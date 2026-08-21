@@ -50,4 +50,31 @@ enum SchedulingEngine {
         }
         return candidate
     }
+
+    static func mondayOfWeek(containing date: Date, calendar: Calendar = .current) -> Date {
+        var cal = calendar
+        cal.firstWeekday = 2 // Monday
+        let components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return cal.date(from: components)!
+    }
+
+    static func computeSchedule(
+        lastConnectedDate: Date,
+        frequencyDays: Int,
+        toggle: DayToggle,
+        blockedRanges: [BlockedRange],
+        calendar: Calendar = .current
+    ) -> ScheduleResult {
+        let rawTarget = calendar.date(byAdding: .day, value: frequencyDays, to: lastConnectedDate)!
+        var target = snapToToggle(rawTarget, toggle: toggle, calendar: calendar)
+        target = avoidBlockedRanges(target, ranges: blockedRanges, toggle: toggle, calendar: calendar)
+
+        let weekday = calendar.component(.weekday, from: target)
+        let isWeekend = weekday == 1 || weekday == 7
+        let notificationDate = isWeekend
+            ? mondayOfWeek(containing: target, calendar: calendar)
+            : target
+
+        return ScheduleResult(nextTargetDate: target, notificationDate: notificationDate)
+    }
 }

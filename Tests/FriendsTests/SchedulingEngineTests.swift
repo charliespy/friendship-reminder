@@ -84,4 +84,66 @@ final class SchedulingEngineTests: XCTestCase {
         )
         XCTAssertEqual(result, expected)
     }
+
+    func test_mondayOfWeek_forSaturday_returnsMondayOfSameWeek() {
+        let saturday = date(2026, 8, 22)
+        let expectedMonday = date(2026, 8, 17)
+        XCTAssertEqual(SchedulingEngine.mondayOfWeek(containing: saturday, calendar: calendar), expectedMonday)
+    }
+
+    func test_mondayOfWeek_forSunday_returnsMondayOfSameWeek() {
+        // Aug 23, 2026 is a Sunday. ISO week convention: the Monday that starts
+        // that week is Aug 17 (the Sunday belongs to the week that started that Monday).
+        let sunday = date(2026, 8, 23)
+        let expectedMonday = date(2026, 8, 17)
+        XCTAssertEqual(SchedulingEngine.mondayOfWeek(containing: sunday, calendar: calendar), expectedMonday)
+    }
+
+    func test_computeSchedule_allDaysToggle_weekdayTarget_notificationEqualsTarget() {
+        let lastConnected = date(2026, 8, 1) // Saturday
+        // 30 days later = Aug 31, a Monday
+        let result = SchedulingEngine.computeSchedule(
+            lastConnectedDate: lastConnected,
+            frequencyDays: 30,
+            toggle: .allDays,
+            blockedRanges: [],
+            calendar: calendar
+        )
+        let expectedTarget = date(2026, 8, 31)
+        XCTAssertEqual(result.nextTargetDate, expectedTarget)
+        XCTAssertEqual(result.notificationDate, expectedTarget) // weekday target: no shift
+    }
+
+    func test_computeSchedule_weekendsOnlyToggle_weekendTarget_notificationIsMonday() {
+        let lastConnected = date(2026, 7, 23) // Thursday
+        // 30 days later = Aug 22, a Saturday; weekendsOnly toggle keeps it there (already a weekend)
+        let result = SchedulingEngine.computeSchedule(
+            lastConnectedDate: lastConnected,
+            frequencyDays: 30,
+            toggle: .weekendsOnly,
+            blockedRanges: [],
+            calendar: calendar
+        )
+        let expectedTarget = date(2026, 8, 22) // Saturday
+        let expectedNotification = date(2026, 8, 17) // Monday of that week
+        XCTAssertEqual(result.nextTargetDate, expectedTarget)
+        XCTAssertEqual(result.notificationDate, expectedNotification)
+    }
+
+    func test_computeSchedule_blockedRangeShiftsTarget() {
+        let lastConnected = date(2026, 7, 23) // Thursday
+        // Raw target Aug 22 (Saturday) falls inside this blocked range
+        let blockedRange = BlockedRange(start: date(2026, 8, 20), end: date(2026, 8, 27))
+        let result = SchedulingEngine.computeSchedule(
+            lastConnectedDate: lastConnected,
+            frequencyDays: 30,
+            toggle: .weekendsOnly,
+            blockedRanges: [blockedRange],
+            calendar: calendar
+        )
+        let expectedTarget = date(2026, 8, 29) // next Saturday after the blocked range ends
+        let expectedNotification = date(2026, 8, 24) // Monday of that week
+        XCTAssertEqual(result.nextTargetDate, expectedTarget)
+        XCTAssertEqual(result.notificationDate, expectedNotification)
+    }
 }
