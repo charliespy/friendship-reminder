@@ -146,4 +146,33 @@ final class SchedulingEngineTests: XCTestCase {
         XCTAssertEqual(result.nextTargetDate, expectedTarget)
         XCTAssertEqual(result.notificationDate, expectedNotification)
     }
+
+    func test_pushMissedSchedule_weekendsOnly_movesToNextWeekend() {
+        let missedTarget = date(2026, 8, 22) // Saturday, now in the past and not completed
+        let result = SchedulingEngine.pushMissedSchedule(
+            currentTargetDate: missedTarget,
+            toggle: .weekendsOnly,
+            blockedRanges: [],
+            calendar: calendar
+        )
+        let expectedTarget = date(2026, 8, 29) // next Saturday
+        let expectedNotification = date(2026, 8, 24) // Monday of that week
+        XCTAssertEqual(result.nextTargetDate, expectedTarget)
+        XCTAssertEqual(result.notificationDate, expectedNotification)
+    }
+
+    func test_pushMissedSchedule_respectsBlockedRanges() {
+        let missedTarget = date(2026, 8, 22) // Saturday
+        let blockedRange = BlockedRange(start: date(2026, 8, 28), end: date(2026, 9, 4))
+        let result = SchedulingEngine.pushMissedSchedule(
+            currentTargetDate: missedTarget,
+            toggle: .weekendsOnly,
+            blockedRanges: [blockedRange],
+            calendar: calendar
+        )
+        // Next Saturday after Aug 22 is Aug 29, which falls inside the blocked range,
+        // so it must continue to the next Saturday/Sunday after Sep 4, which is Sep 5.
+        let expectedTarget = date(2026, 9, 5)
+        XCTAssertEqual(result.nextTargetDate, expectedTarget)
+    }
 }

@@ -77,4 +77,30 @@ enum SchedulingEngine {
 
         return ScheduleResult(nextTargetDate: target, notificationDate: notificationDate)
     }
+
+    static func pushMissedSchedule(
+        currentTargetDate: Date,
+        toggle: DayToggle,
+        blockedRanges: [BlockedRange],
+        calendar: Calendar = .current
+    ) -> ScheduleResult {
+        // Walk forward through the current run of toggle-matching days (e.g. Sat+Sun
+        // for weekendsOnly) so we don't just land on the very next day if it still
+        // matches — that would be "the same missed weekend," not a new opportunity.
+        var candidate = currentTargetDate
+        while matches(candidate, toggle: toggle, calendar: calendar) {
+            candidate = calendar.date(byAdding: .day, value: 1, to: candidate)!
+        }
+
+        var target = snapToToggle(candidate, toggle: toggle, calendar: calendar)
+        target = avoidBlockedRanges(target, ranges: blockedRanges, toggle: toggle, calendar: calendar)
+
+        let weekday = calendar.component(.weekday, from: target)
+        let isWeekend = weekday == 1 || weekday == 7
+        let notificationDate = isWeekend
+            ? mondayOfWeek(containing: target, calendar: calendar)
+            : target
+
+        return ScheduleResult(nextTargetDate: target, notificationDate: notificationDate)
+    }
 }
