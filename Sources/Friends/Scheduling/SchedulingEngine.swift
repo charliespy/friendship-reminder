@@ -29,4 +29,25 @@ enum SchedulingEngine {
         }
         return candidate
     }
+
+    static func avoidBlockedRanges(
+        _ date: Date,
+        ranges: [BlockedRange],
+        toggle: DayToggle,
+        calendar: Calendar = .current
+    ) -> Date {
+        var candidate = date
+        var changed = true
+        while changed {
+            changed = false
+            for range in ranges {
+                if candidate >= range.start && candidate <= range.end {
+                    let dayAfterRange = calendar.date(byAdding: .day, value: 1, to: range.end)!
+                    candidate = snapToToggle(dayAfterRange, toggle: toggle, calendar: calendar)
+                    changed = true
+                }
+            }
+        }
+        return candidate
+    }
 }
