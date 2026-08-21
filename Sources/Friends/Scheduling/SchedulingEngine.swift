@@ -87,9 +87,15 @@ enum SchedulingEngine {
         // Walk forward through the current run of toggle-matching days (e.g. Sat+Sun
         // for weekendsOnly) so we don't just land on the very next day if it still
         // matches — that would be "the same missed weekend," not a new opportunity.
+        // For .allDays there is no "run" concept (every day matches), so the loop
+        // below would never terminate; just advance a single day instead.
         var candidate = currentTargetDate
-        while matches(candidate, toggle: toggle, calendar: calendar) {
+        if toggle == .allDays {
             candidate = calendar.date(byAdding: .day, value: 1, to: candidate)!
+        } else {
+            while matches(candidate, toggle: toggle, calendar: calendar) {
+                candidate = calendar.date(byAdding: .day, value: 1, to: candidate)!
+            }
         }
 
         var target = snapToToggle(candidate, toggle: toggle, calendar: calendar)

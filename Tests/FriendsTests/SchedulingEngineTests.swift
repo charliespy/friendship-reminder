@@ -175,4 +175,16 @@ final class SchedulingEngineTests: XCTestCase {
         let expectedTarget = date(2026, 9, 5)
         XCTAssertEqual(result.nextTargetDate, expectedTarget)
     }
+
+    func test_pushMissedSchedule_allDays_movesToNextDay() {
+        let missedTarget = date(2026, 8, 22) // any day
+        let result = SchedulingEngine.pushMissedSchedule(
+            currentTargetDate: missedTarget,
+            toggle: .allDays,
+            blockedRanges: [],
+            calendar: calendar
+        )
+        let expectedTarget = date(2026, 8, 23) // next day
+        XCTAssertEqual(result.nextTargetDate, expectedTarget)
+    }
 }
