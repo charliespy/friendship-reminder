@@ -16,7 +16,7 @@ final class SyncCoordinator {
 
     func runSyncCycle(people: [Person], blockedRanges ranges: [BlockedDateRange], settings: AppSettings) async throws {
         let blocked = blockedRanges(from: ranges)
-        let today = Date()
+        let today = calendar.startOfDay(for: Date())
 
         for person in people {
             // Detect completion first: if the linked reminder is done, advance lastConnectedDate.
@@ -43,7 +43,9 @@ final class SyncCoordinator {
             }
 
             // Detect a missed (overdue, not completed) reminder and push it forward.
-            if person.notificationDate < today {
+            // Compare day-granular values so a notificationDate later today isn't
+            // mistaken for overdue purely due to time-of-day (see Task 8 review).
+            if calendar.startOfDay(for: person.notificationDate) < today {
                 let result = SchedulingEngine.pushMissedSchedule(
                     currentTargetDate: person.nextTargetDate,
                     toggle: settings.dayToggle,
