@@ -9,7 +9,7 @@ struct MenuBarDropdownView: View {
     private var dueSoon: [Person] {
         let today = Date()
         return people
-            .filter { $0.notificationDate <= Calendar.current.date(byAdding: .day, value: 7, to: today)! }
+            .filter { $0.notificationDate <= (Calendar.current.date(byAdding: .day, value: 7, to: today) ?? today) }
             .sorted { lhs, rhs in
                 if lhs.notificationDate != rhs.notificationDate {
                     return lhs.notificationDate < rhs.notificationDate
