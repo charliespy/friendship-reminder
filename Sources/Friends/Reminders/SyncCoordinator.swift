@@ -15,6 +15,15 @@ final class SyncCoordinator {
     }
 
     func runSyncCycle(people: [Person], blockedRanges ranges: [BlockedDateRange], settings: AppSettings) async throws {
+        let granted = try await remindersService.requestAccess()
+        guard granted else {
+            throw NSError(
+                domain: "SyncCoordinator",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Reminders access was not granted. Grant access in System Settings > Privacy & Security > Reminders, then try again."]
+            )
+        }
+
         let blocked = blockedRanges(from: ranges)
         let today = calendar.startOfDay(for: Date())
 
