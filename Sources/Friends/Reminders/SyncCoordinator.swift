@@ -44,40 +44,17 @@ final class SyncCoordinator {
                 continue
             }
 
-            // Detect a missed (overdue, not completed) reminder and push it forward.
-            // Compare day-granular values so a notificationDate later today isn't
-            // mistaken for overdue purely due to time-of-day (see Task 8 review).
-            let wasOverdue = calendar.startOfDay(for: person.notificationDate) < today
-            if wasOverdue {
-                var result = SchedulingEngine.pushMissedSchedule(
-                    currentTargetDate: person.nextTargetDate,
-                    toggle: settings.dayToggle,
-                    blockedRanges: blocked,
-                    calendar: calendar
-                )
-                // A single push only advances by one cycle. If the app went
-                // unsynced for a long stretch (weeks/months), that would leave
-                // the person still overdue — visibly stuck as overdue in
-                // Reminders — until enough individual syncs happened to walk
-                // them forward one cycle at a time. Keep pushing until the
-                // notification date is genuinely caught up to today, landing
-                // on the next real available day instead of a still-past one.
-                // Each iteration strictly advances the date, so this always
-                // terminates for any realistic backlog; the cap only guards
-                // against a future scheduling bug reintroducing non-termination.
-                var iterations = 0
-                while calendar.startOfDay(for: result.notificationDate) < today, iterations < 1000 {
-                    result = SchedulingEngine.pushMissedSchedule(
-                        currentTargetDate: result.nextTargetDate,
-                        toggle: settings.dayToggle,
-                        blockedRanges: blocked,
-                        calendar: calendar
-                    )
-                    iterations += 1
-                }
-                person.nextTargetDate = result.nextTargetDate
-                person.notificationDate = result.notificationDate
-            }
+            // Detect a missed (overdue, not completed) reminder and push it
+            // forward until it's genuinely caught up to today.
+            let caughtUp = catchUpIfOverdue(
+                nextTargetDate: person.nextTargetDate,
+                notificationDate: person.notificationDate,
+                toggle: settings.dayToggle,
+                blocked: blocked,
+                today: today
+            )
+            person.nextTargetDate = caughtUp.nextTargetDate
+            person.notificationDate = caughtUp.notificationDate
 
             // Ensure a reminder exists and is up to date. upsertReminder recreates it
             // if the stored identifier no longer resolves (the "deleted but not
@@ -85,7 +62,7 @@ final class SyncCoordinator {
             // including cases where a newly added blocked range shifted the dates above.
             person.reminderIdentifier = try remindersService.upsertReminder(
                 identifier: person.reminderIdentifier,
-                title: reminderTitle(for: person, isOverdue: wasOverdue),
+                title: reminderTitle(for: person, isOverdue: caughtUp.wasOverdue),
                 dueDate: person.notificationDate,
                 notes: describeTarget(person.nextTargetDate)
             )
@@ -94,6 +71,40 @@ final class SyncCoordinator {
 
     private func reminderTitle(for person: Person, isOverdue: Bool) -> String {
         isOverdue ? "Reach out to \(person.name) (Overdue)" : "Reach out to \(person.name)"
+    }
+
+    /// If `notificationDate` is already in the past relative to `today`,
+    /// repeatedly pushes it forward (`SchedulingEngine.pushMissedSchedule`)
+    /// until it's genuinely caught up, rather than leaving it "stuck"
+    /// overdue after only a single push — or, for a freshly computed
+    /// schedule (e.g. from `createAllReminders`), catching a `lastConnectedDate`
+    /// far enough in the past that even a fresh `computeSchedule` result
+    /// still lands before today. Each iteration strictly advances the date,
+    /// so this always terminates for any realistic backlog; the cap only
+    /// guards against a future scheduling bug reintroducing non-termination.
+    private func catchUpIfOverdue(
+        nextTargetDate: Date,
+        notificationDate: Date,
+        toggle: DayToggle,
+        blocked: [BlockedRange],
+        today: Date
+    ) -> (nextTargetDate: Date, notificationDate: Date, wasOverdue: Bool) {
+        guard calendar.startOfDay(for: notificationDate) < today else {
+            return (nextTargetDate, notificationDate, false)
+        }
+
+        var result = ScheduleResult(nextTargetDate: nextTargetDate, notificationDate: notificationDate)
+        var iterations = 0
+        while calendar.startOfDay(for: result.notificationDate) < today, iterations < 1000 {
+            result = SchedulingEngine.pushMissedSchedule(
+                currentTargetDate: result.nextTargetDate,
+                toggle: toggle,
+                blockedRanges: blocked,
+                calendar: calendar
+            )
+            iterations += 1
+        }
+        return (result.nextTargetDate, result.notificationDate, true)
     }
 
     private func describeTarget(_ date: Date) -> String {
@@ -146,6 +157,7 @@ final class SyncCoordinator {
         try await requireAccess()
 
         let blocked = blockedRanges(from: ranges)
+        let today = calendar.startOfDay(for: Date())
         for person in people {
             let result = SchedulingEngine.computeSchedule(
                 lastConnectedDate: person.lastConnectedDate,
@@ -154,11 +166,18 @@ final class SyncCoordinator {
                 blockedRanges: blocked,
                 calendar: calendar
             )
-            person.nextTargetDate = result.nextTargetDate
-            person.notificationDate = result.notificationDate
+            let caughtUp = catchUpIfOverdue(
+                nextTargetDate: result.nextTargetDate,
+                notificationDate: result.notificationDate,
+                toggle: settings.dayToggle,
+                blocked: blocked,
+                today: today
+            )
+            person.nextTargetDate = caughtUp.nextTargetDate
+            person.notificationDate = caughtUp.notificationDate
             person.reminderIdentifier = try remindersService.upsertReminder(
                 identifier: person.reminderIdentifier,
-                title: "Reach out to \(person.name)",
+                title: reminderTitle(for: person, isOverdue: caughtUp.wasOverdue),
                 dueDate: person.notificationDate,
                 notes: describeTarget(person.nextTargetDate)
             )
