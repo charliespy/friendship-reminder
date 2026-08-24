@@ -17,27 +17,53 @@ struct AddPersonView: View {
     ]
 
     var body: some View {
-        Form {
-            TextField("Name", text: $name)
-
-            Picker("Frequency", selection: $frequencyDays) {
-                ForEach(frequencyOptions, id: \.days) { option in
-                    Text(option.label).tag(option.days)
-                }
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Add Person").font(FriendsTheme.sectionTitle).foregroundStyle(FriendsTheme.ink)
+                Text("They'll get a reminder in your Friends list when it's time to reach out.")
+                    .font(FriendsTheme.body(12))
+                    .foregroundStyle(FriendsTheme.inkSoft)
             }
 
-            DatePicker("Last connected", selection: $lastConnectedDate, displayedComponents: .date)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Name")
+                    TextField("e.g. Jordan Lee", text: $name)
+                        .textFieldStyle(FriendsTextFieldStyle())
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Frequency")
+                    PillPicker(
+                        options: frequencyOptions.map { ($0.label, $0.days) },
+                        selection: $frequencyDays
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Last Connected")
+                    DatePicker("", selection: $lastConnectedDate, displayedComponents: .date)
+                        .labelsHidden()
+                }
+            }
+            .friendsCard()
 
             if let errorMessage {
-                Text(errorMessage).foregroundStyle(.red).font(.caption)
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
+                    Text(errorMessage).font(FriendsTheme.body(12))
+                }
+                .foregroundStyle(FriendsTheme.rust)
             }
 
             Button("Add Person") {
                 Task { await save() }
             }
+            .buttonStyle(PrimaryButtonStyle(isEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving))
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+
+            Spacer()
         }
-        .padding()
     }
 
     private func save() async {

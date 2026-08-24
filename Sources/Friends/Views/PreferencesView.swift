@@ -1,16 +1,82 @@
 // Sources/Friends/Views/PreferencesView.swift
 import SwiftUI
 
-struct PreferencesView: View {
-    var body: some View {
-        TabView {
-            AddPersonView()
-                .tabItem { Label("Add Person", systemImage: "person.badge.plus") }
-            BlockedDatesView()
-                .tabItem { Label("Blocked Dates", systemImage: "calendar.badge.exclamationmark") }
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+private enum PreferencesTab: String, CaseIterable, Identifiable {
+    case addPerson, blockedDates, settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .addPerson: return "Add Person"
+        case .blockedDates: return "Blocked Dates"
+        case .settings: return "Settings"
         }
-        .frame(width: 420, height: 360)
+    }
+
+    var systemImage: String {
+        switch self {
+        case .addPerson: return "person.badge.plus"
+        case .blockedDates: return "calendar.badge.exclamationmark"
+        case .settings: return "gearshape"
+        }
+    }
+}
+
+struct PreferencesView: View {
+    @State private var selectedTab: PreferencesTab = .addPerson
+
+    var body: some View {
+        HStack(spacing: 0) {
+            sidebar
+
+            Divider().overlay(FriendsTheme.hairline)
+
+            ScrollView {
+                content.padding(20)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(FriendsTheme.cream)
+        }
+        .frame(width: 560, height: 420)
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle().fill(FriendsTheme.rust.gradient).frame(width: 22, height: 22)
+                    Image(systemName: "person.2.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                }
+                Text("Friends").font(FriendsTheme.sectionTitle).foregroundStyle(FriendsTheme.ink)
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 14)
+            .padding(.top, 4)
+
+            ForEach(PreferencesTab.allCases) { tab in
+                SidebarButton(
+                    title: tab.title,
+                    systemImage: tab.systemImage,
+                    isSelected: tab == selectedTab
+                ) {
+                    selectedTab = tab
+                }
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .frame(width: 168)
+        .background(FriendsTheme.paper)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch selectedTab {
+        case .addPerson: AddPersonView()
+        case .blockedDates: BlockedDatesView()
+        case .settings: SettingsView()
+        }
     }
 }
