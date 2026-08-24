@@ -1,9 +1,12 @@
 // Sources/Friends/Views/AddPersonView.swift
+// Presented as a sheet from PeopleListView (the "add" entry point now lives
+// in the People tab rather than its own top-level tab).
 import SwiftUI
 import SwiftData
 
 struct AddPersonView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var settings = AppSettings.shared
 
     @State private var name: String = ""
@@ -52,14 +55,21 @@ struct AddPersonView: View {
                 .foregroundStyle(FriendsTheme.rust)
             }
 
-            Button("Add Person") {
-                Task { await save() }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(isSaving)
+                Button("Add Person") {
+                    Task { await save() }
+                }
+                .buttonStyle(PrimaryButtonStyle(isEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving))
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
             }
-            .buttonStyle(PrimaryButtonStyle(isEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving))
-            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
-
-            Spacer()
         }
+        .padding(20)
+        .frame(width: 420)
+        .background(FriendsTheme.cream)
     }
 
     private func save() async {
@@ -88,8 +98,7 @@ struct AddPersonView: View {
         do {
             let coordinator = SyncCoordinator()
             try await coordinator.runSyncCycle(people: [person], blockedRanges: blockedRanges, settings: settings)
-            name = ""
-            errorMessage = nil
+            dismiss()
         } catch {
             errorMessage = "Could not create reminder: \(error.localizedDescription)"
         }

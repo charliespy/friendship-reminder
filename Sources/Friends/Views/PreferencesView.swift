@@ -2,14 +2,13 @@
 import SwiftUI
 
 private enum PreferencesTab: String, CaseIterable, Identifiable {
-    case people, addPerson, blockedDates, settings
+    case people, blockedDates, settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .people: return "People"
-        case .addPerson: return "Add Person"
         case .blockedDates: return "Blocked Dates"
         case .settings: return "Settings"
         }
@@ -18,7 +17,6 @@ private enum PreferencesTab: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .people: return "person.2"
-        case .addPerson: return "person.badge.plus"
         case .blockedDates: return "calendar.badge.exclamationmark"
         case .settings: return "gearshape"
         }
@@ -40,7 +38,7 @@ struct PreferencesView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .background(FriendsTheme.cream)
         }
-        .frame(width: 560, height: 420)
+        .frame(minWidth: 560, idealWidth: 640, maxWidth: .infinity, minHeight: 420, idealHeight: 480, maxHeight: .infinity)
     }
 
     private var sidebar: some View {
@@ -77,7 +75,6 @@ struct PreferencesView: View {
     private var content: some View {
         switch selectedTab {
         case .people: PeopleListView()
-        case .addPerson: AddPersonView()
         case .blockedDates: BlockedDatesView()
         case .settings: SettingsView()
         }

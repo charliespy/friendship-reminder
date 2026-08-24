@@ -27,6 +27,7 @@ struct FriendsApp: App {
             PreferencesView()
         }
         .modelContainer(sharedModelContainer)
+        .windowResizability(.contentSize)
     }
 
     init() {
