@@ -37,7 +37,7 @@ final class SyncCoordinator {
                 person.notificationDate = result.notificationDate
                 person.reminderIdentifier = try remindersService.upsertReminder(
                     identifier: nil,
-                    title: "Reach out to \(person.name)",
+                    title: reminderTitle(for: person, isOverdue: false),
                     dueDate: person.notificationDate,
                     notes: describeTarget(person.nextTargetDate)
                 )
@@ -47,13 +47,34 @@ final class SyncCoordinator {
             // Detect a missed (overdue, not completed) reminder and push it forward.
             // Compare day-granular values so a notificationDate later today isn't
             // mistaken for overdue purely due to time-of-day (see Task 8 review).
-            if calendar.startOfDay(for: person.notificationDate) < today {
-                let result = SchedulingEngine.pushMissedSchedule(
+            let wasOverdue = calendar.startOfDay(for: person.notificationDate) < today
+            if wasOverdue {
+                var result = SchedulingEngine.pushMissedSchedule(
                     currentTargetDate: person.nextTargetDate,
                     toggle: settings.dayToggle,
                     blockedRanges: blocked,
                     calendar: calendar
                 )
+                // A single push only advances by one cycle. If the app went
+                // unsynced for a long stretch (weeks/months), that would leave
+                // the person still overdue — visibly stuck as overdue in
+                // Reminders — until enough individual syncs happened to walk
+                // them forward one cycle at a time. Keep pushing until the
+                // notification date is genuinely caught up to today, landing
+                // on the next real available day instead of a still-past one.
+                // Each iteration strictly advances the date, so this always
+                // terminates for any realistic backlog; the cap only guards
+                // against a future scheduling bug reintroducing non-termination.
+                var iterations = 0
+                while calendar.startOfDay(for: result.notificationDate) < today, iterations < 1000 {
+                    result = SchedulingEngine.pushMissedSchedule(
+                        currentTargetDate: result.nextTargetDate,
+                        toggle: settings.dayToggle,
+                        blockedRanges: blocked,
+                        calendar: calendar
+                    )
+                    iterations += 1
+                }
                 person.nextTargetDate = result.nextTargetDate
                 person.notificationDate = result.notificationDate
             }
@@ -64,11 +85,15 @@ final class SyncCoordinator {
             // including cases where a newly added blocked range shifted the dates above.
             person.reminderIdentifier = try remindersService.upsertReminder(
                 identifier: person.reminderIdentifier,
-                title: "Reach out to \(person.name)",
+                title: reminderTitle(for: person, isOverdue: wasOverdue),
                 dueDate: person.notificationDate,
                 notes: describeTarget(person.nextTargetDate)
             )
         }
+    }
+
+    private func reminderTitle(for person: Person, isOverdue: Bool) -> String {
+        isOverdue ? "Reach out to \(person.name) (Overdue)" : "Reach out to \(person.name)"
     }
 
     private func describeTarget(_ date: Date) -> String {

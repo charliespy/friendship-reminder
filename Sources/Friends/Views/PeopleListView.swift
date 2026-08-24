@@ -62,6 +62,20 @@ struct PeopleListView: View {
         .sheet(isPresented: $showAddPerson) {
             AddPersonView()
         }
+        .task { await syncOnAppear() }
+    }
+
+    /// Opening the People tab is often the moment a stale/overdue reminder
+    /// actually gets noticed — sync immediately rather than waiting for the
+    /// next scheduled launch/wake/hourly trigger, so a person who's been
+    /// overdue for a long stretch gets caught up (and re-titled) right away.
+    private func syncOnAppear() async {
+        do {
+            let coordinator = SyncCoordinator()
+            try await coordinator.runSyncCycle(people: people, blockedRanges: blockedRanges, settings: settings)
+        } catch {
+            errorMessage = "Could not sync: \(error.localizedDescription)"
+        }
     }
 
     private var header: some View {

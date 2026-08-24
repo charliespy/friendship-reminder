@@ -1,5 +1,6 @@
 // Sources/Friends/Views/PreferencesView.swift
 import SwiftUI
+import AppKit
 
 private enum PreferencesTab: String, CaseIterable, Identifiable {
     case people, blockedDates, settings
@@ -39,6 +40,15 @@ struct PreferencesView: View {
             .background(FriendsTheme.cream)
         }
         .frame(minWidth: 560, idealWidth: 640, maxWidth: .infinity, minHeight: 420, idealHeight: 480, maxHeight: .infinity)
+        .background {
+            WindowAccessor { window in
+                // The Settings scene's default window doesn't reliably pick up
+                // .windowResizability, so force the resizable style mask and a
+                // sane min size directly on the underlying NSWindow.
+                window.styleMask.insert(.resizable)
+                window.minSize = NSSize(width: 560, height: 420)
+            }
+        }
     }
 
     private var sidebar: some View {
