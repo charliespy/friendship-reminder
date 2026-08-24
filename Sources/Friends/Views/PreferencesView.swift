@@ -40,14 +40,22 @@ struct PreferencesView: View {
             .background(FriendsTheme.cream)
         }
         .frame(minWidth: 560, idealWidth: 640, maxWidth: .infinity, minHeight: 420, idealHeight: 480, maxHeight: .infinity)
-        .background {
-            WindowAccessor { window in
-                // The Settings scene's default window doesn't reliably pick up
-                // .windowResizability, so force the resizable style mask and a
-                // sane min size directly on the underlying NSWindow.
-                window.styleMask.insert(.resizable)
-                window.minSize = NSSize(width: 560, height: 420)
-            }
+        .onAppear { makeWindowsResizable() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            makeWindowsResizable()
+        }
+    }
+
+    /// The Settings scene's window doesn't reliably pick up
+    /// `.windowResizability` alone in practice, so force the resizable style
+    /// mask directly on whatever window is currently hosting this view.
+    /// Runs from multiple triggers (onAppear, window-became-key) since the
+    /// window may not exist yet, or may be recreated, at any single point.
+    private func makeWindowsResizable() {
+        for window in NSApplication.shared.windows where window.styleMask.contains(.titled) {
+            guard !window.styleMask.contains(.resizable) else { continue }
+            window.styleMask.insert(.resizable)
+            window.minSize = NSSize(width: 560, height: 420)
         }
     }
 

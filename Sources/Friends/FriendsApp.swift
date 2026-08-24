@@ -27,7 +27,7 @@ struct FriendsApp: App {
             PreferencesView()
         }
         .modelContainer(sharedModelContainer)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
     }
 
     init() {
@@ -53,11 +53,23 @@ struct FriendsApp: App {
         // launch so there's an obvious, immediate sign the app started.
         // `showSettingsWindow:` is the selector SwiftUI registers on
         // NSApplication for a `Settings` scene; there's no public API to
-        // open it directly from outside a View's environment.
-        DispatchQueue.main.async {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            NSApp.activate(ignoringOtherApps: true)
+        // open it directly from outside a View's environment. Waiting for
+        // didFinishLaunchingNotification (rather than firing immediately
+        // from init, which runs before AppKit/NSApplication has finished
+        // standing up — accessing NSApp itself too early can crash) is what
+        // makes this reliable.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didFinishLaunchingNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            FriendsApp.openPreferences()
         }
+    }
+
+    private static func openPreferences() {
+        NSApplication.shared.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     @MainActor
