@@ -14,6 +14,9 @@ struct SettingsView: View {
     @State private var maintenanceIsError = false
     @State private var showDeleteAllConfirmation = false
 
+    @State private var launchAtLoginEnabled = LaunchAtLoginManager.isEnabled
+    @State private var launchAtLoginError: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 2) {
@@ -28,6 +31,40 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(DayToggle.allCases) { toggle in
                         toggleRow(toggle)
+                    }
+                }
+            }
+            .friendsCard()
+
+            VStack(alignment: .leading, spacing: 10) {
+                FieldLabel(text: "Startup")
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle(isOn: launchAtLoginBinding) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Launch Friends at Login")
+                                .font(FriendsTheme.body(13, weight: .semibold))
+                                .foregroundStyle(FriendsTheme.ink)
+                            Text("Starts automatically in the menu bar when you log in.")
+                                .font(FriendsTheme.body(11))
+                                .foregroundStyle(FriendsTheme.inkSoft)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .tint(FriendsTheme.rust)
+
+                    if let launchAtLoginError {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
+                            Text(launchAtLoginError).font(FriendsTheme.body(12))
+                        }
+                        .foregroundStyle(FriendsTheme.rust)
+
+                        if LaunchAtLoginManager.requiresApproval {
+                            Button("Open Login Items Settings…") {
+                                LaunchAtLoginManager.openLoginItemsSettings()
+                            }
+                            .buttonStyle(QuietButtonStyle())
+                        }
                     }
                 }
             }
@@ -97,6 +134,26 @@ struct SettingsView: View {
 
             Spacer()
         }
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLoginEnabled },
+            set: { newValue in
+                launchAtLoginEnabled = newValue
+                do {
+                    try LaunchAtLoginManager.setEnabled(newValue)
+                    launchAtLoginError = nil
+                    if newValue && LaunchAtLoginManager.requiresApproval {
+                        launchAtLoginError = "Added — approve it in System Settings > General > Login Items."
+                    }
+                } catch {
+                    // Revert the toggle's visible state since the request failed.
+                    launchAtLoginEnabled = LaunchAtLoginManager.isEnabled
+                    launchAtLoginError = "Could not update login item: \(error.localizedDescription)"
+                }
+            }
+        )
     }
 
     private func toggleRow(_ toggle: DayToggle) -> some View {

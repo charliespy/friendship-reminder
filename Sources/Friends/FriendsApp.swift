@@ -46,6 +46,18 @@ struct FriendsApp: App {
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in
             Task { await FriendsApp.runSync(using: container) }
         }
+
+        // Since this is a menu-bar-only (LSUIElement) app with no Dock icon,
+        // launching it produces no visible window by default — the user just
+        // sees a new menu bar icon. Open Preferences automatically every
+        // launch so there's an obvious, immediate sign the app started.
+        // `showSettingsWindow:` is the selector SwiftUI registers on
+        // NSApplication for a `Settings` scene; there's no public API to
+        // open it directly from outside a View's environment.
+        DispatchQueue.main.async {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     @MainActor
