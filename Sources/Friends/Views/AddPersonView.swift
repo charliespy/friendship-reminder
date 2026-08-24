@@ -12,10 +12,6 @@ struct AddPersonView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
 
-    private let frequencyOptions: [(label: String, days: Int)] = [
-        ("Monthly", 30), ("Quarterly", 90), ("Semiannual", 180), ("Yearly", 365)
-    ]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 2) {
@@ -35,7 +31,7 @@ struct AddPersonView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     FieldLabel(text: "Frequency")
                     PillPicker(
-                        options: frequencyOptions.map { ($0.label, $0.days) },
+                        options: FrequencyOption.all.map { ($0.label, $0.days) },
                         selection: $frequencyDays
                     )
                 }

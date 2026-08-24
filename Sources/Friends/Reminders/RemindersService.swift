@@ -65,4 +65,24 @@ final class RemindersService {
         }
         return reminder.isCompleted
     }
+
+    /// Removes a single reminder by identifier. A no-op (not an error) if the
+    /// identifier no longer resolves to a reminder — it's already gone.
+    func deleteReminder(identifier: String) throws {
+        guard let reminder = eventStore.calendarItem(withIdentifier: identifier) as? EKReminder else {
+            return
+        }
+        try eventStore.remove(reminder, commit: true)
+    }
+
+    /// Removes every reminder currently in the Friends list, regardless of
+    /// which Person (if any) still references it. Used by the "Resync All"
+    /// maintenance action to guarantee a clean rebuild with no leftovers.
+    func deleteAllReminders() async throws {
+        let reminders = try await fetchFriendsListReminders()
+        for reminder in reminders {
+            try eventStore.remove(reminder, commit: false)
+        }
+        try eventStore.commit()
+    }
 }
