@@ -15,14 +15,7 @@ final class SyncCoordinator {
     }
 
     func runSyncCycle(people: [Person], blockedRanges ranges: [BlockedDateRange], settings: AppSettings) async throws {
-        let granted = try await remindersService.requestAccess()
-        guard granted else {
-            throw NSError(
-                domain: "SyncCoordinator",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Reminders access was not granted. Grant access in System Settings > Privacy & Security > Reminders, then try again."]
-            )
-        }
+        try await requireAccess()
 
         let blocked = blockedRanges(from: ranges)
         let today = calendar.startOfDay(for: Date())
@@ -84,10 +77,7 @@ final class SyncCoordinator {
         return "Aim for \(formatter.string(from: date))"
     }
 
-    /// Removes a person's linked reminder (if any) ahead of deleting the
-    /// `Person` itself from the model. Safe to call even if the reminder was
-    /// already removed or never created.
-    func deletePerson(_ person: Person) async throws {
+    private func requireAccess() async throws {
         let granted = try await remindersService.requestAccess()
         guard granted else {
             throw NSError(
@@ -96,30 +86,39 @@ final class SyncCoordinator {
                 userInfo: [NSLocalizedDescriptionKey: "Reminders access was not granted. Grant access in System Settings > Privacy & Security > Reminders, then try again."]
             )
         }
+    }
+
+    /// Removes a person's linked reminder (if any) ahead of deleting the
+    /// `Person` itself from the model. Safe to call even if the reminder was
+    /// already removed or never created.
+    func deletePerson(_ person: Person) async throws {
+        try await requireAccess()
         if let identifier = person.reminderIdentifier {
             try remindersService.deleteReminder(identifier: identifier)
         }
     }
 
-    /// Wipes every reminder in the Friends list and rebuilds one fresh
-    /// reminder per person from their current data — a full reset for when
-    /// reminders have drifted (manually deleted, edited, duplicated, etc.)
-    /// rather than an incremental sync. Recomputes each person's schedule
-    /// from their current `lastConnectedDate` rather than reusing whatever
-    /// `nextTargetDate`/`notificationDate` was last stored, so the result
-    /// reflects "what's relevant today" under the current toggle/blocked
-    /// ranges, not stale state that may have been superseded.
-    func resyncAll(people: [Person], blockedRanges ranges: [BlockedDateRange], settings: AppSettings) async throws {
-        let granted = try await remindersService.requestAccess()
-        guard granted else {
-            throw NSError(
-                domain: "SyncCoordinator",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Reminders access was not granted. Grant access in System Settings > Privacy & Security > Reminders, then try again."]
-            )
-        }
-
+    /// Removes every reminder currently in the Friends list, and clears each
+    /// person's now-stale `reminderIdentifier` so a later `createAllReminders`
+    /// or `runSyncCycle` creates fresh ones instead of trying to update
+    /// reminders that no longer exist.
+    func deleteAllReminders(people: [Person]) async throws {
+        try await requireAccess()
         try await remindersService.deleteAllReminders()
+        for person in people {
+            person.reminderIdentifier = nil
+        }
+    }
+
+    /// Recomputes every person's schedule from their current
+    /// `lastConnectedDate` (so the result reflects what's relevant *today*
+    /// under the current toggle/blocked ranges, not stale prior state) and
+    /// ensures each has a reminder. Uses each person's existing
+    /// `reminderIdentifier` — updating it in place if still valid, or
+    /// creating a fresh one if it's nil/stale (e.g. after `deleteAllReminders`)
+    /// — so running this on its own never creates duplicates.
+    func createAllReminders(people: [Person], blockedRanges ranges: [BlockedDateRange], settings: AppSettings) async throws {
+        try await requireAccess()
 
         let blocked = blockedRanges(from: ranges)
         for person in people {
@@ -133,7 +132,7 @@ final class SyncCoordinator {
             person.nextTargetDate = result.nextTargetDate
             person.notificationDate = result.notificationDate
             person.reminderIdentifier = try remindersService.upsertReminder(
-                identifier: nil,
+                identifier: person.reminderIdentifier,
                 title: "Reach out to \(person.name)",
                 dueDate: person.notificationDate,
                 notes: describeTarget(person.nextTargetDate)

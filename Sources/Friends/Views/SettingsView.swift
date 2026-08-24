@@ -8,10 +8,11 @@ struct SettingsView: View {
     @Query private var people: [Person]
     @Query private var blockedRanges: [BlockedDateRange]
 
-    @State private var isResyncing = false
-    @State private var resyncMessage: String?
-    @State private var resyncIsError = false
-    @State private var showResyncConfirmation = false
+    @State private var isDeletingAll = false
+    @State private var isCreatingAll = false
+    @State private var maintenanceMessage: String?
+    @State private var maintenanceIsError = false
+    @State private var showDeleteAllConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -35,43 +36,60 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 FieldLabel(text: "Maintenance")
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Wipe every reminder in the Friends list and recreate one fresh reminder per person, based on today's date.")
+                    Text("Manually delete every reminder in the Friends list, or (re)create one for everyone based on today's date.")
                         .font(FriendsTheme.body(12))
                         .foregroundStyle(FriendsTheme.inkSoft)
 
-                    if let resyncMessage {
+                    if let maintenanceMessage {
                         HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: resyncIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            Image(systemName: maintenanceIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                                 .font(.system(size: 11))
-                            Text(resyncMessage).font(FriendsTheme.body(12))
+                            Text(maintenanceMessage).font(FriendsTheme.body(12))
                         }
-                        .foregroundStyle(resyncIsError ? FriendsTheme.rust : FriendsTheme.sage)
+                        .foregroundStyle(maintenanceIsError ? FriendsTheme.rust : FriendsTheme.sage)
                     }
 
-                    Button {
-                        showResyncConfirmation = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            if isResyncing {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Image(systemName: "arrow.triangle.2.circlepath")
+                    HStack(spacing: 10) {
+                        Button {
+                            showDeleteAllConfirmation = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                if isDeletingAll {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "trash")
+                                }
+                                Text("Delete All Reminders")
                             }
-                            Text("Resync All Reminders")
                         }
-                    }
-                    .buttonStyle(PrimaryButtonStyle(tint: FriendsTheme.clay, isEnabled: !isResyncing))
-                    .disabled(isResyncing)
-                    .confirmationDialog(
-                        "Delete and recreate every reminder?",
-                        isPresented: $showResyncConfirmation,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Resync All Reminders", role: .destructive) {
-                            Task { await resyncAll() }
+                        .buttonStyle(PrimaryButtonStyle(tint: FriendsTheme.rust, isEnabled: !isDeletingAll && !isCreatingAll))
+                        .disabled(isDeletingAll || isCreatingAll)
+                        .confirmationDialog(
+                            "Delete every reminder in the Friends list?",
+                            isPresented: $showDeleteAllConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Delete All Reminders", role: .destructive) {
+                                Task { await deleteAll() }
+                            }
+                        } message: {
+                            Text("People stay in Friends, but their reminders are removed until you add them again.")
                         }
-                    } message: {
-                        Text("This removes all current reminders in the Friends list and rebuilds them from today's schedules.")
+
+                        Button {
+                            Task { await createAll() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if isCreatingAll {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "plus")
+                                }
+                                Text("Add Reminders for Today")
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle(tint: FriendsTheme.clay, isEnabled: !isDeletingAll && !isCreatingAll))
+                        .disabled(isDeletingAll || isCreatingAll)
                     }
                 }
             }
@@ -99,18 +117,33 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    private func resyncAll() async {
-        isResyncing = true
-        defer { isResyncing = false }
+    private func deleteAll() async {
+        isDeletingAll = true
+        defer { isDeletingAll = false }
 
         do {
             let coordinator = SyncCoordinator()
-            try await coordinator.resyncAll(people: people, blockedRanges: blockedRanges, settings: settings)
-            resyncIsError = false
-            resyncMessage = "Resynced \(people.count) reminder\(people.count == 1 ? "" : "s")."
+            try await coordinator.deleteAllReminders(people: people)
+            maintenanceIsError = false
+            maintenanceMessage = "Deleted all reminders."
         } catch {
-            resyncIsError = true
-            resyncMessage = "Could not resync: \(error.localizedDescription)"
+            maintenanceIsError = true
+            maintenanceMessage = "Could not delete reminders: \(error.localizedDescription)"
+        }
+    }
+
+    private func createAll() async {
+        isCreatingAll = true
+        defer { isCreatingAll = false }
+
+        do {
+            let coordinator = SyncCoordinator()
+            try await coordinator.createAllReminders(people: people, blockedRanges: blockedRanges, settings: settings)
+            maintenanceIsError = false
+            maintenanceMessage = "Added reminders for \(people.count) \(people.count == 1 ? "person" : "people")."
+        } catch {
+            maintenanceIsError = true
+            maintenanceMessage = "Could not add reminders: \(error.localizedDescription)"
         }
     }
 }
