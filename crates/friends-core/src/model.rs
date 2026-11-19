@@ -216,10 +216,15 @@ impl Data {
         self.last_id = self.last_id.max(self.ids().max().unwrap_or(0));
     }
 
-    fn next_id(&mut self) -> u64 {
-        // is_sane keeps ids under MAX_ID, so this can't overflow.
+    /// A new id, refused at MAX_ID so the saved file stays one the app will load.
+    fn next_id(&mut self) -> Result<u64, Invalid> {
+        if self.last_id + 1 >= MAX_ID {
+            return invalid(
+                "Friends has run out of ids. Remove some people or blocked dates first.",
+            );
+        }
         self.last_id += 1;
-        self.last_id
+        Ok(self.last_id)
     }
 
     fn ranges(&self) -> Vec<BlockedRange> {
@@ -296,7 +301,7 @@ impl Data {
         let name = clean_name(name)?;
         check_frequency(frequency_days)?;
         check_last_connected(last_connected, today)?;
-        let id = self.next_id();
+        let id = self.next_id()?;
         let mut person = Person {
             id,
             name,
@@ -322,9 +327,12 @@ impl Data {
     ) -> Result<(), Invalid> {
         let name = clean_name(name)?;
         check_frequency(frequency_days)?;
-        check_last_connected(last_connected, today)?;
         let (toggle, ranges) = (self.settings.day_toggle, self.ranges());
         let person = self.person_mut(id)?;
+        // Only a changed date is checked: a stored one can be "tomorrow" after a time zone change.
+        if person.last_connected != last_connected {
+            check_last_connected(last_connected, today)?;
+        }
         let schedule_changed =
             person.frequency_days != frequency_days || person.last_connected != last_connected;
         person.name = name;
@@ -372,7 +380,7 @@ impl Data {
         if end < start {
             return invalid("The range has to end on or after the day it starts.");
         }
-        let id = self.next_id();
+        let id = self.next_id()?;
         self.blocked.push(Blocked {
             id,
             start,

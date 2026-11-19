@@ -286,3 +286,28 @@ fn huge_ids_make_a_file_unreadable() {
     data.last_id = u64::MAX;
     assert!(!data.is_sane());
 }
+
+#[test]
+fn ids_stop_short_of_the_limit_instead_of_saving_an_unloadable_file() {
+    let mut data = Data::default();
+    data.last_id = friends_core::model::MAX_ID - 2;
+    assert!(data.add_person("A", 30, today(), today()).is_ok());
+    assert!(data.add_person("B", 30, today(), today()).is_err());
+    assert!(data.is_sane());
+}
+
+#[test]
+fn renaming_works_when_the_stored_date_is_after_today() {
+    let mut data = Data::default();
+    let id = data
+        .add_person("Ada", 30, date(2026, 8, 20), date(2026, 8, 20))
+        .unwrap();
+    // A day earlier, after a time zone change: the unchanged date isn't re-checked.
+    data.update_person(id, "Ada L.", 30, date(2026, 8, 20), today())
+        .unwrap();
+    assert_eq!(data.person(id).unwrap().name, "Ada L.");
+    // A changed date still is.
+    assert!(data
+        .update_person(id, "Ada L.", 30, date(2026, 8, 21), today())
+        .is_err());
+}

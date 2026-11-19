@@ -25,7 +25,7 @@ export function BlockedPane({ view }: { view: View }) {
         </div>
       </header>
 
-      <form className="card form-card" onSubmit={submit} aria-label="Add blocked dates">
+      <form className="card form-card" onSubmit={submit} aria-label="Add blocked dates" noValidate>
         <div className="form-row">
           <label className="field grow">
             <span>What</span>
