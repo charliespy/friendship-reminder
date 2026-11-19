@@ -53,8 +53,12 @@ export function SettingsPane({ view }: { view: View }) {
     setLoginError(null);
     setLoginBusy(true);
     try {
-      setLogin(await api.setLaunchAtLogin(on));
+      const now = await api.setLaunchAtLogin(on);
+      // A read that started during the change may have seen the old value: drop it.
+      loginSeq.current++;
+      setLogin(now);
     } catch (e) {
+      loginSeq.current++;
       setLoginError(errorMessage(e));
     } finally {
       setLoginBusy(false);
