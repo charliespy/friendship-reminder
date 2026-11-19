@@ -135,6 +135,9 @@ impl Dev {
     }
 
     fn reset(&mut self, body: &str) -> Result<(), String> {
+        if let Some(dir) = self.store_path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
         std::fs::write(
             &self.store_path,
             if body.trim() == "{}" {

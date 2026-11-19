@@ -17,8 +17,12 @@ mkdir -p "$(dirname "$data")"
 args=(--port "$port" --data "$data")
 [ -n "${FRIENDS_TODAY:-}" ] && args+=(--today "$FRIENDS_TODAY")
 
-cargo build -q -p friends-devserver
-"${CARGO_TARGET_DIR:-target}/debug/friends-devserver" "${args[@]}" &
+# Ask cargo where it put the binary (CARGO_TARGET_DIR or a cargo config may move it).
+bin=$(cargo build -q -p friends-devserver --message-format=json-render-diagnostics |
+  node -e 'let p; require("readline").createInterface({ input: process.stdin }).on("line", (l) => {
+    const m = JSON.parse(l); if (m.reason === "compiler-artifact" && m.executable && m.target.name === "friends-devserver") p = m.executable;
+  }).on("close", () => { if (!p) process.exit(1); console.log(p); });')
+"$bin" "${args[@]}" &
 server=$!
 trap 'kill "$server" 2>/dev/null || true' EXIT INT TERM
 

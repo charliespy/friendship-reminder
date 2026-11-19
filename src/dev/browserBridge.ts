@@ -54,7 +54,23 @@ export function installBrowserBridge(endpoint = "/__friends/invoke") {
       } catch {
         throw `friends-devserver isn't answering (HTTP ${res.status}). Is npm run dev:web running?`;
       }
-      if (!res.ok) throw body;
+      if (!res.ok) {
+        // Like the app: a failed command may still have caught up missed targets, so every window
+        // gets the current view before the error comes back.
+        if (cmd === "call") {
+          try {
+            const view = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cmd: "call", args: { cmd: "get_view", args: null } }),
+            });
+            if (view.ok) emit("view-changed", await view.json());
+          } catch {
+            // Keep the command's own error; the next command or focus refreshes the view.
+          }
+        }
+        throw body;
+      }
       // The real shell tells every window about a new view; here there is only this window.
       if (cmd === "call") emit("view-changed", body);
       return body;
