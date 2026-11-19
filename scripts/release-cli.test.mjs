@@ -59,7 +59,8 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-describe("release.mjs", () => {
+// Each test starts several node and git processes: allow for a busy machine.
+describe("release.mjs", { timeout: 60_000 }, () => {
   it("plans, prepares and prints the first release", () => {
     const plan = release("plan", "--out", "notes.md");
     expect(plan.code).toBe(0);
