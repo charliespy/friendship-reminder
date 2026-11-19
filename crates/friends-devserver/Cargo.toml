@@ -1,0 +1,14 @@
+[package]
+name = "friends-devserver"
+version = "0.1.0"
+description = "Serves the Friends commands over local HTTP, so the UI can run in a browser for development and end-to-end tests"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+friends-core = { path = "../friends-core" }
+chrono = { workspace = true, features = ["clock"] }
+serde_json.workspace = true
+tiny_http = "0.12"

@@ -15,4 +15,13 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 friends-core = { path = "../crates/friends-core" }
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+chrono = { workspace = true, features = ["clock"] }
+serde_json.workspace = true
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+
+[features]
+# Set by `tauri build`: serve the built front end from inside the app instead of the dev server.
+custom-protocol = ["tauri/custom-protocol"]

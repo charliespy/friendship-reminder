@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Scripts/package-app.sh
+# scripts/package-app.sh (the old Swift build; removed with the Swift code)
 # Builds the Friends executable in release mode and wraps it into a
 # minimal, ad-hoc-signed Friends.app bundle at the repo root.
 set -euo pipefail

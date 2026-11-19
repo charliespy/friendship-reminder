@@ -259,3 +259,28 @@ fn the_view_still_loads_when_saving_the_catch_up_fails() {
     let view = view.unwrap();
     assert_eq!(view.people[0].person.next_target, date(2026, 8, 29));
 }
+
+#[test]
+fn an_edit_without_last_connected_keeps_a_done_made_meanwhile() {
+    let (mut app, _f) = app("edit_keeps_done");
+    app.call(
+        "add_person",
+        json!({"name": "Ada", "frequencyDays": 30, "lastConnected": "2026-07-23"}),
+        today(),
+    )
+    .unwrap();
+    let id = app.data().people[0].id;
+    // The edit form is open; meanwhile "Done" is clicked in the dropdown.
+    app.call("mark_done", json!({"id": id}), today()).unwrap();
+    // Saving the form without touching the date sends no lastConnected.
+    app.call(
+        "update_person",
+        json!({"id": id, "name": "Ada L", "frequencyDays": 90}),
+        today(),
+    )
+    .unwrap();
+    let ada = &app.data().people[0];
+    assert_eq!(ada.name, "Ada L");
+    assert_eq!(ada.frequency_days, 90);
+    assert_eq!(ada.last_connected, today());
+}
