@@ -29,7 +29,7 @@ export function Preferences() {
               role="tab"
               id={`tab-${t.id}`}
               aria-selected={tab === t.id}
-              aria-controls="pane"
+              aria-controls={`pane-${t.id}`}
               className="tab"
               onClick={() => setTab(t.id)}
             >
@@ -39,7 +39,7 @@ export function Preferences() {
           ))}
         </div>
       </nav>
-      <main className="pane" id="pane" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+      <main className="pane">
         {view?.unreadableFile && (
           <p className="banner" role="alert">
             Your saved list couldn't be read, so Friends started fresh. The old file is at {view.unreadableFile}.
@@ -49,12 +49,25 @@ export function Preferences() {
           <p className="empty" role={loadError ? "alert" : undefined}>
             {loadError ?? "Loading…"}
           </p>
-        ) : tab === "people" ? (
-          <PeoplePane view={view} />
-        ) : tab === "blocked" ? (
-          <BlockedPane view={view} />
         ) : (
-          <SettingsPane view={view} />
+          // Every pane stays mounted, so switching tabs keeps a half-filled form and a selection.
+          TABS.map((t) => (
+            <div
+              key={t.id}
+              id={`pane-${t.id}`}
+              role="tabpanel"
+              aria-labelledby={`tab-${t.id}`}
+              hidden={tab !== t.id}
+            >
+              {t.id === "people" ? (
+                <PeoplePane view={view} />
+              ) : t.id === "blocked" ? (
+                <BlockedPane view={view} />
+              ) : (
+                <SettingsPane view={view} />
+              )}
+            </div>
+          ))
         )}
       </main>
     </div>
