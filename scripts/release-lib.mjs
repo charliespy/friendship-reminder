@@ -38,6 +38,11 @@ export function parseVersion(version) {
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
+/** Windows line endings (a file or a description edited on github.com) -> "\n". */
+export function lf(text) {
+  return text.replace(/\r\n?/g, "\n");
+}
+
 /** The newest vX.Y.Z tag among `tags`, or null. Other tags are ignored. */
 export function latestReleaseTag(tags) {
   let best = null;
@@ -282,6 +287,9 @@ export function insertRelease(changelog, version, date, notes) {
   const body = notes.trim();
   if (!body) throw new Error("the release notes are empty");
   if (/^## /m.test(body)) throw new Error('the notes may not contain "## " headings; use "### New" etc.');
+  if (body.split("\n").some((l) => LINK_REF_RE.test(l))) {
+    throw new Error('the notes may not contain "[name]: url" link lines (a section ends there); write links inline');
+  }
   const lines = changelog.split("\n");
   if (findSection(lines, version)) throw new Error(`CHANGELOG.md already has a [${version}] section`);
   const u = findSection(lines, "Unreleased");
@@ -330,10 +338,15 @@ export function checkNewVersion({ version, currentVersion, lastTag, changelog = 
 /** The entries of a release body: each bullet with its wrapped lines, or a lone line. */
 function entries(body) {
   const out = [];
+  let open = false; // Same rule as parseSections: only a line right under an entry continues it.
   for (const line of body.split("\n")) {
-    if (!line.trim() || /^#{1,6}\s/.test(line)) continue;
-    if (/^\s+\S/.test(line) && out.length) out[out.length - 1] += `\n${line}`;
+    if (!line.trim() || /^#{1,6}\s/.test(line)) {
+      open = false;
+      continue;
+    }
+    if (/^\s+\S/.test(line) && open) out[out.length - 1] += `\n${line}`;
     else out.push(line);
+    open = true;
   }
   return out;
 }

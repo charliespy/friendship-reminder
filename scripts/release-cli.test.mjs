@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Runs scripts/release.mjs in a scratch git repo with a copy of this repo's version files.
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,7 +32,8 @@ function release(...args) {
   const r = spawnSync("node", ["scripts/release.mjs", ...args], {
     cwd: dir,
     encoding: "utf8",
-    env: { ...env, INIT_CWD: dir },
+    // A stand-in `gh` first on PATH: it prints the release in gh.json.
+    env: { ...env, INIT_CWD: dir, PATH: `${join(dir, "bin")}:${env.PATH}` },
   });
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
@@ -46,6 +47,9 @@ beforeEach(() => {
   sh("git", ["init", "-q", "-b", "main"]);
   mkdirSync(join(dir, "scripts"));
   mkdirSync(join(dir, "src-tauri"));
+  mkdirSync(join(dir, "bin"));
+  writeFileSync(join(dir, "bin", "gh"), `#!/bin/sh\ncat "${join(dir, "gh.json")}"\n`);
+  chmodSync(join(dir, "bin", "gh"), 0o755);
   for (const f of ["scripts/release.mjs", "scripts/release-lib.mjs"]) cpSync(join(root, f), join(dir, f));
   for (const f of FILES) copyAt010(f);
   writeFileSync(join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n- A new look.\n");
@@ -65,6 +69,31 @@ describe("release.mjs", () => {
     const notes = release("notes", "v0.1.0");
     expect(notes.code).toBe(0);
     expect(notes.out).toMatch(/^### New\n\n- A new look\.\n\n### Good to know\n/);
+  });
+  it("won't overwrite a notes file unless told to", () => {
+    writeFileSync(join(dir, "notes.md"), "rewritten\n");
+    expect(release("plan", "--out", "notes.md").err).toMatch(/already there/);
+    expect(readFileSync(join(dir, "notes.md"), "utf8")).toBe("rewritten\n");
+    expect(release("plan", "--out", "notes.md", "--force").code).toBe(0);
+  });
+  it("verifies a published release against CHANGELOG.md at the tag", () => {
+    release("plan", "--out", "notes.md");
+    release("prepare", "0.1.0", "notes.md", "--date", "2026-11-19");
+    commit("chore(release): v0.1.0 (#9)");
+    sh("git", ["-c", "tag.gpgsign=false", "tag", "v0.1.0"]);
+    const body = release("notes", "0.1.0").out;
+    const dmg = { name: "Friends_0.1.0_universal.dmg", size: 9_000_000 };
+    const gh = (o) => writeFileSync(join(dir, "gh.json"), JSON.stringify({ tagName: "v0.1.0", isDraft: false, url: "u", body, assets: [dmg], ...o }));
+    gh({ body: body.replace(/\n/g, "\r\n") });
+    expect(release("verify", "v0.1.0")).toMatchObject({ code: 0, err: "" });
+    gh({ body: "See CHANGELOG.md." });
+    expect(release("verify", "v0.1.0").err).toMatch(/differs/);
+    gh({ isDraft: true, assets: [] });
+    const r = release("verify", "v0.1.0").err;
+    expect(r).toMatch(/draft/);
+    expect(r).toMatch(/exactly one \.dmg, found 0/);
+    gh({ assets: [{ name: "Friends_0.0.9_universal.dmg", size: 10 }] });
+    expect(release("verify", "v0.1.0").err).toMatch(/not named for 0\.1\.0[\s\S]*only 10 bytes/);
   });
   it("bumps from the last tag, and refuses a version that doesn't go up", () => {
     sh("git", ["-c", "tag.gpgsign=false", "tag", "v0.1.0"]);

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Releasing Friends, step by step (docs/RELEASING.md has the whole procedure):
 //
-//   node scripts/release.mjs plan [--patch] [--out <file>]
+//   node scripts/release.mjs plan [--patch] [--out <file> [--force]]
 //       Dry run: changes nothing. Prints the last release, the next version and why, and a draft
-//       of the release notes (also written to <file> with --out). Exits 3 when there is nothing to
+//       of the release notes (also written to <file> with --out; --force to replace a file that
+//       is already there, which may hold notes you rewrote). Exits 3 when there is nothing to
 //       release (no feat, fix, perf, revert or breaking change since the last tag; --patch
 //       releases a patch anyway, e.g. for dependency updates only).
 //   node scripts/release.mjs prepare <version> <notes file> [--date YYYY-MM-DD] [--drop-unreleased]
@@ -22,13 +23,14 @@
 // Run from anywhere inside the repo; file arguments are relative to the folder you ran it from.
 // The rules themselves are in scripts/release-lib.mjs.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   checkNewVersion,
   draftNotes,
   insertRelease,
   latestReleaseTag,
+  lf,
   nextRelease,
   parseCommit,
   sectionBody,
@@ -47,7 +49,7 @@ function git(args, opts = {}) {
 
 const root = git(["rev-parse", "--show-toplevel"]).trim();
 const file = (p) => join(root, p);
-const read = (p) => readFileSync(file(p), "utf8");
+const read = (p) => lf(readFileSync(file(p), "utf8"));
 /** A path the user typed: relative to where they ran the command (npm run moves to the repo root). */
 const userPath = (p) => resolve(process.env.INIT_CWD ?? process.cwd(), p);
 
@@ -102,7 +104,10 @@ function checkFlags(flags, allowed) {
 
 function plan(argv) {
   const { flags } = parseArgs(argv, ["--out"]);
-  checkFlags(flags, ["--out", "--patch"]);
+  checkFlags(flags, ["--out", "--patch", "--force"]);
+  if (flags["--out"] && existsSync(userPath(flags["--out"])) && !flags["--force"]) {
+    fail(`${flags["--out"]} is already there (your rewritten notes?): pass --force to replace it`);
+  }
   const lastTag = lastReleaseTag();
   const version = currentVersion();
   const all = commitsSince(lastTag);
@@ -156,7 +161,7 @@ function prepare(argv) {
       lastTag: lastReleaseTag(),
       changelog: read("CHANGELOG.md"),
     });
-    const notes = readFileSync(userPath(notesFile), "utf8");
+    const notes = lf(readFileSync(userPath(notesFile), "utf8"));
     const missing = unreleasedLinesMissing(sectionBody(read("CHANGELOG.md"), "Unreleased") ?? "", notes);
     if (missing.length && !flags["--drop-unreleased"]) {
       throw new Error(
@@ -216,14 +221,14 @@ function verify(argv) {
   }
   let changelog = null;
   try {
-    changelog = git(["show", `${tag}:CHANGELOG.md`]);
+    changelog = lf(git(["show", `${tag}:CHANGELOG.md`]));
   } catch {
     problems.push(`can't read CHANGELOG.md at ${tag} (fetch the tags first: git fetch --tags)`);
   }
   const expected = changelog === null ? null : sectionBody(changelog, version);
   if (changelog !== null && expected === null) problems.push(`CHANGELOG.md at ${tag} has no [${version}] section`);
   if (expected === "") problems.push(`the [${version}] section of CHANGELOG.md at ${tag} is empty`);
-  if (expected && release.body.trim() !== expected) {
+  if (expected && lf(release.body).trim() !== expected) {
     problems.push("the release description differs from the CHANGELOG.md section");
   }
   if (problems.length) fail(`${tag} at ${release.url}:\n  - ${problems.join("\n  - ")}`);

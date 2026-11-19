@@ -221,6 +221,9 @@ Intro.
     expect(() => insertRelease(CHANGELOG, "0.2", "2026-12-01", "- x")).toThrow(/version/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "## [9.9.9]\n- x")).toThrow(/headings/);
     expect(() => insertRelease("# Changelog\n", "0.2.0", "2026-12-01", "- x")).toThrow(/Unreleased/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "- See [it][g].\n[g]: https://example.com\n- y")).toThrow(
+      /link lines/,
+    );
   });
   it("leaves the rest of the file byte for byte, and stops sections at link lines", () => {
     const file =
@@ -245,6 +248,9 @@ Intro.
       "- A long\n  Reminders.",
     ]);
     expect(unreleasedLinesMissing("### Removed\n- An old button.", "- Removed: An old button.")).toEqual([]);
+    // A wrapped-looking line right under a heading is its own entry, as in the draft.
+    const odd = "### Added\n- A.\n\n### Removed\n  note";
+    expect(unreleasedLinesMissing(odd, draftNotes({ unreleased: odd }))).toEqual([]);
   });
   it("reads this repo's CHANGELOG.md", () => {
     expect(sectionBody(repoFile("CHANGELOG.md"), "Unreleased")).not.toBeNull();
