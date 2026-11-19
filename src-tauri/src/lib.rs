@@ -92,7 +92,30 @@ fn lock(state: &State) -> MutexGuard<'_, App> {
 }
 
 /// Tell every window about the new view, and update the menu bar icon's count.
+/// The last view sent to the windows, as JSON, so the regular check can skip sending an unchanged one.
+struct LastPublished(Mutex<Option<String>>);
+
+/// Sends `view` to the windows and the menu bar. Callers hold the data lock, so views go out in order.
 fn publish(app: &AppHandle, view: &View) {
+    send(app, view, serde_json::to_string(view).ok());
+}
+
+/// Like `publish`, but does nothing when the windows already show this exact view (the regular
+/// check runs every minute and usually changes nothing).
+fn publish_if_changed(app: &AppHandle, view: &View) {
+    let json = serde_json::to_string(view).ok();
+    let last = app.state::<LastPublished>();
+    let unchanged = json.is_some() && *last.0.lock().unwrap_or_else(|e| e.into_inner()) == json;
+    if !unchanged {
+        send(app, view, json);
+    }
+}
+
+fn send(app: &AppHandle, view: &View, json: Option<String>) {
+    *app.state::<LastPublished>()
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = json;
     let _ = app.emit(VIEW_CHANGED, view);
     let due = view.people.iter().filter(|p| p.due).count();
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
@@ -316,13 +339,13 @@ fn tick(app: &AppHandle) {
         match a.tick(day) {
             Ok(due) => {
                 // Under the lock, for the same reason as in `call`.
-                publish(app, &a.view(day));
+                publish_if_changed(app, &a.view(day));
                 due
             }
             Err(e) => {
                 // The data was rolled back; still refresh the count and dates (the day may have moved on).
                 eprintln!("friends: couldn't save after the regular check: {e}");
-                publish(app, &a.view(day));
+                publish_if_changed(app, &a.view(day));
                 return;
             }
         }
@@ -393,6 +416,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             app.manage(DropdownHiddenAt(Mutex::new(None)));
+            app.manage(LastPublished(Mutex::new(None)));
 
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
             TrayIconBuilder::with_id(TRAY_ID)
