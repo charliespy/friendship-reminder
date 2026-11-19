@@ -177,9 +177,12 @@ export function sectionFor(commit) {
  * `revert: <subject>` flip it once, git's `Reapply "<subject>"` twice. The last commit about a
  * change decides: an even count means it is in. Then:
  *   - in, and its original commit is in the range: the original stays, the reverts go;
- *   - in, but the original is older (released before): it comes back under its own subject;
  *   - out, and the original is in the range: everything about it goes;
- *   - out, and the original is older: the revert stays (a revert doesn't release by itself).
+ *   - the original is older (released before): what matters is whether the change was in at
+ *     the last release (the range opens with an odd flip) and whether it is in now. Out then
+ *     in: it comes back under its own subject. In then out: the revert stays (a revert doesn't
+ *     release by itself). Unchanged: everything about it goes.
+ * Two PRs with the same title are separate changes; a revert applies to the newest one.
  * Takes and returns { subject } objects (other fields kept), oldest first.
  */
 export function dropReverted(commits) {
@@ -203,20 +206,32 @@ export function dropReverted(commits) {
       return { base: t, flips };
     }
   };
-  const changes = new Map(); // base subject -> { original, flips, last }, in first-seen order
+  const records = []; // { base, original, firstFlips, flips, last }, oldest first
+  const open = new Map(); // base subject -> the newest record about it
   for (const c of commits) {
     const { base, flips } = unwrap(c.subject);
-    const change = changes.get(base) ?? { original: null, flips: 0, last: c };
+    let change = open.get(base);
+    // A second PR with the same title is a separate change: only the newest is open to reverts.
+    if (!change || (flips === 0 && change.original)) {
+      change = { base, original: null, firstFlips: flips, flips: 0, last: c };
+      records.push(change);
+      open.set(base, change);
+    }
     if (flips === 0 && !change.original) change.original = c;
     change.flips = flips;
     change.last = c;
-    changes.set(base, change);
   }
   const kept = [];
-  for (const [base, { original, flips, last }] of changes) {
+  for (const { base, original, firstFlips, flips, last } of records) {
     const isIn = flips % 2 === 0;
-    if (isIn) kept.push(original ?? { ...last, subject: base });
-    else if (!original) kept.push(last);
+    if (original) {
+      if (isIn) kept.push(original);
+      continue;
+    }
+    // Released before: it was in at the last release when the range opens with an odd flip.
+    const wasIn = firstFlips % 2 === 1;
+    if (isIn && !wasIn) kept.push({ ...last, subject: base });
+    else if (!isIn && wasIn) kept.push(last);
   }
   return kept;
 }
@@ -248,8 +263,8 @@ export function draftNotes({ unreleased = "", commits = [], unsigned = true }) {
     const line = `- ${c.breaking ? "**Breaking:** " : ""}${sentence(c.description)}`;
     if (!groups[section].includes(line)) groups[section].push(line);
   }
-  // Dependabot's commits: chore(deps): … and chore(deps-dev): …
-  if (commits.some((c) => /^deps/.test(c.scope ?? "") && (c.type === "chore" || c.type === "build"))) {
+  // Dependabot's chore(deps): … (chore(deps-dev) is build and test tools, not part of the app)
+  if (commits.some((c) => c.scope === "deps" && (c.type === "chore" || c.type === "build"))) {
     const line = "- Updated the libraries Friends is built on.";
     if (!groups.Changed.includes(line)) groups.Changed.push(line);
   }

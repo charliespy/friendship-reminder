@@ -145,6 +145,20 @@ describe("dropReverted", () => {
   it("keeps a revert of something released earlier", () => {
     expect(dropReverted(s('Revert "feat: old (#3)" (#13)'))).toEqual(s('Revert "feat: old (#3)" (#13)'));
   });
+  it("drops a released change that is reverted and restored since the last release", () => {
+    const revert = 'Revert "feat: old (#3)" (#20)';
+    expect(dropReverted(s(revert, 'Revert "Revert "feat: old (#3)" (#20)" (#21)'))).toEqual([]);
+    expect(dropReverted(s(revert, 'Reapply "feat: old (#3)" (#21)'))).toEqual([]);
+    expect(dropReverted(s(revert, 'Reapply "feat: old (#3)" (#21)', 'Revert "Reapply "feat: old (#3)" (#21)" (#22)'))).toEqual(
+      s('Revert "Reapply "feat: old (#3)" (#21)" (#22)'),
+    );
+  });
+  it("treats two PRs with the same title as separate changes", () => {
+    const one = "fix: crash on launch (#5)";
+    const two = "fix: crash on launch (#9)";
+    expect(dropReverted(s(one, two, 'Revert "fix: crash on launch (#9)" (#10)'))).toEqual(s(one));
+    expect(dropReverted(s(one, two))).toEqual(s(one, two));
+  });
 });
 
 describe("draftNotes", () => {
@@ -179,6 +193,8 @@ describe("draftNotes", () => {
         "- Updated the libraries Friends is built on.",
       ].join("\n"),
     );
+    // Build and test tools alone don't change the app.
+    expect(draftNotes({ commits: [c("chore(deps-dev): bump vitest")], unsigned: false })).not.toContain("libraries");
   });
   it("keeps what is under [Unreleased], mapping old headings, and adds the unsigned note once", () => {
     const unreleased = "### Added\n- A new look.\n- Tests,\n  run on every PR.\n\n### Removed\n- An old button.\n";

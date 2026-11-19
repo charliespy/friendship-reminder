@@ -109,7 +109,8 @@ on `main` until then.
 
 `plan` reads one commit per merged PR: the squash-merge commits on `main` (`feat: … (#12)`) since
 the last `vX.Y.Z` tag. A commit undone by GitHub's revert button (`Revert "feat: … (#12)"`) is
-left out together with its revert; reverting that revert (or `Reapply "…"`) brings it back. PRs
+left out together with its revert; reverting that revert (or `Reapply "…"`) brings it back. A
+released change that was reverted and then restored since the last release counts as no change. PRs
 are squash-merged, so this is every change; a PR merged with a merge commit would show up only as
 "Merge pull request …", which isn't a conventional commit and is left out. Before the first
 release there is no tag, so the notes come from `[Unreleased]` alone.
