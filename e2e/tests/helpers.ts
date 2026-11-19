@@ -1,6 +1,8 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 const server = `http://127.0.0.1:${process.env.FRIENDS_E2E_SERVER_PORT ?? 1430}`;
+/** The devserver only takes JSON posts (so a web page can't drive it). */
+const JSON_HEADERS = { "Content-Type": "application/json" };
 
 /** The fixed "today" the server starts with: Wednesday, Nov 18, 2026. */
 export const TODAY = "2026-11-18";
@@ -12,7 +14,7 @@ export interface SeedPerson {
 }
 
 async function call(request: APIRequestContext, cmd: string, args: Record<string, unknown>) {
-  const res = await request.post(`${server}/invoke`, { data: { cmd: "call", args: { cmd, args } } });
+  const res = await request.post(`${server}/invoke`, { data: { cmd: "call", args: { cmd, args } }, headers: JSON_HEADERS });
   expect(res.ok(), await res.text()).toBeTruthy();
   return res.json();
 }
@@ -22,14 +24,14 @@ export async function seed(
   request: APIRequestContext,
   opts: { today?: string; people?: SeedPerson[]; blocked?: { start: string; end: string; label: string }[] } = {},
 ) {
-  expect((await request.post(`${server}/__test/reset`, { data: {} })).ok()).toBeTruthy();
-  expect((await request.post(`${server}/__test/today`, { data: JSON.stringify(opts.today ?? TODAY) })).ok()).toBeTruthy();
+  expect((await request.post(`${server}/__test/reset`, { data: {}, headers: JSON_HEADERS })).ok()).toBeTruthy();
+  expect((await request.post(`${server}/__test/today`, { data: JSON.stringify(opts.today ?? TODAY), headers: JSON_HEADERS })).ok()).toBeTruthy();
   for (const p of opts.people ?? []) await call(request, "add_person", { ...p });
   for (const b of opts.blocked ?? []) await call(request, "add_blocked", { ...b });
 }
 
 export async function setToday(request: APIRequestContext, day: string) {
-  expect((await request.post(`${server}/__test/today`, { data: JSON.stringify(day) })).ok()).toBeTruthy();
+  expect((await request.post(`${server}/__test/today`, { data: JSON.stringify(day), headers: JSON_HEADERS })).ok()).toBeTruthy();
 }
 
 /**
