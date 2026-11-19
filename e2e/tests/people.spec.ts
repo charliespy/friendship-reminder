@@ -130,3 +130,38 @@ test("closing a form sends focus back to the button that opened it", async ({ pa
   await expect(editForm).toHaveCount(0);
   await expect(edit).toBeFocused();
 });
+
+test("deleting people sends focus to the person in their place, or to Add person", async ({ page, request }) => {
+  await seed(request, {
+    people: [
+      { name: "Maya Chen", frequencyDays: 30, lastConnected: "2026-10-10" },
+      { name: "Theo Marsh", frequencyDays: 90, lastConnected: "2026-09-29" },
+      { name: "Lena Fischer", frequencyDays: 365, lastConnected: "2026-03-02" },
+    ],
+  });
+  await openPreferences(page);
+  const rows = page.getByTestId("person-row");
+  await expect(rows).toHaveCount(3);
+
+  // Delete Maya with the keyboard: focus goes to the checkbox of whoever now has her place.
+  const maya = page.getByLabel("Select Maya Chen");
+  await maya.focus();
+  await page.keyboard.press("Space");
+  const bar = page.getByRole("region", { name: "Selected people" });
+  const deleteSelected = bar.getByRole("button", { name: "Delete selected…" });
+  await deleteSelected.focus();
+  await page.keyboard.press("Enter");
+  await bar.getByRole("button", { name: "Delete", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(rows).toHaveCount(2);
+  const first = rows.first().getByRole("checkbox");
+  await expect(first).toBeFocused();
+
+  // Delete everyone left: focus goes to Add person.
+  await page.keyboard.press("Space");
+  await rows.nth(1).getByRole("checkbox").check();
+  await bar.getByRole("button", { name: "Delete selected…" }).click();
+  await bar.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByText("Nobody yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add person" })).toBeFocused();
+});
