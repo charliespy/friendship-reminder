@@ -4,9 +4,12 @@ name: Release
 # Signing and notarization switch on by themselves once these repository secrets exist:
 #   APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
 #   APPLE_ID, APPLE_PASSWORD (app-specific password), APPLE_TEAM_ID.
-# Without them the app is built unsigned (see the README for opening an unsigned app).
+# Without them the app is only ad-hoc signed (see the README for opening it).
 # A PR that changes this file, or a manual run, does a dry run: it builds the app and keeps the
 # .dmg as a workflow artifact, but publishes nothing.
+#
+# Two jobs: the build runs npm and cargo with a read-only token; only the small publish job, which
+# runs no project code, may write (create the release), and only for a tag.
 on:
   push:
     tags: ["v*"]
@@ -21,23 +24,25 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+
 jobs:
-  release:
+  build:
     runs-on: macos-latest
-    permissions:
-      contents: write
-    env:
-      PUBLISH: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
+          toolchain: stable
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: npm ci
 
       - name: Check the tag matches the app version
@@ -70,7 +75,7 @@ jobs:
             echo "Signing and notarizing."
           elif [ ${#missing[@]} -eq 6 ]; then
             echo "sign=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No Apple secrets: building an unsigned app."
+            echo "::notice::No Apple secrets: building an ad-hoc signed app."
           else
             echo "::error::Some Apple secrets are set but these are missing: ${missing[*]}"
             exit 1
@@ -87,25 +92,53 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
 
-      - name: Build (unsigned)
+      # "-" signs ad hoc. An app with no signature at all is reported as "damaged" on Apple silicon,
+      # with no way to open it from System Settings.
+      - name: Build (ad-hoc signed)
         if: steps.signing.outputs.sign != 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
 
-      - name: Keep the dry-run build
-        if: env.PUBLISH != 'true'
-        uses: actions/upload-artifact@v4
+      - name: Check the signature
+        run: |
+          app=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          [ "$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg | wc -l)" -eq 1 ] \
+            || { echo "::error::expected exactly one .dmg"; exit 1; }
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Friends-dry-run
+          name: ${{ env.PUBLISH == 'true' && 'Friends' || 'Friends-dry-run' }}
           path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 7
 
+  publish:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Friends
+          path: dist-release
       - name: Publish the release
-        if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          dmg=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg)
-          notes=$(awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md)
+          version="${GITHUB_REF_NAME#v}"
+          # The lines under "## [<version>]" up to the next "## [" heading (plain text match).
+          notes=$(awk -v h="## [$version]" 'index($0, h) == 1 {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md)
           [ -n "$notes" ] || notes="See CHANGELOG.md."
-          gh release create "$GITHUB_REF_NAME" "$dmg" --title "Friends $GITHUB_REF_NAME" --notes "$notes" --verify-tag
+          pre=()
+          case "$version" in *-*) pre=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" dist-release/*.dmg --repo "$GITHUB_REPOSITORY" \
+            --title "Friends $GITHUB_REF_NAME" --notes "$notes" --verify-tag "${pre[@]}"

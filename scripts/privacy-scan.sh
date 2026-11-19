@@ -18,9 +18,11 @@ allowed_email='(@users\.noreply\.github\.com|@example\.(com|org|net)|^git@github
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 # Home folders, in the case the systems write them, so web routes (/api/users/list) don't match:
 # macOS /Users/<name> anywhere (also inside local dev links like /@fs/Users/...); Linux /home/<name>
-# when it starts a path (not /api/home/...); Windows C:\Users\<name> in any case.
+# when it starts a path or follows a dev server's /@fs (not /api/home/...); Windows C:\Users\<name>
+# in any case. Accepted gaps, to keep web routes passing: a lower-case /users/<name> (macOS would
+# open it) and /var/home/<name>.
 mac_home='/Users/[A-Za-z0-9._-]+'
-linux_home='(^|[^A-Za-z0-9._-])/home/[A-Za-z0-9._-]+'
+linux_home='(^|[^A-Za-z0-9._-]|/@fs)/home/[A-Za-z0-9._-]+'
 windows_home='[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9._-]+'
 # Placeholders a doc may use for a home folder, and the system's shared folders.
 allowed_path='[\\/](Users|home)[\\/]+(you|me|runner|USER|\$USER|<[^>]*>|example|name|username|Shared|Public|Default|All Users)$'
@@ -44,7 +46,7 @@ scan_text() {
     paths=$(printf '%s\n' "$text" | sed -E "s#$url##g")
     {
       printf '%s\n' "$paths" | grep -oE "$mac_home" || true
-      printf '%s\n' "$paths" | grep -oE "$linux_home" | sed -E 's#^[^/]##' || true
+      printf '%s\n' "$paths" | grep -oE "$linux_home" | sed -E 's#^.*(/home/)#\1#' || true
       printf '%s\n' "$paths" | grep -oiE "$windows_home" || true
     } | grep -viE "$allowed_path" || true
   )

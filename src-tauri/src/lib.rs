@@ -64,8 +64,19 @@ fn data_file(app: &AppHandle) -> Result<PathBuf, String> {
 /// or its folder can't be read or created (permissions, a full or missing disk).
 fn open_data(app: &AppHandle) -> Result<App, String> {
     let path = data_file(app).map_err(|e| format!("Couldn't find the app data folder: {e}"))?;
-    App::open(Store::new(path.clone()))
-        .map_err(|e| format!("Couldn't read {}: {e}", path.display()))
+    App::open(Store::new(path.clone())).map_err(|e| {
+        let home = app.path().home_dir().ok();
+        format!("Couldn't read {}: {e}", tilde(&path, home.as_deref()))
+    })
+}
+
+/// The path with the home folder shown as ~, so an error pasted into a bug report doesn't carry the
+/// user's account name.
+fn tilde(path: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    match home.and_then(|h| path.strip_prefix(h).ok()) {
+        Some(rest) => format!("~/{}", rest.display()),
+        None => path.display().to_string(),
+    }
 }
 
 fn lock(state: &State) -> MutexGuard<'_, App> {
@@ -352,10 +363,6 @@ pub fn run() {
             quit
         ])
         .setup(|app| {
-            // A menu bar app: no Dock icon, no app menu.
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
             let handle = app.handle().clone();
             let core = match open_data(&handle) {
                 Ok(core) => core,
@@ -374,6 +381,11 @@ pub fn run() {
                 }
             };
             app.manage(State(Mutex::new(core)));
+
+            // A menu bar app: no Dock icon, no app menu. Switched after the data opens, so the alert
+            // above still comes to the front as a normal app's would.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             app.manage(DropdownHiddenAt(Mutex::new(None)));
 
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
@@ -433,6 +445,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tilde_hides_the_home_folder() {
+        let home = std::path::Path::new("/Users/you");
+        let file = std::path::Path::new("/Users/you/Library/Application Support/x/friends.json");
+        assert_eq!(
+            tilde(file, Some(home)),
+            "~/Library/Application Support/x/friends.json"
+        );
+        let elsewhere = std::path::Path::new("/Volumes/data/friends.json");
+        assert_eq!(tilde(elsewhere, Some(home)), "/Volumes/data/friends.json");
+        assert_eq!(tilde(file, None), file.display().to_string());
+    }
 
     /// A Retina laptop (1512 x 982 pt, scale 2) with a plain 1920 x 1080 monitor to its right.
     const LAPTOP: Screen = Screen {

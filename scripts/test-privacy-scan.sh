@@ -39,6 +39,9 @@ expect fail "a home folder in a local dev link" text "http://localhost:1420/@fs/
 expect pass "web routes" text 'fetch("/api/users/list"), /api/home/feed, /settings/users/new'
 expect pass "retina names" text "icon@2x.webp, photo@3x.jpeg, a@2x.gif, b@2x.avif"
 expect fail "a linux home at the start of a path" text 'cd "/home/jane/src"'
+expect fail "a linux home in a local dev link" text "http://localhost:1420/@fs/home/jane/x.ts"
+expect fail "a linux home in a 127.0.0.1 dev link" text "http://127.0.0.1:1420/@fs/home/jane/x.ts"
+expect pass "a home route on a local dev server" text "http://localhost:1420/app/home/feed"
 expect fail "a windows home in lower case" text 'c:\\users\\jane\\x'
 expect fail "an upper-case tailnet host" text "MY-MAC.TAIL1234.TS.NET"
 expect pass "an upper-case noreply address" text "1+SOMEONE@USERS.NOREPLY.GITHUB.COM"
