@@ -21,8 +21,9 @@ colors:
   amber: "#96600c"
   amber-tint: "rgb(150 96 12 / 11%)"
   plum: "#7c4a86"
-  danger: "#c4312b"
-  danger-down: "#a72822"
+  danger: "#b02a24"
+  danger-fill: "#b02a24"
+  danger-down: "#93231e"
   focus: "rgb(51 70 196 / 42%)"
   selection: "rgb(51 70 196 / 20%)"
   disc-indigo: "#3346c4"
@@ -109,7 +110,7 @@ components:
     backgroundColor: "{colors.press-tint}"
     textColor: "{colors.ink}"
   button-danger:
-    backgroundColor: "{colors.danger}"
+    backgroundColor: "{colors.danger-fill}"
     textColor: "{colors.on-press}"
     rounded: "{rounded.sm}"
     padding: "0 8px"
@@ -225,7 +226,7 @@ Two working inks on a cool neutral stock, plus three small spot inks with fixed 
 Four fixed tones (disc-indigo, disc-green, disc-slate, disc-plum), picked from a hash of the name so a person keeps their colour. White initial on top. These stay the same in light and dark mode.
 
 ### Dark mode
-The same roles, re-inked: charcoal stock `#181a21`, sheet `#22252e`, well `#13151b`, sidebar `#1d2028`; ink `#e9ebf2` / `#b4b8c6` / `#9196a6`; press `#4a5bd4`; sea `#5fcbae` with dark `#0d2a23` text on it; amber `#e3b25c`; plum `#c99ad3`; danger `#ff6b61`. Tints and rules switch to light-on-dark alpha. Full set in `src/styles.css` and the sidecar.
+The same roles, re-inked: charcoal stock `#181a21`, sheet `#22252e`, well `#13151b`, sidebar `#1d2028`; ink `#e9ebf2` / `#b4b8c6` / `#9196a6`; press `#4a5bd4`; sea `#5fcbae` with dark `#0d2a23` text on it; amber `#e3b25c`; plum `#c99ad3`; danger `#ff6b61` for error text, with a darker `#c8322b` fill (hover `#ad2a24`) behind the white Delete label. Tints and rules switch to light-on-dark alpha. Full set in `src/styles.css` and the sidecar.
 
 ### Named Rules
 **The Missed Is Amber Rule.** A missed day is information, not failure: it is printed in amber, never red. Red (danger) is for destructive actions (Delete) and error messages only.

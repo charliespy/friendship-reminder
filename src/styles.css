@@ -29,8 +29,9 @@
   --amber: #96600c;
   --amber-tint: rgb(150 96 12 / 11%);
   --plum: #7c4a86;
-  --danger: #c4312b;
-  --danger-down: #a72822;
+  --danger: #b02a24;
+  --danger-fill: #b02a24;
+  --danger-down: #93231e;
 
   --focus: rgb(51 70 196 / 42%);
   --selection: rgb(51 70 196 / 20%);
@@ -100,7 +101,8 @@
     --amber-tint: rgb(227 178 92 / 14%);
     --plum: #c99ad3;
     --danger: #ff6b61;
-    --danger-down: #f0544a;
+    --danger-fill: #c8322b;
+    --danger-down: #ad2a24;
 
     --focus: rgb(127 143 255 / 55%);
     --selection: rgb(127 143 255 / 30%);
@@ -249,7 +251,7 @@ h3 {
 }
 
 .btn-danger {
-  background: var(--danger);
+  background: var(--danger-fill);
   color: #fff;
   box-shadow: var(--lift);
 }

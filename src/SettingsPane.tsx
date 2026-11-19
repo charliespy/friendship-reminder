@@ -16,8 +16,25 @@ export function SettingsPane({ view }: { view: View }) {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
 
+  // Read on mount, and again whenever the window comes back: the pane stays mounted while
+  // Preferences is hidden, and the setting can change in System Settings meanwhile.
   useEffect(() => {
-    api.getLaunchAtLogin().then(setLogin, (e) => setLoginError(errorMessage(e)));
+    const load = () => {
+      api.getLaunchAtLogin().then(
+        (on) => (setLogin(on), setLoginError(null)),
+        (e) => setLoginError(errorMessage(e)),
+      );
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    load();
+    window.addEventListener("focus", load);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", load);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   // One change at a time, so the box always shows the answer to the last click.

@@ -91,7 +91,6 @@ fn lock(state: &State) -> MutexGuard<'_, App> {
     state.0.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Tell every window about the new view, and update the menu bar icon's count.
 /// The last view sent to the windows, as JSON, so the regular check can skip sending an unchanged one.
 struct LastPublished(Mutex<Option<String>>);
 
@@ -111,6 +110,7 @@ fn publish_if_changed(app: &AppHandle, view: &View) {
     }
 }
 
+/// Tell every window about the new view, and update the menu bar icon's count.
 fn send(app: &AppHandle, view: &View, json: Option<String>) {
     *app.state::<LastPublished>()
         .0
