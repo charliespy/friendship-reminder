@@ -14,3 +14,5 @@ All notable changes are written here. The format follows
 ### Added
 - Unit tests for the scheduling rules and end-to-end tests of every screen, run on every PR.
 - Releases: pushing a `v*` tag builds the app and publishes it on GitHub Releases.
+- If Friends can't read its data folder at launch, it says so in an alert instead of quitting
+  without a word.

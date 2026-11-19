@@ -60,6 +60,14 @@ fn data_file(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("friends.json"))
 }
 
+/// Loads the data file. A damaged file is moved aside by the core; this fails only when the file
+/// or its folder can't be read or created (permissions, a full or missing disk).
+fn open_data(app: &AppHandle) -> Result<App, String> {
+    let path = data_file(app).map_err(|e| format!("Couldn't find the app data folder: {e}"))?;
+    App::open(Store::new(path.clone()))
+        .map_err(|e| format!("Couldn't read {}: {e}", path.display()))
+}
+
 fn lock(state: &State) -> MutexGuard<'_, App> {
     // A panic while the lock is held poisons it. The data may then hold half a change, but every
     // command validates what it saves, and refusing all commands from then on would be worse.
@@ -349,8 +357,22 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
-            let store = Store::new(data_file(&handle)?);
-            let core = App::open(store)?;
+            let core = match open_data(&handle) {
+                Ok(core) => core,
+                Err(e) => {
+                    // A menu bar app that quits at launch would vanish without a word; say why.
+                    eprintln!("friends: {e}");
+                    rfd::MessageDialog::new()
+                        .set_level(rfd::MessageLevel::Error)
+                        .set_title("Friends can't open its data")
+                        .set_description(format!(
+                            "{e}\n\nCheck that you can read and write this folder, then open Friends again."
+                        ))
+                        .set_buttons(rfd::MessageButtons::Ok)
+                        .show();
+                    std::process::exit(1);
+                }
+            };
             app.manage(State(Mutex::new(core)));
             app.manage(DropdownHiddenAt(Mutex::new(None)));
 
