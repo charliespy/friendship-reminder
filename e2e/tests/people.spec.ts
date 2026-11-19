@@ -1,0 +1,85 @@
+import { expect, test } from "@playwright/test";
+import { SAMPLE, TODAY, openPreferences, seed } from "./helpers";
+
+test("add a person", async ({ page, request }) => {
+  await seed(request);
+  await openPreferences(page);
+  await expect(page.getByText("Nobody yet")).toBeVisible();
+  await page.getByRole("button", { name: "Add person" }).click();
+  const form = page.getByRole("form", { name: "Add person" });
+  await expect(form.getByRole("button", { name: "Add person" })).toBeDisabled();
+  await form.getByLabel("Name").fill("  Ana   Torres ");
+  await form.getByLabel("How often").selectOption({ label: "Monthly" });
+  await expect(form.getByLabel("Last in touch")).toHaveValue(TODAY);
+  await form.getByRole("button", { name: "Add person" }).click();
+  const row = page.getByTestId("person-row");
+  await expect(row).toHaveCount(1);
+  // Nov 18 + 30 = Fri Dec 18 → Sat Dec 19; reminder Monday Dec 14.
+  await expect(row).toContainText("Ana Torres");
+  await expect(row).toContainText("Monthly · Reminder in 4 weeks, Mon, Dec 14");
+});
+
+test("someone long out of touch is due now and marked missed", async ({ page, request }) => {
+  await seed(request);
+  await openPreferences(page);
+  await page.getByRole("button", { name: "Add person" }).click();
+  const form = page.getByRole("form", { name: "Add person" });
+  await form.getByLabel("Name").fill("Old Friend");
+  await form.getByLabel("Last in touch").fill("2024-01-15");
+  await form.getByRole("button", { name: "Add person" }).click();
+  await expect(page.getByTestId("person-row")).toContainText("Missed last time · aim for Sat, Nov 21");
+  await expect(page.getByRole("tab", { name: /People/ })).toContainText("1");
+});
+
+test("edit a person's name and frequency", async ({ page, request }) => {
+  await seed(request, { people: [{ name: "Theo Marsh", frequencyDays: 90, lastConnected: "2026-09-29" }] });
+  await openPreferences(page);
+  await page.getByRole("button", { name: "Edit Theo Marsh" }).click();
+  const form = page.getByRole("form", { name: "Save changes" });
+  await form.getByLabel("Name").fill("Theodore Marsh");
+  await form.getByLabel("How often").selectOption({ label: "Yearly" });
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form).toHaveCount(0);
+  // Sep 29, 2026 + 365 = Wed Sep 29, 2027 → Sat Oct 2; reminder Mon Sep 27, 2027.
+  await expect(page.getByTestId("person-row")).toContainText("Theodore Marsh");
+  await expect(page.getByTestId("person-row")).toContainText("Yearly · Reminder in 10 months, Mon, Sep 27, 2027");
+});
+
+test("an edit that can't be saved shows why and keeps the form", async ({ page, request }) => {
+  await seed(request, { people: [{ name: "Theo Marsh", frequencyDays: 90, lastConnected: "2026-09-29" }] });
+  await openPreferences(page);
+  await page.getByRole("button", { name: "Edit Theo Marsh" }).click();
+  const form = page.getByRole("form", { name: "Save changes" });
+  await form.getByLabel("Name").fill("x".repeat(100));
+  await form.getByLabel("Last in touch").fill("1850-01-01");
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form.getByRole("alert")).toHaveText("Pick a date between 1900 and today.");
+  await expect(form).toBeVisible();
+});
+
+test("mark a person done from the list", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE.slice(0, 1) });
+  await openPreferences(page);
+  const row = page.getByTestId("person-row");
+  await expect(row).toContainText("Due");
+  await row.getByRole("button", { name: "Done" }).click();
+  await expect(row).toContainText("Monthly · Reminder in 4 weeks, Mon, Dec 14");
+  await expect(page.getByRole("tab", { name: "People" })).toHaveText("People");
+});
+
+test("delete several people after confirming", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE });
+  await openPreferences(page);
+  await page.getByLabel("Select Maya Chen").check();
+  await page.getByLabel("Select Theo Marsh").check();
+  const bar = page.getByRole("region", { name: "Selected people" });
+  await expect(bar).toContainText("2 selected");
+  await bar.getByRole("button", { name: "Delete selected…" }).click();
+  await bar.getByRole("button", { name: "Keep" }).click();
+  await expect(page.getByTestId("person-row")).toHaveCount(6);
+  await bar.getByRole("button", { name: "Delete selected…" }).click();
+  await bar.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByTestId("person-row")).toHaveCount(4);
+  await expect(page.getByText("Maya Chen")).toHaveCount(0);
+  await expect(bar).toHaveCount(0);
+});
