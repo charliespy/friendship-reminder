@@ -15,7 +15,8 @@
     "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
     "check:web": "npm run typecheck && npm run lint && npm run test && vite build",
     "check": "npm run check:web && npm run check:rust",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "privacy": "scripts/privacy-scan.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",
