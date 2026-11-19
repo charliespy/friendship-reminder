@@ -14,9 +14,14 @@ report() { echo "privacy-scan: $1" >&2; fail=1; }
 
 # Addresses that are fine to publish: GitHub noreply addresses, the reserved example domains, git
 # remotes, and retina image names (icon@2x.png).
-allowed_email='(@users\.noreply\.github\.com|@example\.(com|org|net)|@localhost|^git@github\.com|@[0-9]+x\.(png|jpg|svg))$'
+allowed_email='(@users\.noreply\.github\.com|@example\.(com|org|net)|^git@github\.com|@[0-9]+x\.(png|jpe?g|svg|webp|gif|avif))$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
-home_path='(/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+|[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9._-]+)'
+# Home folders, in the case the systems write them, so web routes (/api/users/list) don't match:
+# macOS /Users/<name> anywhere (also inside local dev links like /@fs/Users/...); Linux /home/<name>
+# when it starts a path (not /api/home/...); Windows C:\Users\<name> in any case.
+mac_home='/Users/[A-Za-z0-9._-]+'
+linux_home='(^|[^A-Za-z0-9._-])/home/[A-Za-z0-9._-]+'
+windows_home='[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9._-]+'
 # Placeholders a doc may use for a home folder, and the system's shared folders.
 allowed_path='[\\/](Users|home)[\\/]+(you|me|runner|USER|\$USER|<[^>]*>|example|name|username|Shared|Public|Default|All Users)$'
 # A web link to a named site (example.com): a /home/... or /Users/... in it is a page, not a folder.
@@ -35,7 +40,14 @@ scan_text() {
   done < <(printf '%s\n' "$text" | grep -oE "$email" | grep -viE "$allowed_email" || true)
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "home-folder path in $where: $hit"
-  done < <(printf '%s\n' "$text" | sed -E "s#$url##g" | grep -oiE "$home_path" | grep -viE "$allowed_path" || true)
+  done < <(
+    paths=$(printf '%s\n' "$text" | sed -E "s#$url##g")
+    {
+      printf '%s\n' "$paths" | grep -oE "$mac_home" || true
+      printf '%s\n' "$paths" | grep -oE "$linux_home" | sed -E 's#^[^/]##' || true
+      printf '%s\n' "$paths" | grep -oiE "$windows_home" || true
+    } | grep -viE "$allowed_path" || true
+  )
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "private host name in $where: $hit"
   done < <(printf '%s\n' "$text" | grep -oiE "$private_host" || true)
@@ -107,12 +119,15 @@ while IFS= read -r -d '' record; do
 done < <(git log -z --format='%H%n%B' "$range")
 
 # 3. What the commits added: something added in one commit and removed in the next is gone from
-#    the files but stays public in the history. Same files skipped as above.
-scan_text "the changes in $range" < <(
-  git log -p --no-ext-diff --no-color --format= "$range" -- . \
-    ':(glob,exclude)**/package-lock.json' ':(glob,exclude)**/Cargo.lock' \
-    ':(exclude)scripts/privacy-scan.sh' ':(exclude)scripts/test-privacy-scan.sh' |
-    grep '^+' | grep -v '^+++' || true
-)
+#    the files but stays public in the history. Same files skipped as above. The diff goes to a file
+#    first, so a failing git log fails the scan instead of scanning nothing.
+diff_file=$(mktemp)
+trap 'rm -f "$diff_file"' EXIT
+git log -p --no-ext-diff --no-color --format= "$range" -- . \
+  ':(glob,exclude)**/package-lock.json' ':(glob,exclude)**/Cargo.lock' \
+  ':(exclude)scripts/privacy-scan.sh' ':(exclude)scripts/test-privacy-scan.sh' >"$diff_file"
+# Added lines start with "+"; git's own "+++ b/<file>" (or "+++ /dev/null") header lines don't count,
+# but an added line whose text starts with "++" does.
+scan_text "the changes in $range" < <(grep -E '^\+' "$diff_file" | grep -vE '^\+\+\+ (b/|/dev/null)' || true)
 
 finish
