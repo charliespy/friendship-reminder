@@ -73,6 +73,29 @@ describe("release.mjs", { timeout: 60_000 }, () => {
     expect(notes.code).toBe(0);
     expect(notes.out).toMatch(/^### New\n\n- A new look\.\n\n### Good to know\n/);
   });
+  it("dry-run: the plan, then the prepared description, then the plan again after the tag", () => {
+    let r = release("dry-run");
+    expect(r).toMatchObject({ code: 0 });
+    expect(r.out).toContain("Next version:  0.1.0");
+    release("plan", "--out", "notes.md");
+    release("prepare", "0.1.0", "notes.md", "--date", "2026-11-19");
+    r = release("dry-run");
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/^v0\.1\.0 is prepared\. Tagging it would publish this description:\n\n### New\n\n- A new look\./);
+    commit("chore(release): v0.1.0 (#9)");
+    sh("git", ["-c", "tag.gpgsign=false", "tag", "v0.1.0"]);
+    commit("docs: typo (#10)");
+    r = release("dry-run");
+    expect(r.code).toBe(0); // Nothing to release is fine for a dry run.
+    expect(r.out).toContain("Last release:  v0.1.0");
+  });
+  it("dry-run fails on a prepared release with an empty section", () => {
+    writeFileSync(join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-11-19\n");
+    const r = release("dry-run");
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/no notes for \[0\.1\.0\]/);
+    expect(release("notes", "v1.0.0-rc.1").err).toMatch(/not a release version/);
+  });
   it("won't overwrite a notes file unless told to", () => {
     writeFileSync(join(dir, "notes.md"), "rewritten\n");
     expect(release("plan", "--out", "notes.md").err).toMatch(/already there/);

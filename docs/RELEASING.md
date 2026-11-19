@@ -57,9 +57,16 @@ on `main` until then.
    it in, or add `--drop-unreleased` when the notes already say it in other words.
 
 5. **Open the release PR** titled `chore(release): vX.Y.Z`, with the notes
-   (`npm run release:notes -- X.Y.Z`) in its description. The
-   release workflow runs a dry-run build on it and prints the notes it will publish. Merge it once
-   the checks pass.
+   (`npm run release:notes -- X.Y.Z`) in its description. The release workflow runs a dry-run
+   build on it and prints the description it will publish. It starts by itself only when the PR
+   changes the app version; when it doesn't (the first release, `v0.1.0`, keeps the version the
+   files already have), start it by hand and check that run:
+
+   ```sh
+   gh workflow run release.yml --ref chore/release-vX.Y.Z
+   ```
+
+   Merge the PR once the checks and the dry run pass.
 
 6. **Tag the merge commit** on `main` and push the tag:
 

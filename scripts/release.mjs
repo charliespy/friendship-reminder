@@ -16,6 +16,10 @@
 //   node scripts/release.mjs notes <version> [--out <file>]
 //       Prints the CHANGELOG.md section for <version> (the release description). Exits 1 when it
 //       is missing or empty. The release workflow publishes exactly this text.
+//   node scripts/release.mjs dry-run
+//       What the release workflow's dry run prints: on a release PR (the files' version has a
+//       CHANGELOG.md section but no tag yet), the description tagging would publish, failing when
+//       it is empty; otherwise the plan (exit 0 even when there is nothing to release).
 //   node scripts/release.mjs verify <vX.Y.Z>
 //       Checks the published GitHub Release: not a draft, exactly one .dmg for that version, and
 //       a description equal to the CHANGELOG.md section at that tag. Needs `gh`.
@@ -49,7 +53,10 @@ function git(args, opts = {}) {
 
 const root = git(["rev-parse", "--show-toplevel"]).trim();
 const file = (p) => join(root, p);
-const read = (p) => lf(readFileSync(file(p), "utf8"));
+/** A file as it is on disk (prepare rewrites these, so their bytes must stay as they are). */
+const read = (p) => readFileSync(file(p), "utf8");
+/** CHANGELOG.md for reading only, with Windows line endings made "\n". */
+const readChangelog = () => lf(read("CHANGELOG.md"));
 /** A path the user typed: relative to where they ran the command (npm run moves to the repo root). */
 const userPath = (p) => resolve(process.env.INIT_CWD ?? process.cwd(), p);
 
@@ -102,7 +109,34 @@ function checkFlags(flags, allowed) {
   for (const f of Object.keys(flags)) if (!allowed.includes(f)) fail(`unknown option ${f}`);
 }
 
-function plan(argv) {
+/** True when the version in the files has a CHANGELOG.md section but no tag yet: a release PR. */
+function preparedRelease() {
+  const version = currentVersion();
+  let tagged = true;
+  try {
+    git(["rev-parse", "-q", "--verify", `refs/tags/v${version}`]);
+  } catch {
+    tagged = false;
+  }
+  return !tagged && sectionBody(readChangelog(), version) !== null ? version : null;
+}
+
+// The workflow's dry run: on a release PR (prepared, not tagged), the exact description tagging
+// would publish, failing when it is empty; otherwise the plan, where "nothing to release" is fine.
+function dryRun(argv) {
+  const { pos, flags } = parseArgs(argv, []);
+  checkFlags(flags, []);
+  if (pos.length) fail("usage: release.mjs dry-run");
+  const version = preparedRelease();
+  if (version) {
+    process.stdout.write(`v${version} is prepared. Tagging it would publish this description:\n\n`);
+    notes([version]);
+    return;
+  }
+  plan([], { nothingIsFine: true });
+}
+
+function plan(argv, { nothingIsFine = false } = {}) {
   const { flags } = parseArgs(argv, ["--out"]);
   checkFlags(flags, ["--out", "--patch", "--force"]);
   if (flags["--out"] && existsSync(userPath(flags["--out"])) && !flags["--force"]) {
@@ -123,7 +157,7 @@ function plan(argv) {
   } catch (e) {
     fail(e.message);
   }
-  const unreleased = sectionBody(read("CHANGELOG.md"), "Unreleased");
+  const unreleased = sectionBody(readChangelog(), "Unreleased");
   if (unreleased === null) fail("CHANGELOG.md has no ## [Unreleased] section");
 
   const out = [];
@@ -139,7 +173,7 @@ function plan(argv) {
     out.push("  (first release: the notes come from CHANGELOG.md's [Unreleased] section alone)");
   }
   process.stdout.write(`${out.join("\n")}\n`);
-  if (!next.version) process.exit(3);
+  if (!next.version) process.exit(nothingIsFine ? 0 : 3);
 
   const notes = draftNotes({ unreleased, commits: lastTag ? conventional.map((c) => c.parsed) : [] });
   process.stdout.write(`\nDraft notes for v${next.version} (rewrite into plain words before "prepare"):\n\n${notes}\n`);
@@ -159,17 +193,19 @@ function prepare(argv) {
       version,
       currentVersion: currentVersion(),
       lastTag: lastReleaseTag(),
-      changelog: read("CHANGELOG.md"),
+      changelog: readChangelog(),
     });
     const notes = lf(readFileSync(userPath(notesFile), "utf8"));
-    const missing = unreleasedLinesMissing(sectionBody(read("CHANGELOG.md"), "Unreleased") ?? "", notes);
+    const missing = unreleasedLinesMissing(sectionBody(readChangelog(), "Unreleased") ?? "", notes);
     if (missing.length && !flags["--drop-unreleased"]) {
       throw new Error(
         `these lines under [Unreleased] aren't in the notes, and would be lost:\n  ${missing.join("\n  ")}\n` +
           "Put them in the notes, or pass --drop-unreleased if the notes already cover them in other words.",
       );
     }
-    writes.push(["CHANGELOG.md", insertRelease(read("CHANGELOG.md"), version, date, notes)]);
+    const changelog = read("CHANGELOG.md");
+    if (changelog.includes("\r")) throw new Error("CHANGELOG.md has Windows line endings: convert it to \\n first");
+    writes.push(["CHANGELOG.md", insertRelease(changelog, version, date, notes)]);
     writes.push(["package.json", setJsonVersion(read("package.json"), version)]);
     writes.push(["package-lock.json", setJsonVersion(read("package-lock.json"), version, { lockfile: true })]);
     writes.push(["src-tauri/tauri.conf.json", setJsonVersion(read("src-tauri/tauri.conf.json"), version)]);
@@ -187,7 +223,8 @@ function notes(argv) {
   checkFlags(flags, ["--out"]);
   if (pos.length !== 1) fail("usage: release.mjs notes <version> [--out <file>]");
   const version = pos[0].replace(/^v/, "");
-  const body = sectionBody(read("CHANGELOG.md"), version);
+  if (!/^\d+\.\d+\.\d+$/.test(version)) fail(`not a release version (want X.Y.Z): ${pos[0]}`);
+  const body = sectionBody(readChangelog(), version);
   if (!body) fail(`CHANGELOG.md has no notes for [${version}]: run "release.mjs prepare" in the release PR`);
   if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${body}\n`);
   else process.stdout.write(`${body}\n`);
@@ -242,6 +279,8 @@ function localDate() {
 }
 
 const [command, ...rest] = process.argv.slice(2);
-const commands = { plan, prepare, notes, verify };
-if (!commands[command]) fail("usage: release.mjs plan | prepare | notes | verify (see the top of scripts/release.mjs)");
+const commands = { plan, prepare, notes, verify, "dry-run": dryRun };
+if (!Object.hasOwn(commands, command)) {
+  fail("usage: release.mjs plan | prepare | notes | verify | dry-run (see the top of scripts/release.mjs)");
+}
 commands[command](rest);

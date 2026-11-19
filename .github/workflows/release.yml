@@ -10,8 +10,9 @@ name: Release
 # run, does a dry run: it prints the release plan and notes, builds the app and keeps the .dmg
 # as a workflow artifact, but publishes nothing.
 #
-# Two jobs: the build runs npm and cargo with a read-only token; only the small publish job, which
-# runs no project code, may write (create the release), and only for a tag.
+# Two jobs: the build runs npm and cargo with a read-only token, and makes the .dmg and the release
+# notes; only the small publish job, which runs no project code, may write (create the release from
+# those two files), and only for a tag.
 on:
   push:
     tags: ["v*"]
@@ -40,8 +41,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-          # The whole history and the tags, so the dry run can work out the next version.
-          fetch-depth: 0
+          # The dry run needs the whole history and the tags to work out the next version; a release
+          # build reads only the tagged files.
+          fetch-depth: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) && 1 || 0 }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -56,6 +58,11 @@ jobs:
       - name: Check the tag matches the app version
         if: env.PUBLISH == 'true'
         run: |
+          # Only vX.Y.Z tags are releases (no pre-releases).
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$GITHUB_REF_NAME is not a vX.Y.Z release tag"
+            exit 1
+          fi
           tag="${GITHUB_REF_NAME#v}"
           app=$(node -p "require('./src-tauri/tauri.conf.json').version")
           if [ "$tag" != "$app" ]; then
@@ -71,23 +78,11 @@ jobs:
           node scripts/release.mjs notes "$GITHUB_REF_NAME" --out dist-release/release-notes.md
           cat dist-release/release-notes.md
 
+      # On a release PR: the exact description tagging would publish (fails if it is empty).
+      # Otherwise the plan; on a PR it reads the base branch: what main would release without it.
       - name: Dry run of the release plan and notes
         if: env.PUBLISH != 'true'
-        run: |
-          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if ! git rev-parse -q --verify "refs/tags/v$version" > /dev/null \
-            && node scripts/release.mjs notes "$version" > /dev/null 2>&1; then
-            # A release PR: v$version is prepared and waits for its tag.
-            echo "Tagging v$version would publish it with this description:"
-            echo
-            node scripts/release.mjs notes "$version"
-          else
-            # On a PR this reads the base branch's history: what main would release without the PR.
-            code=0
-            node scripts/release.mjs plan || code=$?
-            # 3 = nothing to release yet, which is fine for a dry run.
-            [ "$code" -eq 0 ] || [ "$code" -eq 3 ] || exit "$code"
-          fi
+        run: node scripts/release.mjs dry-run
 
       - name: Decide whether to sign
         id: signing

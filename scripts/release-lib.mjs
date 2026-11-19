@@ -341,7 +341,7 @@ export function checkNewVersion({ version, currentVersion, lastTag, changelog = 
 /** The entries of a release body: each bullet with its wrapped lines, or a lone line. */
 function entries(body) {
   const out = [];
-  let open = false; // Same rule as parseSections: only a line right under an entry continues it.
+  let open = false; // An indented line continues only the entry right above it.
   for (const line of body.split("\n")) {
     if (!line.trim() || /^#{1,6}\s/.test(line)) {
       open = false;
