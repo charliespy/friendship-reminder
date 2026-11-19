@@ -8,6 +8,7 @@
 //! - `POST /invoke` with `{"cmd": "<tauri command>", "args": {...}}` answers like the Tauri command would:
 //!   `200` with the result, or `400` with the error.
 //! - `POST /__test/reset` with a data file's JSON (or `{}`) replaces the data and clears launch at login.
+//! - `GET /__test/health` answers 200 once the server is up.
 //! - `POST /__test/today` with `"YYYY-MM-DD"` (a JSON string) moves the server's clock to that day.
 //!
 //! It only listens on the loopback address and is never part of the app. So that a web page open in
@@ -212,6 +213,7 @@ fn main() {
                 }
                 Err(e) => json_response(400, &json!(e.to_string())),
             },
+            (Method::Get, "/__test/health") => json_response(200, &json!("ok")),
             (Method::Post, "/__test/reset") => match dev.reset(&body) {
                 Ok(()) => json_response(200, &Value::Null),
                 Err(e) => json_response(500, &json!(e)),

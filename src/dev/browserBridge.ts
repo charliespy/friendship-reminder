@@ -47,7 +47,13 @@ export function installBrowserBridge(endpoint = "/__friends/invoke") {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cmd, args }),
       });
-      const body: unknown = await res.json();
+      const text = await res.text();
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        throw `friends-devserver isn't answering (HTTP ${res.status}). Is npm run dev:web running?`;
+      }
       if (!res.ok) throw body;
       // The real shell tells every window about a new view; here there is only this window.
       if (cmd === "call") emit("view-changed", body);

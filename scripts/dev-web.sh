@@ -25,8 +25,9 @@ trap 'kill "$server" 2>/dev/null || true' EXIT INT TERM
 # Start Vite only once the devserver answers (it exits at once if the port is taken).
 for _ in $(seq 1 50); do
   kill -0 "$server" 2>/dev/null || { echo "dev-web: friends-devserver didn't start (is port $port in use?)" >&2; exit 1; }
-  curl -fs "http://127.0.0.1:$port/__test/health" >/dev/null && break
+  if curl -fs "http://127.0.0.1:$port/__test/health" >/dev/null; then ready=1; break; fi
   sleep 0.2
 done
+[ -n "${ready:-}" ] || { echo "dev-web: friends-devserver isn't answering on port $port" >&2; exit 1; }
 
 FRIENDS_DEVSERVER_PORT="$port" VITE_BROWSER_BRIDGE=1 npx vite
