@@ -3,6 +3,7 @@ name: CI
 # Every PR, and every push to main: the full check, the end-to-end tests and the privacy scan.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -23,6 +24,12 @@ jobs:
           fetch-depth: 0
       - name: Scan files and commits for personal info
         run: scripts/privacy-scan.sh
+      - name: Scan the PR title and description
+        if: github.event_name == 'pull_request'
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n%s\n' "$TITLE" "$BODY" | scripts/privacy-scan.sh --stdin
 
   check:
     name: Check (types, lint, unit tests, Rust)

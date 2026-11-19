@@ -4,6 +4,7 @@
 #
 #   scripts/privacy-scan.sh            scan tracked files and the commits of this branch
 #   scripts/privacy-scan.sh --all      also scan every commit in history
+#   ... | scripts/privacy-scan.sh --stdin   scan text (CI pipes in the PR title and description)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -18,6 +19,20 @@ private_host='[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.ts\.net'
 attribution='(Co-authored-by:|Generated with \[?Claude|noreply@anthropic\.com)'
 # Placeholders a doc may use for a home folder.
 allowed_path='/(Users|home)/(you|me|runner|USER|\$USER|<[^>]*>|example|name|username)\b'
+
+if [ "${1:-}" = "--stdin" ]; then
+  text=$(cat)
+  while IFS= read -r hit; do report "email address: $hit"; done < <(echo "$text" | grep -oE "$email" | grep -vE "$allowed_email" || true)
+  while IFS= read -r hit; do report "home-folder path: $hit"; done < <(echo "$text" | grep -oE "$home_path" | grep -vE "$allowed_path" || true)
+  while IFS= read -r hit; do report "private host name: $hit"; done < <(echo "$text" | grep -oE "$private_host" || true)
+  while IFS= read -r hit; do report "AI attribution: $hit"; done < <(echo "$text" | grep -iE "$attribution" || true)
+  if [ "$fail" -ne 0 ]; then
+    echo "privacy-scan: failed. Edit the text above (this repo is public)." >&2
+    exit 1
+  fi
+  echo "privacy-scan: clean"
+  exit 0
+fi
 
 # 1. Tracked files (lock files are generated and full of package metadata; skip them).
 files=$(git ls-files -z | xargs -0 -n1 echo | grep -vE '(^|/)(package-lock\.json|Cargo\.lock)$|\.(png|icns|ico|jpg|gif|pdf)$' | grep -v '^scripts/privacy-scan\.sh$' || true)
