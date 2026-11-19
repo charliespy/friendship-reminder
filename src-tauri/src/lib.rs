@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::{Local, NaiveDate};
 use friends_core::api::{ApiError, App, View};
@@ -24,8 +24,16 @@ const TRAY_ID: &str = "friends";
 /// How often to check for missed targets and reminders to send. Cheap, and it also covers the Mac
 /// waking from sleep and the date changing at midnight.
 const TICK_EVERY: Duration = Duration::from_secs(60);
+/// The dropdown's width in points (tauri.conf.json).
+const DROPDOWN_WIDTH: f64 = 360.0;
+/// A click on the menu bar icon first takes focus from the open dropdown, which hides it; the click
+/// that follows within this time is that same click, and must not show the dropdown again.
+const REOPEN_GUARD: Duration = Duration::from_millis(300);
 
 struct State(Mutex<App>);
+
+/// When the dropdown last hid itself because it lost focus.
+struct DropdownHiddenAt(Mutex<Option<Instant>>);
 
 /// The local calendar date. `FRIENDS_TODAY=YYYY-MM-DD` overrides it in debug builds, to try the app on
 /// a given day.
@@ -53,7 +61,8 @@ fn data_file(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn lock(state: &State) -> MutexGuard<'_, App> {
-    // App::call undoes a change that fails, so a lock poisoned by a panic still holds whole data.
+    // A panic while the lock is held poisons it. The data may then hold half a change, but every
+    // command validates what it saves, and refusing all commands from then on would be worse.
     state.0.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -74,25 +83,29 @@ fn publish(app: &AppHandle, view: &View) {
 }
 
 /// The one command the UI calls: runs a friends-core command and tells every window the result.
+/// Async, so Tauri runs it off the main thread and a slow save never freezes the menu bar.
 #[tauri::command]
-fn call(
+async fn call(
     app: AppHandle,
     state: tauri::State<'_, State>,
     cmd: String,
     args: Value,
 ) -> Result<View, ApiError> {
     let view = lock(&state).call(&cmd, args, today())?;
-    publish(&app, &view);
+    // Reading the view changes nothing, so only commands that change data tell the other windows.
+    if cmd != "get_view" {
+        publish(&app, &view);
+    }
     Ok(view)
 }
 
 #[tauri::command]
-fn get_launch_at_login(app: AppHandle) -> Result<bool, String> {
+async fn get_launch_at_login(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn set_launch_at_login(app: AppHandle, on: bool) -> Result<bool, String> {
+async fn set_launch_at_login(app: AppHandle, on: bool) -> Result<bool, String> {
     let launcher = app.autolaunch();
     let result = if on {
         launcher.enable()
@@ -139,6 +152,22 @@ fn show_preferences(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Whether a click on the icon should show the dropdown: not when the dropdown hid itself because of
+/// that same click.
+fn should_show(hidden_at: Option<Instant>, now: Instant) -> bool {
+    hidden_at.is_none_or(|t| now.saturating_duration_since(t) >= REOPEN_GUARD)
+}
+
+/// The dropdown's left edge: centred under the icon, kept inside the screen the icon is on.
+/// Everything in physical pixels; `screen` is that screen's left edge and width.
+fn dropdown_x(icon_x: f64, icon_width: f64, width: f64, screen: Option<(f64, f64)>) -> f64 {
+    let x = icon_x + icon_width / 2.0 - width / 2.0;
+    match screen {
+        Some((left, screen_width)) => x.min(left + screen_width - width).max(left),
+        None => x,
+    }
+}
+
 /// Shows the dropdown under the menu bar icon, or hides it when it's already showing.
 fn toggle_dropdown(app: &AppHandle, icon: Rect) {
     let Some(w) = app.get_webview_window(DROPDOWN) else {
@@ -148,19 +177,34 @@ fn toggle_dropdown(app: &AppHandle, icon: Rect) {
         let _ = w.hide();
         return;
     }
-    let scale = w.scale_factor().unwrap_or(1.0);
+    let hidden_at = *app
+        .state::<DropdownHiddenAt>()
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if !should_show(hidden_at, Instant::now()) {
+        return;
+    }
+    // The screen under the icon decides the scale (a Retina laptop next to a plain monitor differ).
+    let rough = icon
+        .position
+        .to_physical::<f64>(w.scale_factor().unwrap_or(1.0));
+    let monitor = app.monitor_from_point(rough.x, rough.y).ok().flatten();
+    let scale = monitor
+        .as_ref()
+        .map(|m| m.scale_factor())
+        .unwrap_or_else(|| w.scale_factor().unwrap_or(1.0));
     let (pos, size) = (
         icon.position.to_physical::<f64>(scale),
         icon.size.to_physical::<f64>(scale),
     );
-    let width = w
-        .outer_size()
-        .map(|s| f64::from(s.width))
-        .unwrap_or(360.0 * scale);
-    // Centred under the icon, a few points below the menu bar.
-    let x = pos.x + size.width / 2.0 - width / 2.0;
+    let screen = monitor
+        .as_ref()
+        .map(|m| (f64::from(m.position().x), f64::from(m.size().width)));
+    let x = dropdown_x(pos.x, size.width, DROPDOWN_WIDTH * scale, screen);
+    // A few points below the menu bar.
     let y = pos.y + size.height + 4.0 * scale;
-    let _ = w.set_position(PhysicalPosition::new(x.max(0.0), y));
+    let _ = w.set_position(PhysicalPosition::new(x, y));
     let _ = w.show();
     let _ = w.set_focus();
 }
@@ -188,12 +232,16 @@ fn tick(app: &AppHandle) {
         } else {
             format!("It's time to reach out to {}.", person.name)
         };
-        let _ = app
+        // macOS delivers it later; the person also stays in the dropdown and the menu bar count.
+        if let Err(e) = app
             .notification()
             .builder()
             .title("Friends")
             .body(body)
-            .show();
+            .show()
+        {
+            eprintln!("friends: couldn't send a notification: {e}");
+        }
     }
     publish(app, &view);
 }
@@ -226,6 +274,7 @@ pub fn run() {
             let store = Store::new(data_file(&handle)?);
             let core = App::open(store)?;
             app.manage(State(Mutex::new(core)));
+            app.manage(DropdownHiddenAt(Mutex::new(None)));
 
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
             TrayIconBuilder::with_id(TRAY_ID)
@@ -247,8 +296,15 @@ pub fn run() {
 
             if let Some(w) = app.get_webview_window(DROPDOWN) {
                 let hide = w.clone();
+                let app = handle.clone();
                 w.on_window_event(move |e| {
                     if let WindowEvent::Focused(false) = e {
+                        if hide.is_visible().unwrap_or(false) {
+                            *app.state::<DropdownHiddenAt>()
+                                .0
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+                        }
                         let _ = hide.hide();
                     }
                 });
@@ -265,4 +321,35 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running the Friends app");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dropdown_is_centred_under_the_icon() {
+        assert_eq!(dropdown_x(1000.0, 40.0, 720.0, Some((0.0, 3000.0))), 660.0);
+    }
+
+    #[test]
+    fn dropdown_stays_on_the_icons_screen() {
+        // Near the right edge: pushed left so it ends at the screen's edge.
+        assert_eq!(dropdown_x(2950.0, 40.0, 720.0, Some((0.0, 3000.0))), 2280.0);
+        // Near the left edge of a screen placed left of the main one.
+        assert_eq!(
+            dropdown_x(-1990.0, 40.0, 720.0, Some((-2000.0, 2000.0))),
+            -2000.0
+        );
+        // Unknown screen: just centred.
+        assert_eq!(dropdown_x(10.0, 40.0, 720.0, None), -330.0);
+    }
+
+    #[test]
+    fn the_click_that_hid_the_dropdown_does_not_show_it_again() {
+        let now = Instant::now();
+        assert!(should_show(None, now));
+        assert!(!should_show(Some(now), now + Duration::from_millis(50)));
+        assert!(should_show(Some(now), now + Duration::from_millis(400)));
+    }
 }
