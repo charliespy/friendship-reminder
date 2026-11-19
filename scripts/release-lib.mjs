@@ -183,7 +183,7 @@ export function sectionFor(commit) {
  *     in: it comes back under its own subject. In then out: the revert stays (a revert doesn't
  *     release by itself). Unchanged: everything about it goes.
  * Two PRs with the same title are separate changes; a revert applies to the one whose PR number it
- * names, else to the newest.
+ * names (one released earlier has a record of its own), else to the newest.
  * Takes and returns { subject } objects (other fields kept), oldest first.
  */
 export function dropReverted(commits) {
@@ -217,11 +217,13 @@ export function dropReverted(commits) {
     const same = byBase.get(base) ?? [];
     byBase.set(base, same);
     // A second PR with the same title is a separate change. A revert applies to the one whose PR
-    // number it names, else to the newest.
+    // number it names (when that PR shipped in an earlier release, to a record of it alone), else
+    // to the newest.
     let change = null;
     if (flips > 0) {
-      change =
-        (pr && same.find((r) => r.original && prNumber(r.original.subject) === pr)) ?? same[same.length - 1] ?? null;
+      change = pr
+        ? (same.find((r) => r.original && prNumber(r.original.subject) === pr) ?? same.find((r) => !r.original) ?? null)
+        : (same[same.length - 1] ?? null);
     } else if (same.length && !same[same.length - 1].original) {
       change = same[same.length - 1];
     }

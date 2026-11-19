@@ -160,6 +160,8 @@ describe("dropReverted", () => {
     expect(dropReverted(s(one, two))).toEqual(s(one, two));
     // A revert that names the older PR removes that one.
     expect(dropReverted(s(one, two, 'Revert "fix: crash on launch (#5)" (#10)'))).toEqual(s(two));
+    // A revert of the released #3 doesn't cancel the new #9 with the same title.
+    expect(dropReverted(s("feat: x (#9)", 'Revert "feat: x (#3)" (#10)'))).toEqual(s("feat: x (#9)", 'Revert "feat: x (#3)" (#10)'));
   });
 });
 

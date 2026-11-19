@@ -72,7 +72,11 @@ on `main` until then.
    version. If something did merge, close the release PR, delete its branch
    (`git push origin --delete chore/release-vX.Y.Z`, then `git switch main && git branch -D
    chore/release-vX.Y.Z`), and start again from step 1: `plan` reads the new change and may give
-   a different version.
+   a different version (your notes are still in the closed PR's description). One exception:
+   when it was only Dependabot updating libraries (`chore(deps): …`, which merge by themselves),
+   the version doesn't change: if the notes lack "Updated the libraries Friends is built on.", add
+   it under `### Changed` in the release's `CHANGELOG.md` section on the release branch (and in the
+   PR description), push, and carry on.
 
 6. **Tag the release PR's merge commit** on `main`, by its hash (another PR may have merged after
    it), and push the tag:
