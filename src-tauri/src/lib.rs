@@ -11,7 +11,7 @@ use friends_core::store::Store;
 use serde_json::Value;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, LogicalPosition, Manager, Rect, WebviewUrl, WebviewWindowBuilder,
     WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
@@ -91,9 +91,12 @@ async fn call(
     cmd: String,
     args: Value,
 ) -> Result<View, ApiError> {
-    let view = lock(&state).call(&cmd, args, today())?;
+    let mut core = lock(&state);
+    let view = core.call(&cmd, args, today())?;
     // Every command (get_view too) may have caught up missed targets, so every one tells the windows.
+    // Sent while the lock is held, so two commands' views reach the windows in the order they ran.
     publish(&app, &view);
+    drop(core);
     Ok(view)
 }
 
@@ -156,23 +159,49 @@ fn should_show(hidden_at: Option<Instant>, now: Instant) -> bool {
     hidden_at.is_none_or(|t| now.saturating_duration_since(t) >= REOPEN_GUARD)
 }
 
-/// Which of the screens (left, top, width, height, in pixels) holds the point (x, y), also in pixels.
-/// The tray reports the icon in pixels and each monitor's position and size are in pixels at its own
-/// scale, so the comparison needs no conversion (monitor_from_point would want points on macOS).
-fn screen_at(x: f64, y: f64, screens: &[(f64, f64, f64, f64)]) -> Option<usize> {
-    screens
-        .iter()
-        .position(|&(left, top, w, h)| x >= left && x < left + w && y >= top && y < top + h)
+/// A screen in points (macOS's global coordinates, top-left origin) and its scale (2 on Retina).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Screen {
+    left: f64,
+    top: f64,
+    width: f64,
+    height: f64,
+    scale: f64,
 }
 
-/// The dropdown's left edge: centred under the icon, kept inside the screen the icon is on.
-/// Everything in physical pixels; `screen` is that screen's left edge and width.
-fn dropdown_x(icon_x: f64, icon_width: f64, width: f64, screen: Option<(f64, f64)>) -> f64 {
-    let x = icon_x + icon_width / 2.0 - width / 2.0;
-    match screen {
-        Some((left, screen_width)) => x.min(left + screen_width - width).max(left),
-        None => x,
-    }
+/// Where the dropdown goes, in points: centred under the icon, a few points below the menu bar, and
+/// kept inside the screen the icon is on.
+///
+/// The units on macOS are a trap. The tray reports the icon's rect as points times the scale of the
+/// icon's own screen, so on a Retina laptop next to a plain monitor the same pixel x can mean either
+/// screen. The cursor (which is on the icon: the user just pressed it) is reported as points times the
+/// main screen's scale, one scale for everything, so it tells which screen it is. Then the icon's
+/// pixels are turned back into points with that screen's scale, and everything is done in points.
+fn dropdown_origin(
+    icon_px: (f64, f64, f64, f64),
+    cursor_pt: Option<(f64, f64)>,
+    screens: &[Screen],
+    fallback_scale: f64,
+) -> (f64, f64) {
+    let screen = cursor_pt.and_then(|(cx, cy)| {
+        screens
+            .iter()
+            .copied()
+            .find(|s| cx >= s.left && cx < s.left + s.width && cy >= s.top && cy < s.top + s.height)
+    });
+    let scale = screen.map_or(fallback_scale, |s| s.scale);
+    let (x, y, w, h) = (
+        icon_px.0 / scale,
+        icon_px.1 / scale,
+        icon_px.2 / scale,
+        icon_px.3 / scale,
+    );
+    let left = x + w / 2.0 - DROPDOWN_WIDTH / 2.0;
+    let left = match screen {
+        Some(s) => left.min(s.left + s.width - DROPDOWN_WIDTH).max(s.left),
+        None => left,
+    };
+    (left, y + h + 4.0)
 }
 
 /// Shows the dropdown under the menu bar icon, or hides it when it's already showing.
@@ -192,32 +221,44 @@ fn toggle_dropdown(app: &AppHandle, icon: Rect) {
     if !should_show(hidden_at, Instant::now()) {
         return;
     }
-    // The screen under the icon decides the scale (a Retina laptop next to a plain monitor differ).
     let window_scale = w.scale_factor().unwrap_or(1.0);
     let (pos, size) = (
         icon.position.to_physical::<f64>(window_scale),
         icon.size.to_physical::<f64>(window_scale),
     );
-    let monitors = app.available_monitors().unwrap_or_default();
-    let rects: Vec<_> = monitors
+    let main_scale = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map_or(window_scale, |m| m.scale_factor());
+    let cursor_pt = app
+        .cursor_position()
+        .ok()
+        .map(|c| (c.x / main_scale, c.y / main_scale));
+    // Each monitor's position and size are its points times its own scale.
+    let screens: Vec<Screen> = app
+        .available_monitors()
+        .unwrap_or_default()
         .iter()
         .map(|m| {
-            let (p, s) = (m.position(), m.size());
-            (
-                f64::from(p.x),
-                f64::from(p.y),
-                f64::from(s.width),
-                f64::from(s.height),
-            )
+            let (p, s, scale) = (m.position(), m.size(), m.scale_factor());
+            Screen {
+                left: f64::from(p.x) / scale,
+                top: f64::from(p.y) / scale,
+                width: f64::from(s.width) / scale,
+                height: f64::from(s.height) / scale,
+                scale,
+            }
         })
         .collect();
-    let found = screen_at(pos.x, pos.y, &rects);
-    let scale = found.map_or(window_scale, |i| monitors[i].scale_factor());
-    let screen = found.map(|i| (rects[i].0, rects[i].2));
-    let x = dropdown_x(pos.x, size.width, DROPDOWN_WIDTH * scale, screen);
-    // A few points below the menu bar.
-    let y = pos.y + size.height + 4.0 * scale;
-    let _ = w.set_position(PhysicalPosition::new(x, y));
+    let (x, y) = dropdown_origin(
+        (pos.x, pos.y, size.width, size.height),
+        cursor_pt,
+        &screens,
+        window_scale,
+    );
+    // In points, which macOS places as they are, whatever screen the dropdown was on before.
+    let _ = w.set_position(LogicalPosition::new(x, y));
     let _ = w.show();
     let _ = w.set_focus();
 }
@@ -226,10 +267,14 @@ fn toggle_dropdown(app: &AppHandle, icon: Rect) {
 fn tick(app: &AppHandle) {
     let state = app.state::<State>();
     let day = today();
-    let (due, view) = {
+    let due = {
         let mut a = lock(&state);
         match a.tick(day) {
-            Ok(due) => (due, a.view(day)),
+            Ok(due) => {
+                // Under the lock, for the same reason as in `call`.
+                publish(app, &a.view(day));
+                due
+            }
             Err(e) => {
                 eprintln!("friends: couldn't save after the regular check: {e}");
                 return;
@@ -256,7 +301,6 @@ fn tick(app: &AppHandle) {
             eprintln!("friends: couldn't send a notification: {e}");
         }
     }
-    publish(app, &view);
 }
 
 pub fn run() {
@@ -347,36 +391,72 @@ pub fn run() {
 mod tests {
     use super::*;
 
+    /// A Retina laptop (1512 x 982 pt, scale 2) with a plain 1920 x 1080 monitor to its right.
+    const LAPTOP: Screen = Screen {
+        left: 0.0,
+        top: 0.0,
+        width: 1512.0,
+        height: 982.0,
+        scale: 2.0,
+    };
+    const EXTERNAL: Screen = Screen {
+        left: 1512.0,
+        top: 0.0,
+        width: 1920.0,
+        height: 1080.0,
+        scale: 1.0,
+    };
+
     #[test]
     fn dropdown_is_centred_under_the_icon() {
-        assert_eq!(dropdown_x(1000.0, 40.0, 720.0, Some((0.0, 3000.0))), 660.0);
-    }
-
-    #[test]
-    fn dropdown_stays_on_the_icons_screen() {
-        // Near the right edge: pushed left so it ends at the screen's edge.
-        assert_eq!(dropdown_x(2950.0, 40.0, 720.0, Some((0.0, 3000.0))), 2280.0);
-        // Near the left edge of a screen placed left of the main one.
-        assert_eq!(
-            dropdown_x(-1990.0, 40.0, 720.0, Some((-2000.0, 2000.0))),
-            -2000.0
+        // Icon at 1000 pt on the laptop, 20 pt wide, 24 pt tall: reported doubled.
+        let at = dropdown_origin(
+            (2000.0, 0.0, 40.0, 48.0),
+            Some((1005.0, 5.0)),
+            &[LAPTOP, EXTERNAL],
+            2.0,
         );
-        // Unknown screen: just centred.
-        assert_eq!(dropdown_x(10.0, 40.0, 720.0, None), -330.0);
+        assert_eq!(at, (1010.0 - 180.0, 28.0));
     }
 
     #[test]
-    fn finds_the_screen_that_holds_the_icon() {
-        // A Retina laptop (3024 px wide) with a plain monitor to its right and one to its left.
-        let screens = [
-            (0.0, 0.0, 3024.0, 1964.0),
-            (3024.0, 0.0, 1920.0, 1080.0),
-            (-2560.0, 0.0, 2560.0, 1440.0),
-        ];
-        assert_eq!(screen_at(2800.0, 10.0, &screens), Some(0));
-        assert_eq!(screen_at(3100.0, 10.0, &screens), Some(1));
-        assert_eq!(screen_at(-5.0, 10.0, &screens), Some(2));
-        assert_eq!(screen_at(9000.0, 10.0, &screens), None);
+    fn the_cursor_tells_which_screen_the_icon_is_on() {
+        // Icon at 3000 pt on the plain monitor, reported as 3000 px: the same number the laptop
+        // would give for an icon at 1500 pt. The cursor says it's the monitor.
+        let at = dropdown_origin(
+            (3000.0, 0.0, 20.0, 24.0),
+            Some((3005.0, 5.0)),
+            &[LAPTOP, EXTERNAL],
+            2.0,
+        );
+        assert_eq!(at, (3010.0 - 180.0, 28.0));
+        // Icon at 1500 pt on the laptop, also reported as 3000 px: kept inside the laptop's edge.
+        let at = dropdown_origin(
+            (3000.0, 0.0, 40.0, 48.0),
+            Some((1505.0, 5.0)),
+            &[LAPTOP, EXTERNAL],
+            1.0,
+        );
+        assert_eq!(at, (1512.0 - 360.0, 28.0));
+    }
+
+    #[test]
+    fn dropdown_stays_inside_the_screen() {
+        // Near the left edge of a screen placed left of the laptop.
+        let left = Screen {
+            left: -1920.0,
+            ..EXTERNAL
+        };
+        let at = dropdown_origin(
+            (-1910.0, 0.0, 20.0, 24.0),
+            Some((-1905.0, 5.0)),
+            &[LAPTOP, left],
+            2.0,
+        );
+        assert_eq!(at.0, -1920.0);
+        // No cursor: centred, using the fallback scale.
+        let at = dropdown_origin((2000.0, 0.0, 40.0, 48.0), None, &[LAPTOP], 2.0);
+        assert_eq!(at, (830.0, 28.0));
     }
 
     #[test]
