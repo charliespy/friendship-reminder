@@ -23,7 +23,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Scan files and commits for personal info
-        run: scripts/privacy-scan.sh
+        env:
+          # A PR: its own commits. A push: the commits it added (a new branch's first push: all of them).
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || (github.event.before != '0000000000000000000000000000000000000000' && format('{0}..{1}', github.event.before, github.sha) || github.sha) }}
+        run: scripts/privacy-scan.sh --range "$RANGE"
       - name: Scan the PR title and description
         if: github.event_name == 'pull_request'
         env:
@@ -33,6 +36,8 @@ jobs:
 
   check:
     name: Check (types, lint, unit tests, Rust)
+    # Editing the PR text only needs the privacy scan again.
+    if: github.event.action != 'edited'
     # The Tauri shell links macOS frameworks, so the Rust checks run on macOS.
     runs-on: macos-latest
     steps:
@@ -50,6 +55,7 @@ jobs:
 
   e2e:
     name: End-to-end (Playwright, WebKit)
+    if: github.event.action != 'edited'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

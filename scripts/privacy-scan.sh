@@ -1,81 +1,110 @@
 #!/usr/bin/env bash
-# Fails when tracked files or commit metadata hold personal info: email addresses, home-folder
+# Fails when tracked files, commits or a PR's text hold personal info: email addresses, home-folder
 # paths, private host names, or AI attribution lines. This repo is public, so CI runs it on every PR.
 #
-#   scripts/privacy-scan.sh            scan tracked files and the commits of this branch
-#   scripts/privacy-scan.sh --all      also scan every commit in history
-#   ... | scripts/privacy-scan.sh --stdin   scan text (CI pipes in the PR title and description)
+#   scripts/privacy-scan.sh                   tracked files, and the commits not on origin/main yet
+#   scripts/privacy-scan.sh --range A..B      tracked files, and the commits in A..B (CI passes this)
+#   scripts/privacy-scan.sh --all             tracked files, and every commit in history
+#   ... | scripts/privacy-scan.sh --stdin     only the text piped in (CI: the PR title and description)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 fail=0
 report() { echo "privacy-scan: $1" >&2; fail=1; }
 
-# Addresses that are fine to publish: GitHub noreply addresses and the reserved example domains.
-allowed_email='(users\.noreply\.github\.com|@example\.(com|org|net)|@localhost|@[0-9]+x\.(png|jpg|svg))'
+# Addresses that are fine to publish: GitHub noreply addresses, the reserved example domains, git
+# remotes, and retina image names (icon@2x.png).
+allowed_email='(users\.noreply\.github\.com|@example\.(com|org|net)|@localhost|^git@github\.com|@[0-9]+x\.(png|jpg|svg))'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
-home_path='(/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+|C:\\\\Users\\\\[A-Za-z0-9._-]+)'
+home_path='(/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+|[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9._-]+)'
+# Placeholders a doc may use for a home folder.
+allowed_path='[\\/](Users|home)[\\/]+(you|me|runner|USER|\$USER|<[^>]*>|example|name|username)$'
 private_host='[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.ts\.net'
 attribution='(Co-authored-by:|Generated with \[?Claude|noreply@anthropic\.com)'
-# Placeholders a doc may use for a home folder.
-allowed_path='/(Users|home)/(you|me|runner|USER|\$USER|<[^>]*>|example|name|username)\b'
 
-if [ "${1:-}" = "--stdin" ]; then
+# Scans text on stdin; $1 says where it came from.
+scan_text() {
+  local where=$1 text hit
   text=$(cat)
-  while IFS= read -r hit; do report "email address: $hit"; done < <(echo "$text" | grep -oE "$email" | grep -vE "$allowed_email" || true)
-  while IFS= read -r hit; do report "home-folder path: $hit"; done < <(echo "$text" | grep -oE "$home_path" | grep -vE "$allowed_path" || true)
-  while IFS= read -r hit; do report "private host name: $hit"; done < <(echo "$text" | grep -oE "$private_host" || true)
-  while IFS= read -r hit; do report "AI attribution: $hit"; done < <(echo "$text" | grep -iE "$attribution" || true)
+  while IFS= read -r hit; do
+    [ -n "$hit" ] && report "email address in $where: $hit"
+  done < <(printf '%s\n' "$text" | grep -oE "$email" | grep -vE "$allowed_email" || true)
+  while IFS= read -r hit; do
+    [ -n "$hit" ] && report "home-folder path in $where: $hit"
+  done < <(printf '%s\n' "$text" | grep -oE "$home_path" | grep -vE "$allowed_path" || true)
+  while IFS= read -r hit; do
+    [ -n "$hit" ] && report "private host name in $where: $hit"
+  done < <(printf '%s\n' "$text" | grep -oE "$private_host" || true)
+  while IFS= read -r hit; do
+    [ -n "$hit" ] && report "AI attribution in $where: $hit"
+  done < <(printf '%s\n' "$text" | grep -iE "$attribution" || true)
+}
+
+finish() {
   if [ "$fail" -ne 0 ]; then
-    echo "privacy-scan: failed. Edit the text above (this repo is public)." >&2
+    echo "privacy-scan: failed. Remove the personal info above (this repo is public)." >&2
     exit 1
   fi
   echo "privacy-scan: clean"
   exit 0
+}
+
+mode=${1:-}
+if [ "$mode" = "--stdin" ]; then
+  scan_text "the text"
+  finish
 fi
 
-# 1. Tracked files (lock files are generated and full of package metadata; skip them).
-files=$(git ls-files -z | xargs -0 -n1 echo | grep -vE '(^|/)(package-lock\.json|Cargo\.lock)$|\.(png|icns|ico|jpg|gif|pdf)$' | grep -v '^scripts/privacy-scan\.sh$' || true)
-if [ -n "$files" ]; then
+# 1. Tracked text files. Lock files are generated package metadata; this script names the patterns.
+#    grep -I skips binary files.
+skip='(^|/)(package-lock\.json|Cargo\.lock)$|^scripts/privacy-scan\.sh$'
+files=()
+while IFS= read -r -d '' f; do
+  if ! printf '%s' "$f" | grep -qE "$skip"; then files+=("$f"); fi
+done < <(git ls-files -z)
+if [ ${#files[@]} -gt 0 ]; then
+  # Each hit is file:line:match; the allow-lists look at the match only.
   while IFS= read -r hit; do
-    report "email address in $hit"
-  done < <(echo "$files" | tr '\n' '\0' | xargs -0 grep -nHoE "$email" 2>/dev/null | grep -vE "$allowed_email" || true)
-  while IFS= read -r hit; do
-    report "home-folder path in $hit"
-  done < <(echo "$files" | tr '\n' '\0' | xargs -0 grep -nHoE "$home_path" 2>/dev/null | grep -vE "$allowed_path" || true)
-  while IFS= read -r hit; do
-    report "private host name in $hit"
-  done < <(echo "$files" | tr '\n' '\0' | xargs -0 grep -nHoE "$private_host" 2>/dev/null || true)
-  while IFS= read -r hit; do
-    report "AI attribution in $hit"
-  done < <(echo "$files" | tr '\n' '\0' | xargs -0 grep -nHiE "$attribution" 2>/dev/null || true)
-fi
-
-# 2. Commit authors, committers and messages.
-range="HEAD"
-if [ "${1:-}" != "--all" ]; then
-  base=$(git merge-base HEAD origin/main 2>/dev/null || true)
-  [ -n "$base" ] && range="$base..HEAD"
-fi
-while IFS=$'\t' read -r sha ae ce; do
-  for addr in "$ae" "$ce"; do
-    if ! echo "$addr" | grep -qE "$allowed_email"; then
-      report "commit ${sha:0:12} has a personal address ($addr); use your GitHub noreply address"
+    if [ -n "$hit" ] && ! printf '%s' "${hit#*:*:}" | grep -qE "$allowed_email"; then
+      report "email address in $hit"
     fi
-  done
-done < <(git log --format='%H%x09%ae%x09%ce' "$range" | grep -v $'\tnoreply@github.com$' || true)
-for c in $(git log --format='%H' "$range"); do
-  msg=$(git log -1 --format='%B' "$c")
-  if echo "$msg" | grep -qiE "$attribution"; then
-    report "commit ${c:0:12} message has an AI attribution line"
-  fi
-  if echo "$msg" | grep -oE "$email" | grep -qvE "$allowed_email"; then
-    report "commit ${c:0:12} message has an email address"
-  fi
-done
-
-if [ "$fail" -ne 0 ]; then
-  echo "privacy-scan: failed. Remove the personal info above (this repo is public)." >&2
-  exit 1
+  done < <(grep -IHnoE "$email" -- "${files[@]}" 2>/dev/null || true)
+  while IFS= read -r hit; do
+    if [ -n "$hit" ] && ! printf '%s' "${hit#*:*:}" | grep -qE "$allowed_path"; then
+      report "home-folder path in $hit"
+    fi
+  done < <(grep -IHnoE "$home_path" -- "${files[@]}" 2>/dev/null || true)
+  while IFS= read -r hit; do
+    [ -n "$hit" ] && report "private host name in $hit"
+  done < <(grep -IHnoE "$private_host" -- "${files[@]}" 2>/dev/null || true)
+  while IFS= read -r hit; do
+    [ -n "$hit" ] && report "AI attribution in $hit"
+  done < <(grep -IHniE "$attribution" -- "${files[@]}" 2>/dev/null || true)
 fi
-echo "privacy-scan: clean"
+
+# 2. Commits: authors, committers and messages.
+case "$mode" in
+  --all) range=HEAD ;;
+  --range) range=${2:?--range needs A..B} ;;
+  *)
+    base=$(git merge-base HEAD origin/main 2>/dev/null || true)
+    range=${base:+$base..}HEAD
+    ;;
+esac
+while IFS=$'\t' read -r sha author committer; do
+  [ -n "$sha" ] || continue
+  if ! printf '%s' "$author" | grep -qE "$allowed_email"; then
+    report "commit ${sha:0:12} has a personal author address ($author); use your GitHub noreply address"
+  fi
+  # GitHub itself commits web edits and PR merges as noreply@github.com.
+  if [ "$committer" != "noreply@github.com" ] && ! printf '%s' "$committer" | grep -qE "$allowed_email"; then
+    report "commit ${sha:0:12} has a personal committer address ($committer)"
+  fi
+done < <(git log --format='%H%x09%ae%x09%ce' "$range")
+while IFS= read -r -d '' record; do
+  sha=${record%%$'\n'*}
+  [ -n "$sha" ] || continue
+  scan_text "the message of commit ${sha:0:12}" < <(printf '%s\n' "${record#*$'\n'}")
+done < <(git log -z --format='%H%n%B' "$range")
+
+finish
