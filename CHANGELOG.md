@@ -17,3 +17,7 @@ All notable changes are written here. The format follows
 - A new look: calm, native macOS styling in light and dark mode (see DESIGN.md).
 - If Friends can't read its data folder at launch, it says so in an alert instead of quitting
   without a word.
+
+### Removed
+- The "Add Reminders for Today" and "Delete All Reminders" buttons. They only worked with
+  Apple Reminders, which Friends no longer uses.
