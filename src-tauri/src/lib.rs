@@ -193,9 +193,9 @@ fn dropdown_origin(
     };
     let screen = cursor_pt
         .and_then(|(cx, cy)| screens.iter().copied().find(|s| contains(s, cx, cy)))
-        // No cursor to go by: a screen whose menu bar holds the icon at that screen's scale. Pixels
-        // can fit two screens; then the main one (at 0, 0), which has the menu bar unless each
-        // display has its own.
+        // No cursor to go by (rare): a screen whose menu bar holds the icon at that screen's scale.
+        // The pixels can fit two screens, and with "Displays have separate Spaces" (the default)
+        // each has a menu bar, so this is a guess: the main one (at 0, 0).
         .or_else(|| {
             let mut fits = screens.iter().copied().filter(|s| {
                 let (x, y) = (icon_px.0 / s.scale, icon_px.1 / s.scale);
