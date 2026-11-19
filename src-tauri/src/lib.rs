@@ -26,8 +26,8 @@ const TRAY_ID: &str = "friends";
 const TICK_EVERY: Duration = Duration::from_secs(60);
 /// The dropdown's width in points (tauri.conf.json).
 const DROPDOWN_WIDTH: f64 = 360.0;
-/// A click on the menu bar icon first takes focus from the open dropdown, which hides it; the click
-/// that follows within this time is that same click, and must not show the dropdown again.
+/// Pressing the menu bar icon takes focus from the open dropdown, which hides it; a press on the icon
+/// within this time of that is the same press, and must not show the dropdown again.
 const REOPEN_GUARD: Duration = Duration::from_millis(300);
 
 struct State(Mutex<App>);
@@ -92,10 +92,8 @@ async fn call(
     args: Value,
 ) -> Result<View, ApiError> {
     let view = lock(&state).call(&cmd, args, today())?;
-    // Reading the view changes nothing, so only commands that change data tell the other windows.
-    if cmd != "get_view" {
-        publish(&app, &view);
-    }
+    // Every command (get_view too) may have caught up missed targets, so every one tells the windows.
+    publish(&app, &view);
     Ok(view)
 }
 
@@ -158,6 +156,15 @@ fn should_show(hidden_at: Option<Instant>, now: Instant) -> bool {
     hidden_at.is_none_or(|t| now.saturating_duration_since(t) >= REOPEN_GUARD)
 }
 
+/// Which of the screens (left, top, width, height, in pixels) holds the point (x, y), also in pixels.
+/// The tray reports the icon in pixels and each monitor's position and size are in pixels at its own
+/// scale, so the comparison needs no conversion (monitor_from_point would want points on macOS).
+fn screen_at(x: f64, y: f64, screens: &[(f64, f64, f64, f64)]) -> Option<usize> {
+    screens
+        .iter()
+        .position(|&(left, top, w, h)| x >= left && x < left + w && y >= top && y < top + h)
+}
+
 /// The dropdown's left edge: centred under the icon, kept inside the screen the icon is on.
 /// Everything in physical pixels; `screen` is that screen's left edge and width.
 fn dropdown_x(icon_x: f64, icon_width: f64, width: f64, screen: Option<(f64, f64)>) -> f64 {
@@ -186,21 +193,27 @@ fn toggle_dropdown(app: &AppHandle, icon: Rect) {
         return;
     }
     // The screen under the icon decides the scale (a Retina laptop next to a plain monitor differ).
-    let rough = icon
-        .position
-        .to_physical::<f64>(w.scale_factor().unwrap_or(1.0));
-    let monitor = app.monitor_from_point(rough.x, rough.y).ok().flatten();
-    let scale = monitor
-        .as_ref()
-        .map(|m| m.scale_factor())
-        .unwrap_or_else(|| w.scale_factor().unwrap_or(1.0));
+    let window_scale = w.scale_factor().unwrap_or(1.0);
     let (pos, size) = (
-        icon.position.to_physical::<f64>(scale),
-        icon.size.to_physical::<f64>(scale),
+        icon.position.to_physical::<f64>(window_scale),
+        icon.size.to_physical::<f64>(window_scale),
     );
-    let screen = monitor
-        .as_ref()
-        .map(|m| (f64::from(m.position().x), f64::from(m.size().width)));
+    let monitors = app.available_monitors().unwrap_or_default();
+    let rects: Vec<_> = monitors
+        .iter()
+        .map(|m| {
+            let (p, s) = (m.position(), m.size());
+            (
+                f64::from(p.x),
+                f64::from(p.y),
+                f64::from(s.width),
+                f64::from(s.height),
+            )
+        })
+        .collect();
+    let found = screen_at(pos.x, pos.y, &rects);
+    let scale = found.map_or(window_scale, |i| monitors[i].scale_factor());
+    let screen = found.map(|i| (rects[i].0, rects[i].2));
     let x = dropdown_x(pos.x, size.width, DROPDOWN_WIDTH * scale, screen);
     // A few points below the menu bar.
     let y = pos.y + size.height + 4.0 * scale;
@@ -284,7 +297,9 @@ pub fn run() {
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
+                        // On press, like other menu bar items, and the same event that takes focus
+                        // from an open dropdown (so the reopen guard is not a race with a long press).
+                        button_state: MouseButtonState::Down,
                         rect,
                         ..
                     } = event
@@ -298,6 +313,11 @@ pub fn run() {
                 let hide = w.clone();
                 let app = handle.clone();
                 w.on_window_event(move |e| {
+                    // Cmd+W (the default menu's Close Window) would destroy the dropdown for good.
+                    if let WindowEvent::CloseRequested { api, .. } = e {
+                        api.prevent_close();
+                        let _ = hide.hide();
+                    }
                     if let WindowEvent::Focused(false) = e {
                         if hide.is_visible().unwrap_or(false) {
                             *app.state::<DropdownHiddenAt>()
@@ -343,6 +363,20 @@ mod tests {
         );
         // Unknown screen: just centred.
         assert_eq!(dropdown_x(10.0, 40.0, 720.0, None), -330.0);
+    }
+
+    #[test]
+    fn finds_the_screen_that_holds_the_icon() {
+        // A Retina laptop (3024 px wide) with a plain monitor to its right and one to its left.
+        let screens = [
+            (0.0, 0.0, 3024.0, 1964.0),
+            (3024.0, 0.0, 1920.0, 1080.0),
+            (-2560.0, 0.0, 2560.0, 1440.0),
+        ];
+        assert_eq!(screen_at(2800.0, 10.0, &screens), Some(0));
+        assert_eq!(screen_at(3100.0, 10.0, &screens), Some(1));
+        assert_eq!(screen_at(-5.0, 10.0, &screens), Some(2));
+        assert_eq!(screen_at(9000.0, 10.0, &screens), None);
     }
 
     #[test]
