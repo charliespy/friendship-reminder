@@ -62,15 +62,17 @@ export function BlockedPane({ view }: { view: View }) {
               onChange={(e) => setEnd(e.target.value)}
             />
           </label>
-          <button type="submit" className="btn btn-primary" disabled={add.busy || !start || !end}>
-            Block dates
-          </button>
         </div>
         {add.error && (
           <p className="error" role="alert">
             {add.error}
           </p>
         )}
+        <div className="form-actions">
+          <button type="submit" className="btn btn-primary" disabled={add.busy || !start || !end}>
+            Block dates
+          </button>
+        </div>
       </form>
 
       {remove.error && (

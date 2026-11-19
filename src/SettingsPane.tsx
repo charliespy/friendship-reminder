@@ -1,5 +1,5 @@
 /** Preferences › Settings: which days count, notifications, and launch at login. */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DayToggle, type View } from "./api";
 import { useAction } from "./useView";
 
@@ -16,17 +16,49 @@ export function SettingsPane({ view }: { view: View }) {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
 
+  // Bumped by every read and change, so a read that finishes after a newer click is dropped.
+  const loginSeq = useRef(0);
+
+  // Read on mount, and again whenever the window comes back: the pane stays mounted while
+  // Preferences is hidden, and the setting can change in System Settings meanwhile.
   useEffect(() => {
-    api.getLaunchAtLogin().then(setLogin, (e) => setLoginError(errorMessage(e)));
+    const load = () => {
+      const seq = ++loginSeq.current;
+      api.getLaunchAtLogin().then(
+        (on) => {
+          if (seq !== loginSeq.current) return;
+          setLogin(on);
+          setLoginError(null);
+        },
+        (e) => {
+          if (seq === loginSeq.current) setLoginError(errorMessage(e));
+        },
+      );
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    load();
+    window.addEventListener("focus", load);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", load);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   // One change at a time, so the box always shows the answer to the last click.
   const changeLogin = async (on: boolean) => {
+    loginSeq.current++;
     setLoginError(null);
     setLoginBusy(true);
     try {
-      setLogin(await api.setLaunchAtLogin(on));
+      const now = await api.setLaunchAtLogin(on);
+      // A read that started during the change may have seen the old value: drop it.
+      loginSeq.current++;
+      setLogin(now);
     } catch (e) {
+      loginSeq.current++;
       setLoginError(errorMessage(e));
     } finally {
       setLoginBusy(false);

@@ -110,7 +110,7 @@ function PersonRow({
       : `Due · aim for ${formatDay(person.nextTarget, today)}`
     : `Reminder ${relativeDay(person.notificationDate, today)}, ${formatDay(person.notificationDate, today)}`;
   return (
-    <li className="list-row" data-testid="person-row">
+    <li className="list-row" data-testid="person-row" data-overdue={person.overdue}>
       <input
         type="checkbox"
         checked={selected}
@@ -119,14 +119,16 @@ function PersonRow({
       />
       <Avatar name={person.name} />
       <div className="person-text">
-        <div className="person-name">{person.name}</div>
+        <div className="person-name">
+          {person.name}
+          {person.due && <span className="tag">Due</span>}
+        </div>
         <div className="person-meta">
           {frequencyLabel(person.frequencyDays)} · {when}
         </div>
         {error && <p className="error">{error}</p>}
       </div>
-      {person.due && <span className="tag">Due</span>}
-      <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => run(() => api.markDone(person.id))}>
+      <button className="btn btn-done btn-sm" disabled={busy} onClick={() => run(() => api.markDone(person.id))}>
         Done
       </button>
       <button className="btn btn-quiet btn-sm" onClick={onEdit} aria-label={`Edit ${person.name}`}>

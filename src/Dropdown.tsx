@@ -16,7 +16,7 @@ function dueLine(p: Person, today: string): string {
 function DueRow({ person, today }: { person: Person; today: string }) {
   const { run, busy, error } = useAction();
   return (
-    <li className="person-row" data-testid="due-person">
+    <li className="person-row" data-testid="due-person" data-overdue={person.overdue}>
       <Avatar name={person.name} />
       <div className="person-text">
         <div className="person-name">{person.name}</div>
@@ -24,7 +24,7 @@ function DueRow({ person, today }: { person: Person; today: string }) {
         {error && <p className="error">{error}</p>}
       </div>
       <button
-        className="btn btn-primary btn-sm"
+        className="btn btn-done btn-sm"
         disabled={busy}
         onClick={() => run(() => api.markDone(person.id))}
         aria-label={`Mark ${person.name} as done`}
@@ -72,7 +72,7 @@ export function DropdownContent({ view }: { view: View }) {
                 Reach out now
               </h2>
               {due.length === 0 ? (
-                <p className="empty">You're all caught up.</p>
+                <p className="caught-up">You're all caught up.</p>
               ) : (
                 <ul className="list due-list">
                   {due.map((p) => (
