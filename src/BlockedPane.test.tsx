@@ -121,13 +121,13 @@ describe("BlockedPane", () => {
   });
 
   it("shows an add error and keeps what was typed", async () => {
-    addBlocked.mockRejectedValue({ kind: "invalid", message: "The range ends before it starts." });
+    addBlocked.mockRejectedValue({ kind: "storage", message: "Couldn't save the data file." });
     render(<BlockedPane view={view("2026-11-18")} />);
     fireEvent.change(input("What"), { target: { value: "Trip" } });
     fireEvent.change(input("From"), { target: { value: "2026-12-20" } });
     await submit();
     const form = screen.getByRole("form", { name: "Add blocked dates" });
-    expect(within(form).getByRole("alert").textContent).toBe("The range ends before it starts.");
+    expect(within(form).getByRole("alert").textContent).toBe("Couldn't save the data file.");
     expect(input("What").value).toBe("Trip");
     expect(input("From").value).toBe("2026-12-20");
   });

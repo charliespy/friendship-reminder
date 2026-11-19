@@ -150,8 +150,30 @@ describe("PeoplePane", () => {
     expect(markDone).toHaveBeenCalledWith(2);
   });
 
+  it("shows a Done error in that person's row", async () => {
+    markDone.mockRejectedValue({ kind: "storage", message: "Couldn't save the data file." });
+    render(<PeoplePane view={view([MAYA, THEO])} />);
+    await click(button("Mark Theo Marsh as done"));
+    const [maya, theo] = screen.getAllByTestId("person-row") as [HTMLElement, HTMLElement];
+    expect(within(theo).getByRole("alert").textContent).toBe("Couldn't save the data file.");
+    expect(within(maya).queryByRole("alert")).toBeNull();
+  });
+
+  it("backs out of a delete with Keep, and clears the selection with Deselect all", async () => {
+    render(<PeoplePane view={view([MAYA, THEO])} />);
+    fireEvent.click(screen.getByLabelText("Select Maya Chen"));
+    await click(button("Delete selected…"));
+    await click(button("Keep"));
+    expect(screen.queryByText("Delete this person?")).toBeNull();
+    expect(screen.getByText("1 selected")).toBeTruthy();
+    await click(button("Deselect all"));
+    expect(screen.queryByRole("region", { name: "Selected people" })).toBeNull();
+    expect((screen.getByLabelText("Select Maya Chen") as HTMLInputElement).checked).toBe(false);
+    expect(deletePeople).not.toHaveBeenCalled();
+  });
+
   it("deletes the selected people after a confirmation", async () => {
-    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
     fireEvent.click(screen.getByLabelText("Select Maya Chen"));
     fireEvent.click(screen.getByLabelText("Select Lena Fischer"));
     expect(screen.getByText("2 selected")).toBeTruthy();
@@ -159,7 +181,6 @@ describe("PeoplePane", () => {
     expect(screen.getByText("Delete these people?")).toBeTruthy();
     await click(button("Delete"));
     expect(deletePeople).toHaveBeenCalledWith([1, 3]);
-    rerender(<PeoplePane view={view([THEO])} />);
     expect(screen.queryByRole("region", { name: "Selected people" })).toBeNull();
   });
 
@@ -175,7 +196,7 @@ describe("PeoplePane", () => {
     expect(within(bar).getByText("1 selected")).toBeTruthy();
   });
 
-  it("forgets the selection of a person who is gone", () => {
+  it("stops counting a selected person who is gone", () => {
     const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
     fireEvent.click(screen.getByLabelText("Select Maya Chen"));
     fireEvent.click(screen.getByLabelText("Select Theo Marsh"));
@@ -188,26 +209,25 @@ describe("PeoplePane", () => {
   });
 
   it("keeps another person's edit form open when deleting", async () => {
-    deletePeople.mockResolvedValue(view([MAYA]));
-    render(<PeoplePane view={view([MAYA, THEO])} />);
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
     await click(button("Edit Maya Chen"));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Maya Chen-Ito" } });
     fireEvent.click(screen.getByLabelText("Select Theo Marsh"));
     await click(button("Delete selected…"));
     await click(button("Delete"));
     expect(deletePeople).toHaveBeenCalledWith([2]);
+    // The new view, without Theo, arrives.
+    rerender(<PeoplePane view={view([MAYA])} />);
     expect(form("Save changes")).toBeTruthy();
-    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Maya Chen");
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Maya Chen-Ito");
   });
 
   it("closes the edit form when its person is deleted", async () => {
-    const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
+    render(<PeoplePane view={view([MAYA, THEO])} />);
     await click(button("Edit Maya Chen"));
     fireEvent.click(screen.getByLabelText("Select Maya Chen"));
     await click(button("Delete selected…"));
     await click(button("Delete"));
-    expect(form("Save changes")).toBeNull();
-    // Maya coming back with the same id (an undo, say) doesn't reopen the form.
-    rerender(<PeoplePane view={view([MAYA, THEO])} />);
     expect(form("Save changes")).toBeNull();
   });
 });
