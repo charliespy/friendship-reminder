@@ -92,12 +92,17 @@ async fn call(
     args: Value,
 ) -> Result<View, ApiError> {
     let mut core = lock(&state);
-    let view = core.call(&cmd, args, today())?;
-    // Every command (get_view too) may have caught up missed targets, so every one tells the windows.
-    // Sent while the lock is held, so two commands' views reach the windows in the order they ran.
-    publish(&app, &view);
+    let day = today();
+    let result = core.call(&cmd, args, day);
+    // Every command (get_view too, and one that fails) may have caught up missed targets first, so
+    // every one tells the windows. Sent while the lock is held, so two commands' views reach the
+    // windows in the order they ran.
+    match &result {
+        Ok(view) => publish(&app, view),
+        Err(_) => publish(&app, &core.view(day)),
+    }
     drop(core);
-    Ok(view)
+    result
 }
 
 #[tauri::command]
@@ -188,12 +193,21 @@ fn dropdown_origin(
     };
     let screen = cursor_pt
         .and_then(|(cx, cy)| screens.iter().copied().find(|s| contains(s, cx, cy)))
-        // No cursor to go by: the screen whose menu bar holds the icon at that screen's scale.
+        // No cursor to go by: a screen whose menu bar holds the icon at that screen's scale. Pixels
+        // can fit two screens; then the main one (at 0, 0), which has the menu bar unless each
+        // display has its own.
         .or_else(|| {
-            screens.iter().copied().find(|s| {
+            let mut fits = screens.iter().copied().filter(|s| {
                 let (x, y) = (icon_px.0 / s.scale, icon_px.1 / s.scale);
                 contains(s, x, y) && y < s.top + 40.0
-            })
+            });
+            let first = fits.next()?;
+            Some(
+                std::iter::once(first)
+                    .chain(fits)
+                    .find(|s| s.left == 0.0 && s.top == 0.0)
+                    .unwrap_or(first),
+            )
         });
     let scale = screen.map_or(fallback_scale, |s| s.scale);
     let (x, y, w, h) = (
@@ -465,6 +479,9 @@ mod tests {
         // No cursor: the screen whose menu bar holds the icon (here the laptop, at its scale 2).
         let at = dropdown_origin((2000.0, 0.0, 40.0, 48.0), None, &[LAPTOP], 1.0);
         assert_eq!(at, (830.0, 28.0));
+        // No cursor, and the pixels fit both screens: the main one (the laptop here).
+        let at = dropdown_origin((3000.0, 0.0, 20.0, 24.0), None, &[EXTERNAL, LAPTOP], 1.0);
+        assert_eq!(at, (1512.0 - 360.0, 16.0));
         // No cursor and no screen fits: centred, using the fallback scale.
         let at = dropdown_origin((2000.0, 0.0, 40.0, 48.0), None, &[], 2.0);
         assert_eq!(at, (830.0, 28.0));
