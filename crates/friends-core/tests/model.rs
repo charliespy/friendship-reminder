@@ -289,8 +289,10 @@ fn huge_ids_make_a_file_unreadable() {
 
 #[test]
 fn ids_stop_short_of_the_limit_instead_of_saving_an_unloadable_file() {
-    let mut data = Data::default();
-    data.last_id = friends_core::model::MAX_ID - 2;
+    let mut data = Data {
+        last_id: friends_core::model::MAX_ID - 2,
+        ..Data::default()
+    };
     assert!(data.add_person("A", 30, today(), today()).is_ok());
     assert!(data.add_person("B", 30, today(), today()).is_err());
     assert!(data.is_sane());
