@@ -11,7 +11,10 @@
 //! - `GET /__test/health` answers 200 once the server is up.
 //! - `POST /__test/today` with `"YYYY-MM-DD"` (a JSON string) moves the server's clock to that day.
 //!
-//! It only listens on the loopback address and is never part of the app.
+//! It only listens on the loopback address and is never part of the app. So that a web page open in
+//! the browser can't drive it, it answers only requests addressed to `127.0.0.1:<port>` or
+//! `localhost:<port>` (no DNS rebinding) and only JSON POSTs (a page can't send those to another
+//! origin without a CORS preflight, which this server never allows).
 
 use std::path::PathBuf;
 
@@ -49,6 +52,46 @@ fn parse_args() -> Result<Options, String> {
     let data =
         data.ok_or("--data <file> is required (use a scratch file, never your real data)")?;
     Ok(Options { port, data, today })
+}
+
+fn header<'a>(request: &'a tiny_http::Request, name: &'static str) -> Option<&'a str> {
+    request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv(name))
+        .map(|h| h.value.as_str())
+}
+
+/// Refuses requests a web page could have sent: see the top of this file.
+fn check_request(request: &tiny_http::Request, port: u16) -> Result<(), &'static str> {
+    allowed(
+        header(request, "Host"),
+        header(request, "Content-Type"),
+        *request.method() == Method::Post,
+        port,
+    )
+}
+
+fn allowed(
+    host: Option<&str>,
+    content_type: Option<&str>,
+    post: bool,
+    port: u16,
+) -> Result<(), &'static str> {
+    let host_ok =
+        host.is_some_and(|h| h == format!("127.0.0.1:{port}") || h == format!("localhost:{port}"));
+    if !host_ok {
+        return Err("wrong Host: send requests to 127.0.0.1 or localhost on this port");
+    }
+    let json = content_type.is_some_and(|c| {
+        c.split(';')
+            .next()
+            .is_some_and(|t| t.trim().eq_ignore_ascii_case("application/json"))
+    });
+    if post && !json {
+        return Err("send JSON with Content-Type: application/json");
+    }
+    Ok(())
 }
 
 struct Dev {
@@ -145,6 +188,10 @@ fn main() {
     );
 
     for mut request in server.incoming_requests() {
+        if let Err(why) = check_request(&request, opts.port) {
+            let _ = request.respond(json_response(403, &json!(why)));
+            continue;
+        }
         let mut body = String::new();
         if request.as_reader().read_to_string(&mut body).is_err() {
             let _ = request.respond(json_response(400, &json!("unreadable body")));
@@ -184,5 +231,40 @@ fn main() {
             _ => json_response(404, &json!("not found")),
         };
         let _ = request.respond(response);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed;
+
+    #[test]
+    fn accepts_json_posts_to_the_loopback_host() {
+        assert!(allowed(Some("127.0.0.1:1430"), Some("application/json"), true, 1430).is_ok());
+        assert!(allowed(
+            Some("localhost:1430"),
+            Some("application/json; charset=utf-8"),
+            true,
+            1430
+        )
+        .is_ok());
+        assert!(allowed(Some("localhost:1430"), None, false, 1430).is_ok());
+    }
+
+    #[test]
+    fn refuses_what_a_web_page_could_send() {
+        // A plain form or no-cors fetch: no JSON content type.
+        assert!(allowed(Some("127.0.0.1:1430"), Some("text/plain"), true, 1430).is_err());
+        assert!(allowed(Some("127.0.0.1:1430"), None, true, 1430).is_err());
+        // DNS rebinding: the page's own host name pointed at 127.0.0.1.
+        assert!(allowed(
+            Some("evil.example:1430"),
+            Some("application/json"),
+            true,
+            1430
+        )
+        .is_err());
+        assert!(allowed(Some("127.0.0.1:9999"), Some("application/json"), true, 1430).is_err());
+        assert!(allowed(None, Some("application/json"), true, 1430).is_err());
     }
 }

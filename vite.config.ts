@@ -2,6 +2,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// Browser dev mode and the e2e tests send the app's commands to friends-devserver through this
+// proxy. Only /invoke goes through; changeOrigin sends the Host the devserver accepts.
+const devserverProxy = {
+  "/__friends/invoke": {
+    target: `http://127.0.0.1:${process.env.FRIENDS_DEVSERVER_PORT ?? 1430}`,
+    changeOrigin: true,
+    rewrite: (p: string) => p.replace(/^\/__friends/, ""),
+  },
+};
+
 // Tauri loads the dev server at a fixed port, so it must not move to another one.
 export default defineConfig({
   plugins: [react()],
@@ -14,11 +24,9 @@ export default defineConfig({
     // Cargo's build folders hold tens of thousands of files; watching them floods the watcher.
     watch: { ignored: ["**/target/**", "**/src-tauri/**"] },
     // In browser dev mode (npm run dev:web) the commands go to friends-devserver.
-    proxy: { "/__friends": { target: `http://127.0.0.1:${process.env.FRIENDS_DEVSERVER_PORT ?? 1430}`, rewrite: (p) => p.replace(/^\/__friends/, "") } },
+    proxy: devserverProxy,
   },
-  preview: {
-    proxy: { "/__friends": { target: `http://127.0.0.1:${process.env.FRIENDS_DEVSERVER_PORT ?? 1430}`, rewrite: (p) => p.replace(/^\/__friends/, "") } },
-  },
+  preview: { proxy: devserverProxy },
   build: {
     target: "safari16",
     rollupOptions: {
