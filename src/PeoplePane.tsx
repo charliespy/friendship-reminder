@@ -128,7 +128,7 @@ function PersonRow({
         </div>
         {error && <p className="error">{error}</p>}
       </div>
-      <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => run(() => api.markDone(person.id))}>
+      <button className="btn btn-done btn-sm" disabled={busy} onClick={() => run(() => api.markDone(person.id))}>
         Done
       </button>
       <button className="btn btn-quiet btn-sm" onClick={onEdit} aria-label={`Edit ${person.name}`}>

@@ -32,7 +32,7 @@ quiet native settings window: a source-list sidebar and inset grouped lists.
 
 FIRST VIEWPORT: Dropdown fills its window edge to edge (square, matching the native window).
 Header row: "Friends" at 13pt semibold left, today's date right in secondary ink. "Reach out now":
-a white inset group, one 48px row per person (disc, name, aim line, a filled press-blue Done).
+a white inset group, one 48px row per person (disc, name, aim line, a sea-green tinted Done; Done is sea green wherever it appears).
 "Coming up": a plain list in date order, reminder line under each name. Footer: Preferences… and
 Quit Friends as menu-style text buttons on a hairline.
 
