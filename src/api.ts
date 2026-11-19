@@ -64,7 +64,8 @@ function call(cmd: string, args: Record<string, unknown> = {}): Promise<View> {
 export const api = {
   getView: () => call("get_view"),
   addPerson: (p: { name: string; frequencyDays: number; lastConnected: IsoDate }) => call("add_person", p),
-  updatePerson: (p: { id: number; name: string; frequencyDays: number; lastConnected: IsoDate }) =>
+  /** Leave out lastConnected when it wasn't changed, so a "Done" made meanwhile is kept. */
+  updatePerson: (p: { id: number; name: string; frequencyDays: number; lastConnected?: IsoDate }) =>
     call("update_person", p),
   deletePeople: (ids: number[]) => call("delete_people", { ids }),
   markDone: (id: number) => call("mark_done", { id }),

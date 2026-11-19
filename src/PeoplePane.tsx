@@ -22,14 +22,16 @@ function PersonForm({
   initial: Draft;
   today: string;
   submitLabel: string;
-  onSubmit: (d: Draft) => Promise<unknown>;
+  /** `opened` is the draft as the form first showed it. */
+  onSubmit: (d: Draft, opened: Draft) => Promise<unknown>;
   onCancel: () => void;
 }) {
+  const [opened] = useState(initial);
   const [draft, setDraft] = useState(initial);
   const { run, busy, error } = useAction();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (await run(() => onSubmit({ ...draft, name: draft.name.trim() }))) onCancel();
+    if (await run(() => onSubmit({ ...draft, name: draft.name.trim() }, opened))) onCancel();
   };
   return (
     <form className="card form-card" onSubmit={submit} aria-label={submitLabel} noValidate>
@@ -197,7 +199,14 @@ export function PeoplePane({ view }: { view: View }) {
           }}
           today={view.today}
           submitLabel="Save changes"
-          onSubmit={(d) => api.updatePerson({ id: editingPerson.id, ...d })}
+          onSubmit={(d, opened) =>
+            api.updatePerson({
+              id: editingPerson.id,
+              name: d.name,
+              frequencyDays: d.frequencyDays,
+              ...(d.lastConnected !== opened.lastConnected && { lastConnected: d.lastConnected }),
+            })
+          }
           onCancel={() => setEditing(null)}
         />
       )}
