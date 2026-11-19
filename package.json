@@ -17,7 +17,11 @@
     "check:web": "npm run typecheck && npm run lint && npm run test && vite build",
     "check": "npm run check:web && npm run check:rust",
     "e2e": "playwright test",
-    "privacy": "scripts/privacy-scan.sh"
+    "privacy": "scripts/privacy-scan.sh",
+    "release:plan": "node scripts/release.mjs plan",
+    "release:prepare": "node scripts/release.mjs prepare",
+    "release:notes": "node scripts/release.mjs notes",
+    "release:verify": "node scripts/release.mjs verify"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",
