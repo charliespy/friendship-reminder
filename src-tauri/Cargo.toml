@@ -15,8 +15,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 friends-core = { path = "../crates/friends-core" }
-tauri = { version = "2", features = ["tray-icon"] }
-chrono.workspace = true
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+chrono = { workspace = true, features = ["clock"] }
 serde_json.workspace = true
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
