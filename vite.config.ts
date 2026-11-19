@@ -19,8 +19,8 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    // Reachable through a .ts.net share of the dev server.
-    allowedHosts: [".ts.net"],
+    // Extra host names the dev server answers to (for example a tunnel), comma-separated.
+    allowedHosts: process.env.FRIENDS_DEV_ALLOWED_HOSTS?.split(",").filter(Boolean) ?? [],
     // Cargo's build folders hold tens of thousands of files; watching them floods the watcher.
     watch: { ignored: ["**/target/**", "**/src-tauri/**"] },
     // In browser dev mode (npm run dev:web) the commands go to friends-devserver.

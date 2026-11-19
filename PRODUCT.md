@@ -2,8 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-<!-- Written by the maintainers' build agent from the issue, README and code, without an interview.
-     Every fact below is inferred from those sources; correct anything that is wrong. -->
+<!-- Inferred from the issue, README and code; correct anything that is wrong. -->
 
 ## Platform
 

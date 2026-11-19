@@ -190,7 +190,7 @@ export function PeoplePane({ view }: { view: View }) {
 
       {adding && (
         <PersonForm
-          initial={{ name: "", frequencyDays: 90, lastConnected: view.today }}
+          initial={{ name: "", frequencyDays: 30, lastConnected: view.today }}
           today={view.today}
           submitLabel="Add person"
           onSubmit={(d) => api.addPerson(d)}

@@ -12,8 +12,7 @@ panes). Mode: Operate. Audience and job: see PRODUCT.md (a glance from the menu 
 click; Preferences opened rarely). Constraints: native macOS feel pinned by the brief, light and
 dark mode, WebKit only, no web fonts, test names and labels unchanged.
 
-Decided without the owner (unattended run, no question channel): the roll's assigned direction,
-code-led (Operate surface).
+Direction: the roll's assigned direction, code-led (Operate surface).
 
 ## Direction contract
 

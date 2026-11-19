@@ -58,8 +58,8 @@ npm run e2e              # end-to-end tests (Playwright, WebKit)
 
 - Each person has a frequency. The next day to aim for is their last contact plus that many
   days, moved forward past blocked dates and to an allowed day.
-- With **weekends only**, the reminder comes on the Monday before the weekend, so there's time
-  to plan. Otherwise it comes on the day itself.
+- When the day to aim for is a Saturday or Sunday, the reminder comes on the Monday before, so
+  there's time to plan. A weekday is reminded on the day itself.
 - Mark someone **Done** from the menu bar when you've been in touch; their next day is
   scheduled from today.
 - If the day passes without **Done**, Friends keeps them in the list and aims for the next

@@ -183,10 +183,11 @@ impl App {
             people,
             blocked: self.data.blocked.clone(),
             settings: self.data.settings.clone(),
-            unreadable_file: self
-                .unreadable_file
-                .as_ref()
-                .map(|p| p.display().to_string()),
+            unreadable_file: self.unreadable_file.as_ref().map(|p| {
+                // Shown in the app, where it may end up in a screenshot for a bug report.
+                let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+                crate::hide_home(&p.display().to_string(), home.as_deref())
+            }),
         }
     }
 

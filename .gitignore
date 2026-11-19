@@ -8,3 +8,4 @@ playwright-report/
 
 # Impeccable review captures (local only)
 .impeccable/review/
+.impeccable/hook.cache.json

@@ -20,7 +20,13 @@ export function BlockedPane({ view }: { view: View }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (await add.run(() => api.addBlocked({ start, end, label: label.trim() }))) setLabel("");
+    if (await add.run(() => api.addBlocked({ start, end, label: label.trim() }))) {
+      // Back to a fresh form: today's dates, which follow the calendar again until touched.
+      setLabel("");
+      setStart(view.today);
+      setEnd(view.today);
+      touched.current = false;
+    }
   };
 
   return (
