@@ -4,8 +4,8 @@
 #
 #   scripts/repo-settings.sh apply        protect main with .github/rulesets/main.json (create or
 #                                         update the "main" ruleset), turn on auto-merge, squash
-#                                         merges titled by the PR title, and deleting merged
-#                                         branches; then `check`
+#                                         merges titled by the PR title with the commits as the
+#                                         message, and deleting merged branches; then `check`
 #   scripts/repo-settings.sh check        read-only: fails unless GitHub matches this repo's files
 #   scripts/repo-settings.sh verify-push  try a direct push of an empty commit to main; passes only
 #                                         if GitHub refuses it
@@ -49,7 +49,7 @@ check() {
   local fail=0 id live want
   settings=$(gh api "repos/$repo" --jq '[.allow_auto_merge, .allow_squash_merge, .delete_branch_on_merge, .squash_merge_commit_title, .squash_merge_commit_message] | map(tostring) | join(" ")')
   if [ "$settings" != "true true true PR_TITLE COMMIT_MESSAGES" ]; then
-    echo "repo-settings: auto-merge, squash merges, deleting merged branches and squash titles from the PR title must all be on (got: $settings)" >&2
+    echo "repo-settings: auto-merge, squash merges, deleting merged branches, squash titles from the PR title and squash messages from the commits must all be on (got: $settings)" >&2
     fail=1
   fi
   id=$(ruleset_id)

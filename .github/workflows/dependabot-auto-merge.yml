@@ -2,7 +2,8 @@ name: Dependabot auto-merge
 
 # Turns on GitHub's auto-merge for Dependabot's minor and patch updates of npm and Cargo packages,
 # so they squash-merge once every required check on main passes (.github/rulesets/main.json).
-# Major updates, breaking 0.x updates and GitHub Actions updates wait for a maintainer. A merge made
+# Major updates, breaking 0.x updates, Tauri minor updates (whose Rust and npm halves must move
+# together) and GitHub Actions updates wait for a maintainer. A merge made
 # this way doesn't start CI's run on main (GitHub starts no workflows for its own token's actions);
 # the PR was tested before it merged. scripts/dependabot-auto-merge.sh
 # makes the call; scripts/test-dependabot-auto-merge.sh tests it.

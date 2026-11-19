@@ -67,8 +67,14 @@ group='[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"
 expect "a group of safe updates merges" "$on" cargo version-update:semver-minor "$group"
 expect "0.x middle number changes waits" "$off" cargo version-update:semver-minor \
   '[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"chrono","prevVersion":"0.4.41","newVersion":"0.5.0"}]'
-expect "a Tauri crate minor update waits" "$off" cargo version-update:semver-minor \
-  '[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"tauri-build","prevVersion":"2.5.1","newVersion":"2.6.0"}]'
+expect "a tauri minor update waits" "$off" cargo version-update:semver-minor \
+  '[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"tauri","prevVersion":"2.12.7","newVersion":"2.13.0"}]'
+expect "a Tauri plugin crate minor update waits" "$off" cargo version-update:semver-minor \
+  '[{"dependencyName":"tauri-plugin-notification","prevVersion":"2.8.1","newVersion":"2.9.0"}]'
+expect "a Tauri npm plugin minor update waits" "$off" npm_and_yarn version-update:semver-minor \
+  '[{"dependencyName":"@tauri-apps/plugin-notification","prevVersion":"2.3.1","newVersion":"2.4.0"}]'
+expect "tauri-build and @tauri-apps/cli minor updates merge (no partner to match)" "$on" cargo version-update:semver-minor \
+  '[{"dependencyName":"tauri-build","prevVersion":"2.7.6","newVersion":"2.8.0"},{"dependencyName":"@tauri-apps/cli","prevVersion":"2.12.6","newVersion":"2.13.0"}]'
 expect "a Tauri npm minor update waits" "$off" npm_and_yarn version-update:semver-minor \
   '[{"dependencyName":"@tauri-apps/api","prevVersion":"2.12.5","newVersion":"2.13.0"}]'
 expect "a Tauri patch update merges" "$on" cargo version-update:semver-patch \

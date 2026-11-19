@@ -1,7 +1,8 @@
 # Dependabot checks for new versions once a week. Minor and patch updates come as one PR per
 # ecosystem (the "minor-and-patch" group), and .github/workflows/dependabot-auto-merge.yml merges
 # the npm and Cargo ones once every required check passes (not a 0.x package's breaking update,
-# nor a Tauri minor update, whose Rust and npm halves must move together).
+# nor a minor update of tauri, @tauri-apps/api or a Tauri plugin, whose
+# Rust and npm halves must move together).
 # A major update comes as a PR of its own and waits for a maintainer. PR titles are conventional
 # commits ("chore(deps): ...", "ci(deps): ..."), so they pass the PR title check.
 version: 2

@@ -84,10 +84,12 @@ Rust crates and GitHub Actions. It proposes a release only once it is 3 days old
 - A package still at 0.x whose middle number changes (0.4 → 0.5), or a 0.0.x one whose last
   number does, is a breaking change under npm and Cargo rules, so that PR waits for a maintainer
   too.
-- Tauri's Rust crates (`tauri*`) and npm packages (`@tauri-apps/*`) must share the same
-  major.minor version, and Dependabot updates them in separate PRs. So a PR that moves a Tauri
-  package to a new minor version waits for a maintainer, who updates both sides together. Tauri
-  patch updates still merge by themselves.
+- Tauri's CLI refuses to build when the `tauri` crate and the `@tauri-apps/api` npm package (or a
+  `tauri-plugin-*` crate and its `@tauri-apps/plugin-*` package) are on different major.minor
+  versions, and Dependabot updates the two sides in separate PRs. So a PR that moves one of these
+  to a new minor version waits for a maintainer, who updates both sides together. Their patch
+  updates, and `tauri-build` and `@tauri-apps/cli`, which have no partner, still merge by
+  themselves.
 - Dependabot pushes newer versions onto a PR that is still open. When a push turns a PR into one
   that has to wait, the workflow turns its auto-merge off again, even auto-merge a maintainer
   turned on by hand: turn it on again after checking the new push. (Between a push and that job,
