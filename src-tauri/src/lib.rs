@@ -197,17 +197,16 @@ fn dropdown_origin(
         // The pixels can fit two screens, and with "Displays have separate Spaces" (the default)
         // each has a menu bar, so this is a guess: the main one (at 0, 0).
         .or_else(|| {
-            let mut fits = screens.iter().copied().filter(|s| {
-                let (x, y) = (icon_px.0 / s.scale, icon_px.1 / s.scale);
-                contains(s, x, y) && y < s.top + 40.0
-            });
-            let first = fits.next()?;
-            Some(
-                std::iter::once(first)
-                    .chain(fits)
-                    .find(|s| s.left == 0.0 && s.top == 0.0)
-                    .unwrap_or(first),
-            )
+            let fits: Vec<Screen> = screens
+                .iter()
+                .copied()
+                .filter(|s| {
+                    let (x, y) = (icon_px.0 / s.scale, icon_px.1 / s.scale);
+                    contains(s, x, y) && y < s.top + 40.0
+                })
+                .collect();
+            let main = fits.iter().find(|s| s.left == 0.0 && s.top == 0.0);
+            main.or(fits.first()).copied()
         });
     let scale = screen.map_or(fallback_scale, |s| s.scale);
     let (x, y, w, h) = (

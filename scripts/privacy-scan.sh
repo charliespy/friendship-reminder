@@ -14,14 +14,15 @@ report() { echo "privacy-scan: $1" >&2; fail=1; }
 
 # Addresses that are fine to publish: GitHub noreply addresses, the reserved example domains, git
 # remotes, and retina image names (icon@2x.png).
-allowed_email='(users\.noreply\.github\.com|@example\.(com|org|net)|@localhost|^git@github\.com|@[0-9]+x\.(png|jpg|svg))'
+allowed_email='(@users\.noreply\.github\.com|@example\.(com|org|net)|@localhost|^git@github\.com|@[0-9]+x\.(png|jpg|svg))$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 home_path='(/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+|[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9._-]+)'
 # Placeholders a doc may use for a home folder, and the system's shared folders.
 allowed_path='[\\/](Users|home)[\\/]+(you|me|runner|USER|\$USER|<[^>]*>|example|name|username|Shared|Public|Default|All Users)$'
 # Web links: a /home/... or /Users/... inside one is a page, not a folder on someone's disk.
-url='[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]<>"()]+'
-private_host='[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.ts\.net'
+# Only web links: a file:// link is a folder on someone's disk.
+url='(https?|ftp)://[^[:space:]<>"()]+'
+private_host='([A-Za-z0-9-]+\.)+ts\.net'
 attribution='(Co-authored-by:|Generated with \[?Claude|noreply@anthropic\.com)'
 
 # Scans text on stdin; $1 says where it came from.
@@ -80,7 +81,8 @@ if ! git rev-list --quiet "$range" -- 2>/dev/null; then
   echo "privacy-scan: can't read the commits in $range" >&2
   exit 1
 fi
-while IFS=$'\t' read -r sha author committer; do
+# Fields split by \x1f: read would merge tabs, and an empty author would shift the fields.
+while IFS=$'\x1f' read -r sha author committer; do
   [ -n "$sha" ] || continue
   if ! printf '%s' "$author" | grep -qE "$allowed_email"; then
     report "commit ${sha:0:12} has a personal author address ($author); use your GitHub noreply address"
@@ -89,7 +91,7 @@ while IFS=$'\t' read -r sha author committer; do
   if [ "$committer" != "noreply@github.com" ] && ! printf '%s' "$committer" | grep -qE "$allowed_email"; then
     report "commit ${sha:0:12} has a personal committer address ($committer)"
   fi
-done < <(git log --format='%H%x09%ae%x09%ce' "$range")
+done < <(git log --format='%H%x1f%ae%x1f%ce' "$range")
 while IFS= read -r -d '' record; do
   sha=${record%%$'\n'*}
   [ -n "$sha" ] || continue

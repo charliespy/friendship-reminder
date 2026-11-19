@@ -32,6 +32,10 @@ expect fail "home folder" text "it lives in /Users/jane/Code"
 expect fail "linux home folder" text "/home/jane/.config"
 expect fail "windows home folder" text "C:\\Users\\jane\\Desktop"
 expect fail "tailnet host" text "https://my-mac.tail1234.ts.net:4100/"
+expect fail "tailnet name alone" text "https://tail1234.ts.net/ and foo.ts.net:4100"
+expect fail "a file:// link to a home folder" text "file:///Users/jane/Code/x"
+expect fail "an example domain inside another" text "jane@example.com.au, jane@example.company.com"
+expect fail "noreply inside another domain" text "bob@users.noreply.github.com.evil.io"
 expect fail "co-author trailer" text "Co-authored-by: Someone <someone@example.com>"
 
 # A repo: files and commits.
@@ -73,6 +77,8 @@ git commit -qm "test: remove it"
 
 git commit -q --allow-empty -m "chore: by someone" --author="Jane <jane@gmail.com>"
 expect fail "personal author" bash scripts/privacy-scan.sh --range "HEAD~1..HEAD"
+git commit -q --allow-empty -m "chore: lookalike" --author="Jane <jane@example.com.au>"
+expect fail "an author at a lookalike domain" bash scripts/privacy-scan.sh --range "HEAD~1..HEAD"
 GIT_COMMITTER_EMAIL=noreply@github.com git commit -q --allow-empty -m "chore: web edit" \
   --author="Web <web@gmail.com>"
 expect fail "personal author of a commit GitHub made" bash scripts/privacy-scan.sh --range "HEAD~1..HEAD"
