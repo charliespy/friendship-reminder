@@ -222,6 +222,51 @@ describe("PeoplePane", () => {
     expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Maya Chen-Ito");
   });
 
+  it("after a delete, focuses the checkbox of the person now in the first deleted one's place", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    fireEvent.click(screen.getByLabelText("Select Maya Chen"));
+    fireEvent.click(screen.getByLabelText("Select Theo Marsh"));
+    await click(button("Delete selected…"));
+    button("Delete").focus();
+    await click(button("Delete"));
+    // The bar is gone, and the new view hasn't arrived yet.
+    expect(document.activeElement).toBe(document.body);
+    rerender(<PeoplePane view={view([LENA])} />);
+    expect(document.activeElement).toBe(screen.getByLabelText("Select Lena Fischer"));
+  });
+
+  it("after deleting the last people in the list, focuses the one before them", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    fireEvent.click(screen.getByLabelText("Select Lena Fischer"));
+    await click(button("Delete selected…"));
+    button("Delete").focus();
+    await click(button("Delete"));
+    rerender(<PeoplePane view={view([MAYA, THEO])} />);
+    expect(document.activeElement).toBe(screen.getByLabelText("Select Theo Marsh"));
+  });
+
+  it("after deleting everyone, focuses Add person", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA])} />);
+    fireEvent.click(screen.getByLabelText("Select Maya Chen"));
+    await click(button("Delete selected…"));
+    button("Delete").focus();
+    await click(button("Delete"));
+    rerender(<PeoplePane view={view([])} />);
+    expect(document.activeElement).toBe(button("Add person"));
+  });
+
+  it("leaves focus alone after a delete if the user moved it", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
+    fireEvent.click(screen.getByLabelText("Select Maya Chen"));
+    await click(button("Delete selected…"));
+    button("Delete").focus();
+    await click(button("Delete"));
+    const edit = button("Edit Theo Marsh");
+    edit.focus();
+    rerender(<PeoplePane view={view([THEO])} />);
+    expect(document.activeElement).toBe(edit);
+  });
+
   it("closes the edit form when its person is deleted", async () => {
     render(<PeoplePane view={view([MAYA, THEO])} />);
     await click(button("Edit Maya Chen"));

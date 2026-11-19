@@ -105,6 +105,7 @@ function PersonRow({
   selected,
   onSelect,
   onEdit,
+  selectRef,
   editRef,
 }: {
   person: Person;
@@ -112,6 +113,7 @@ function PersonRow({
   selected: boolean;
   onSelect: (on: boolean) => void;
   onEdit: () => void;
+  selectRef: (el: HTMLInputElement | null) => void;
   editRef: (el: HTMLButtonElement | null) => void;
 }) {
   const { run, busy, error } = useAction();
@@ -123,6 +125,7 @@ function PersonRow({
   return (
     <li className="list-row" data-testid="person-row" data-overdue={person.overdue}>
       <input
+        ref={selectRef}
         type="checkbox"
         checked={selected}
         onChange={(e) => onSelect(e.target.checked)}
@@ -162,17 +165,29 @@ export function PeoplePane({ view }: { view: View }) {
   const del = useAction();
 
   // When a form closes, focus goes back to the button that opened it (Add person, or the person's
-  // Edit), so keyboard and screen reader users don't land back at the top of the window.
+  // Edit), so keyboard and screen reader users don't land back at the top of the window. After a
+  // delete, it goes to the checkbox of the person now in the first deleted person's place (or the
+  // last person, if the deleted ones were at the end), or to Add person when nobody is left.
   const addButton = useRef<HTMLButtonElement>(null);
   const editButtons = useRef(new Map<number, HTMLButtonElement>());
-  const returnFocus = useRef<"add" | number | null>(null);
+  const checkboxes = useRef(new Map<number, HTMLInputElement>());
+  const returnFocus = useRef<"add" | number | { deleted: number[]; at: number } | null>(null);
   useEffect(() => {
     const target = returnFocus.current;
     if (target === null) return;
+    const left = view.people;
+    // The new view can arrive after the delete command returns: wait until it no longer shows the
+    // deleted people.
+    if (typeof target === "object" && left.some((p) => target.deleted.includes(p.id))) return;
     returnFocus.current = null;
     // Only if focus was lost with the form; never take it from somewhere the user moved it.
     if (document.activeElement && document.activeElement !== document.body) return;
-    (target === "add" ? addButton.current : editButtons.current.get(target))?.focus();
+    if (typeof target === "object") {
+      const next = left[Math.min(target.at, left.length - 1)];
+      (next ? checkboxes.current.get(next.id) : addButton.current)?.focus();
+    } else {
+      (target === "add" ? addButton.current : editButtons.current.get(target))?.focus();
+    }
   });
 
   // Forget selections of people who are gone.
@@ -189,7 +204,10 @@ export function PeoplePane({ view }: { view: View }) {
   };
 
   const deleteChosen = async () => {
+    const at = view.people.findIndex((p) => chosen.includes(p.id));
     if (await del.run(() => api.deletePeople(chosen))) {
+      // The selection bar, and the Delete button in it, are about to go.
+      returnFocus.current = { deleted: chosen, at };
       setSelected(new Set());
       setConfirming(false);
       // Close the edit form only if its person was deleted; another person's edit stays open.
@@ -289,6 +307,10 @@ export function PeoplePane({ view }: { view: View }) {
               selected={chosen.includes(p.id)}
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}
+              selectRef={(el) => {
+                if (el) checkboxes.current.set(p.id, el);
+                else checkboxes.current.delete(p.id);
+              }}
               editRef={(el) => {
                 if (el) editButtons.current.set(p.id, el);
                 else editButtons.current.delete(p.id);
