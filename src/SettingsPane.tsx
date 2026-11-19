@@ -14,17 +14,22 @@ export function SettingsPane({ view }: { view: View }) {
   const notify = useAction();
   const [login, setLogin] = useState<boolean | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
 
   useEffect(() => {
     api.getLaunchAtLogin().then(setLogin, (e) => setLoginError(errorMessage(e)));
   }, []);
 
+  // One change at a time, so the box always shows the answer to the last click.
   const changeLogin = async (on: boolean) => {
     setLoginError(null);
+    setLoginBusy(true);
     try {
       setLogin(await api.setLaunchAtLogin(on));
     } catch (e) {
       setLoginError(errorMessage(e));
+    } finally {
+      setLoginBusy(false);
     }
   };
 
@@ -86,7 +91,7 @@ export function SettingsPane({ view }: { view: View }) {
             <input
               type="checkbox"
               checked={login ?? false}
-              disabled={login === null && !loginError}
+              disabled={loginBusy || (login === null && !loginError)}
               onChange={(e) => changeLogin(e.target.checked)}
             />
             <span>
