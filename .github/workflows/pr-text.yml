@@ -1,7 +1,9 @@
 name: PR text
 
-# The PR's title and description are public too: scan them whenever they're written or edited.
-# A separate workflow, so editing them never re-runs (or cancels) the checks in CI.
+# The PR's title and description: the title must be a conventional commit (it becomes the squash
+# commit on main), and both are public, so they're scanned for personal info. They run whenever the
+# text is written or edited. A separate workflow, so editing them never re-runs (or cancels) the
+# checks in CI. Both jobs are required checks on main (.github/rulesets/main.json).
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
@@ -26,4 +28,21 @@ jobs:
           # Through the environment, never pasted into the script, so the text can't run as code.
           TITLE: ${{ github.event.pull_request.title }}
           BODY: ${{ github.event.pull_request.body }}
-        run: printf '%s\n%s\n' "$TITLE" "$BODY" | scripts/privacy-scan.sh --stdin
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          # Dependabot's descriptions quote other projects' release notes, which may hold their
+          # authors' addresses. Those aren't ours to remove, so for its PRs only the title is scanned.
+          if [ "$AUTHOR" = "dependabot[bot]" ]; then BODY=""; fi
+          printf '%s\n%s\n' "$TITLE" "$BODY" | scripts/privacy-scan.sh --stdin
+
+  title:
+    name: PR title (conventional commit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Check the PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: scripts/pr-title-check.sh

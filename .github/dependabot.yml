@@ -1,0 +1,65 @@
+# Dependabot checks for new versions once a week. Minor and patch updates come as one PR per
+# ecosystem (the "minor-and-patch" group), and .github/workflows/dependabot-auto-merge.yml merges
+# the npm and Cargo ones once every required check passes (not a 0.x package's breaking update).
+# A major update comes as a PR of its own and waits for a maintainer. PR titles are conventional
+# commits ("chore(deps): ...", "ci(deps): ..."), so they pass the PR title check.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    # A new release is proposed only once it's 3 days old, so a bad or hijacked one has time to be
+    # pulled first.
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    # A new release is proposed only once it's 3 days old, so a bad or hijacked one has time to be
+    # pulled first.
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Los_Angeles
+    # A new release is proposed only once it's 3 days old, so a bad or hijacked one has time to be
+    # pulled first.
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]

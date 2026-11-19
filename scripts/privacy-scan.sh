@@ -12,9 +12,10 @@ cd "$(git rev-parse --show-toplevel)"
 fail=0
 report() { echo "privacy-scan: $1" >&2; fail=1; }
 
-# Addresses that are fine to publish: GitHub noreply addresses, the reserved example domains, git
-# remotes, and retina image names (icon@2x.png).
-allowed_email='(@users\.noreply\.github\.com|@example\.(com|org|net)|^git@github\.com|@[0-9]+x\.(png|jpe?g|svg|webp|gif|avif))$'
+# Addresses that are fine to publish: GitHub noreply addresses, GitHub's own public addresses
+# (Dependabot signs its commits "dependabot[bot] <support@github.com>"), the reserved example
+# domains, git remotes, and retina image names (icon@2x.png).
+allowed_email='(@users\.noreply\.github\.com|^(support|noreply)@github\.com|@example\.(com|org|net)|^git@github\.com|@[0-9]+x\.(png|jpe?g|svg|webp|gif|avif))$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 # Home folders, in the case the systems write them, so web routes (/api/users/list) don't match:
 # macOS /Users/<name> anywhere (also inside local dev links like /@fs/Users/...); Linux /home/<name>
