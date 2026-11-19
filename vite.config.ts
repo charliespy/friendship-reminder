@@ -13,6 +13,11 @@ export default defineConfig({
     allowedHosts: [".ts.net"],
     // Cargo's build folders hold tens of thousands of files; watching them floods the watcher.
     watch: { ignored: ["**/target/**", "**/src-tauri/**"] },
+    // In browser dev mode (npm run dev:web) the commands go to friends-devserver.
+    proxy: { "/__friends": { target: `http://127.0.0.1:${process.env.FRIENDS_DEVSERVER_PORT ?? 1430}`, rewrite: (p) => p.replace(/^\/__friends/, "") } },
+  },
+  preview: {
+    proxy: { "/__friends": { target: `http://127.0.0.1:${process.env.FRIENDS_DEVSERVER_PORT ?? 1430}`, rewrite: (p) => p.replace(/^\/__friends/, "") } },
   },
   build: {
     target: "safari16",
@@ -23,5 +28,6 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
+    restoreMocks: true,
   },
 });

@@ -21,3 +21,7 @@ serde_json.workspace = true
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
+
+[features]
+# Set by `tauri build`: serve the built front end from inside the app instead of the dev server.
+custom-protocol = ["tauri/custom-protocol"]

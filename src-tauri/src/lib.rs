@@ -11,7 +11,8 @@ use friends_core::store::Store;
 use serde_json::Value;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindowBuilder,
+    WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
 use tauri_plugin_notification::NotificationExt;
@@ -74,7 +75,12 @@ fn publish(app: &AppHandle, view: &View) {
 
 /// The one command the UI calls: runs a friends-core command and tells every window the result.
 #[tauri::command]
-fn call(app: AppHandle, state: tauri::State<'_, State>, cmd: String, args: Value) -> Result<View, ApiError> {
+fn call(
+    app: AppHandle,
+    state: tauri::State<'_, State>,
+    cmd: String,
+    args: Value,
+) -> Result<View, ApiError> {
     let view = lock(&state).call(&cmd, args, today())?;
     publish(&app, &view);
     Ok(view)
@@ -88,7 +94,11 @@ fn get_launch_at_login(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 fn set_launch_at_login(app: AppHandle, on: bool) -> Result<bool, String> {
     let launcher = app.autolaunch();
-    let result = if on { launcher.enable() } else { launcher.disable() };
+    let result = if on {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
     result.map_err(|e| format!("macOS didn't accept the change: {e}"))?;
     launcher.is_enabled().map_err(|e| e.to_string())
 }
@@ -131,14 +141,22 @@ fn show_preferences(app: &AppHandle) -> tauri::Result<()> {
 
 /// Shows the dropdown under the menu bar icon, or hides it when it's already showing.
 fn toggle_dropdown(app: &AppHandle, icon: Rect) {
-    let Some(w) = app.get_webview_window(DROPDOWN) else { return };
+    let Some(w) = app.get_webview_window(DROPDOWN) else {
+        return;
+    };
     if w.is_visible().unwrap_or(false) {
         let _ = w.hide();
         return;
     }
     let scale = w.scale_factor().unwrap_or(1.0);
-    let (pos, size) = (icon.position.to_physical::<f64>(scale), icon.size.to_physical::<f64>(scale));
-    let width = w.outer_size().map(|s| f64::from(s.width)).unwrap_or(360.0 * scale);
+    let (pos, size) = (
+        icon.position.to_physical::<f64>(scale),
+        icon.size.to_physical::<f64>(scale),
+    );
+    let width = w
+        .outer_size()
+        .map(|s| f64::from(s.width))
+        .unwrap_or(360.0 * scale);
     // Centred under the icon, a few points below the menu bar.
     let x = pos.x + size.width / 2.0 - width / 2.0;
     let y = pos.y + size.height + 4.0 * scale;
@@ -163,11 +181,19 @@ fn tick(app: &AppHandle) {
     };
     for person in due {
         let body = if person.overdue {
-            format!("You meant to reach out to {} — there's still time this round.", person.name)
+            format!(
+                "You meant to reach out to {} — there's still time this round.",
+                person.name
+            )
         } else {
             format!("It's time to reach out to {}.", person.name)
         };
-        let _ = app.notification().builder().title("Friends").body(body).show();
+        let _ = app
+            .notification()
+            .builder()
+            .title("Friends")
+            .body(body)
+            .show();
     }
     publish(app, &view);
 }
@@ -179,7 +205,10 @@ pub fn run() {
             let _ = show_preferences(app);
         }))
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             call,
             get_launch_at_login,
