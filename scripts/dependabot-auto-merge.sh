@@ -38,7 +38,10 @@ disable() {
     say "Dry run: would make sure auto-merge is off for $PR_URL."
     return
   fi
-  if [ "$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')" = true ]; then
+  local on
+  # A plain assignment, so a failing `gh pr view` stops the script (inside `[ "$(…)" ]` it wouldn't).
+  on=$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')
+  if [ "$on" = true ]; then
     gh pr merge "$PR_URL" --disable-auto
     say "Auto-merge turned off for $PR_URL."
   fi

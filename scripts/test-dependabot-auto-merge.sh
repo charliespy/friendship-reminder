@@ -8,10 +8,16 @@ script="$(cd "$(dirname "$0")" && pwd)/dependabot-auto-merge.sh"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir "$work/bin"
-# `gh pr view` answers whether auto-merge is on ($GH_AUTO); every other call is recorded.
+# `gh pr view` answers whether auto-merge is on ($GH_AUTO), or fails like an API error when
+# GH_VIEW_FAIL=1; its arguments go to $GH_VIEWS. Every other call is recorded in $GH_CALLS.
 cat >"$work/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-if [ "$1 $2" = "pr view" ]; then echo "${GH_AUTO:-false}"; exit 0; fi
+if [ "$1 $2" = "pr view" ]; then
+  printf '%s\n' "$*" >>"$GH_VIEWS"
+  if [ "${GH_VIEW_FAIL-}" = 1 ]; then echo "HTTP 502" >&2; exit 1; fi
+  echo "${GH_AUTO:-false}"
+  exit 0
+fi
 printf '%s\n' "$*" >>"$GH_CALLS"
 EOF
 chmod +x "$work/bin/gh"
@@ -27,7 +33,7 @@ one='[{"dependencyName":"vite","prevVersion":"7.1.2","newVersion":"7.2.0"}]'
 expect() {
   local name=$1 want=$2 got
   : >"$work/calls"
-  if ! PATH="$work/bin:$PATH" GH_CALLS="$work/calls" GH_AUTO=${GH_AUTO-true} GITHUB_STEP_SUMMARY="" \
+  if ! PATH="$work/bin:$PATH" GH_CALLS="$work/calls" GH_VIEWS="$work/views" GH_AUTO=${GH_AUTO-true} GITHUB_STEP_SUMMARY="" \
     PR_URL=$url HEAD_SHA=$sha ECOSYSTEM=$3 UPDATE_TYPE=$4 UPDATED_DEPENDENCIES=${5-$one} DRY_RUN=${6-} \
     bash "$script" ${ARGS:+"$ARGS"} >"$work/out" 2>&1; then
     echo "FAIL $name: the script failed"
@@ -80,8 +86,31 @@ GH_AUTO=false expect "a waiting PR with auto-merge off: no call" none cargo vers
 ARGS=--disable expect "--disable turns auto-merge off" "$off" cargo version-update:semver-patch
 GH_AUTO=false ARGS=--disable expect "--disable with auto-merge off: no call" none "" ""
 
+# The question it asks GitHub before turning auto-merge off.
+: >"$work/views"
+PATH="$work/bin:$PATH" GH_CALLS="$work/calls" GH_VIEWS="$work/views" GH_AUTO=true PR_URL=$url HEAD_SHA=$sha \
+  ECOSYSTEM=cargo UPDATE_TYPE=version-update:semver-major bash "$script" >/dev/null 2>&1 || true
+if [ "$(cat "$work/views")" = "pr view $url --json autoMergeRequest --jq .autoMergeRequest != null" ]; then
+  echo "ok   asks GitHub whether auto-merge is on"
+else
+  echo "FAIL asks GitHub whether auto-merge is on: got '$(cat "$work/views")'"
+  failures=$((failures + 1))
+fi
+
+# If GitHub can't say whether auto-merge is on, the script must fail (so the job goes red and the
+# workflow's fallback runs), on a wait path and in --disable mode.
+for args in "" --disable; do
+  if PATH="$work/bin:$PATH" GH_CALLS="$work/calls" GH_VIEWS="$work/views" GH_VIEW_FAIL=1 PR_URL=$url \
+    HEAD_SHA=$sha ECOSYSTEM=cargo UPDATE_TYPE=version-update:semver-major bash "$script" ${args:+"$args"} >/dev/null 2>&1; then
+    echo "FAIL a failing gh pr view must fail the script (${args:-wait path})"
+    failures=$((failures + 1))
+  else
+    echo "ok   a failing gh pr view fails the script (${args:-wait path})"
+  fi
+done
+
 # Without the PR or its head commit it must fail, not guess.
-if PATH="$work/bin:$PATH" GH_CALLS="$work/calls" ECOSYSTEM=cargo UPDATE_TYPE=version-update:semver-patch \
+if PATH="$work/bin:$PATH" GH_CALLS="$work/calls" GH_VIEWS="$work/views" ECOSYSTEM=cargo UPDATE_TYPE=version-update:semver-patch \
   PR_URL=$url HEAD_SHA="" bash "$script" >/dev/null 2>&1; then
   echo "FAIL a missing HEAD_SHA must fail"
   failures=$((failures + 1))
