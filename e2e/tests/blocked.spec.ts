@@ -27,7 +27,7 @@ test("blocking dates moves anyone due then, and removing them moves them back", 
   await expect(page.getByTestId("person-row")).toContainText("Mon, Dec 14");
 });
 
-test("a range that ends before it starts can't be added", async ({ page, request }) => {
+test("moving From past To moves To along", async ({ page, request }) => {
   await seed(request);
   await openPreferences(page, "Blocked dates");
   const form = page.getByRole("form", { name: "Add blocked dates" });

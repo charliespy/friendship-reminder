@@ -25,7 +25,7 @@ export async function seed(
   opts: { today?: string; people?: SeedPerson[]; blocked?: { start: string; end: string; label: string }[] } = {},
 ) {
   expect((await request.post(`${server}/__test/reset`, { data: {}, headers: JSON_HEADERS })).ok()).toBeTruthy();
-  expect((await request.post(`${server}/__test/today`, { data: JSON.stringify(opts.today ?? TODAY), headers: JSON_HEADERS })).ok()).toBeTruthy();
+  await setToday(request, opts.today ?? TODAY);
   for (const p of opts.people ?? []) await call(request, "add_person", { ...p });
   for (const b of opts.blocked ?? []) await call(request, "add_blocked", { ...b });
 }

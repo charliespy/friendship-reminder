@@ -71,7 +71,7 @@ test("saving an edit keeps a Done made while the form was open", async ({ page, 
   await seed(request, { people: SAMPLE.slice(0, 1) });
   await openPreferences(page);
   const row = page.getByTestId("person-row");
-  await page.getByRole("button", { name: `Edit ${SAMPLE[0].name}` }).click();
+  await page.getByRole("button", { name: `Edit ${SAMPLE[0]!.name}` }).click();
   const form = page.getByRole("form", { name: "Save changes" });
   // With the form open, the person is marked done (as from the menu bar dropdown).
   await row.getByRole("button", { name: "Done" }).click();
