@@ -1,0 +1,29 @@
+name: PR text
+
+# The PR's title and description are public too: scan them whenever they're written or edited.
+# A separate workflow, so editing them never re-runs (or cancels) the checks in CI.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-text-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: PR title and description
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Scan the PR title and description for personal info
+        env:
+          # Through the environment, never pasted into the script, so the text can't run as code.
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n%s\n' "$TITLE" "$BODY" | scripts/privacy-scan.sh --stdin

@@ -1,0 +1,28 @@
+[package]
+name = "friends"
+version = "0.1.0"
+description = "A macOS menu bar app that reminds you to stay in touch with people"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "friends_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+friends-core = { path = "../crates/friends-core" }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+chrono = { workspace = true, features = ["clock"] }
+serde_json.workspace = true
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+rfd = { version = "0.18.0", default-features = false }
+
+[features]
+# Set by `tauri build`: serve the built front end from inside the app instead of the dev server.
+custom-protocol = ["tauri/custom-protocol"]

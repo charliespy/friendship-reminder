@@ -1,4 +1,11 @@
-.superpowers/
 .DS_Store
-.build/
 *.app
+target/
+node_modules/
+dist/
+test-results/
+playwright-report/
+
+# Impeccable review captures (local only)
+.impeccable/review/
+.impeccable/hook.cache.json
