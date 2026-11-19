@@ -26,7 +26,7 @@ const HEADING_ALIASES = {
 /**
  * What a user of an unsigned build needs to open it the first time. Wrapped like a hand-written
  * bullet in CHANGELOG.md (lines of at most 100 characters, the rest indented two spaces), so the
- * drafted notes need no rewrapping. Keep "**Open Anyway**" on one line: draftNotes looks for it.
+ * drafted notes need no rewrapping.
  */
 export const UNSIGNED_NOTE = [
   "Friends isn't signed with an Apple Developer ID yet, so macOS blocks the first launch. Open it",
@@ -289,7 +289,8 @@ export function draftNotes({ unreleased = "", commits = [], unsigned = true }) {
     const line = "- Updated the libraries Friends is built on.";
     if (!groups.Changed.includes(line)) groups.Changed.push(line);
   }
-  if (unsigned && !groups["Good to know"].some((l) => l.includes("Open Anyway"))) {
+  // The note may already be there, wrapped anywhere (a bullet keeps its line breaks).
+  if (unsigned && !groups["Good to know"].some((l) => l.replace(/\s+/g, " ").includes("Open Anyway"))) {
     groups["Good to know"].push(`- ${UNSIGNED_NOTE}`);
   }
   return renderSections(groups);

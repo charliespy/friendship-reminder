@@ -224,6 +224,9 @@ describe("draftNotes", () => {
     expect(UNSIGNED_NOTE.replace(/\s+/g, " ")).toContain(
       "On macOS 13 or 14, Control-click Friends in Applications and choose **Open** instead.",
     );
+    // A note rewrapped by hand, with "Open Anyway" split across lines, isn't added again.
+    const rewrapped = "### Good to know\n- Unsigned: click **Open\n  Anyway** in Privacy & Security.\n";
+    expect(parseSections(draftNotes({ unreleased: rewrapped }))["Good to know"]).toHaveLength(1);
   });
   it("writes sentences", () => {
     expect(sentence("add x")).toBe("Add x.");
