@@ -108,7 +108,7 @@ export function BlockedPane({ view }: { view: View }) {
                 <div className="person-text">
                   <div className="person-name">{b.label || "Blocked"}</div>
                   <div className="person-meta">
-                    {formatRange(b.start, b.end)}
+                    {formatRange(b.start, b.end, view.today)}
                     {past && " · over"}
                   </div>
                 </div>
@@ -116,7 +116,7 @@ export function BlockedPane({ view }: { view: View }) {
                   className="btn btn-quiet btn-sm"
                   disabled={remove.busy}
                   onClick={() => remove.run(() => api.deleteBlocked(b.id))}
-                  aria-label={`Remove ${b.label || "blocked dates"} ${formatRange(b.start, b.end)}`}
+                  aria-label={`Remove ${b.label || "blocked dates"} ${formatRange(b.start, b.end, view.today)}`}
                 >
                   Remove
                 </button>

@@ -49,8 +49,11 @@ export function relativeDay(iso: IsoDate, today: IsoDate): string {
   return `in ${Math.round(n / 30)} months`;
 }
 
-/** "Aug 20 – 27", "Aug 30 – Sep 2" or "Dec 28, 2026 – Jan 3, 2027". */
-export function formatRange(start: IsoDate, end: IsoDate): string {
+/**
+ * "Aug 20 – 27", "Aug 30 – Sep 2" or "Dec 28, 2026 – Jan 3, 2027". A range in another year than
+ * today's ends with its year, like `formatDay`: "Dec 1 – 5, 2027", "Nov 30, 2027".
+ */
+export function formatRange(start: IsoDate, end: IsoDate, today: IsoDate): string {
   const a = parseIso(start);
   const b = parseIso(end);
   const md = { month: "short", day: "numeric" } as const;
@@ -58,7 +61,8 @@ export function formatRange(start: IsoDate, end: IsoDate): string {
   if (a.getFullYear() !== b.getFullYear()) {
     return `${a.toLocaleDateString("en-US", mdy)} – ${b.toLocaleDateString("en-US", mdy)}`;
   }
-  if (start === end) return a.toLocaleDateString("en-US", md);
-  if (a.getMonth() === b.getMonth()) return `${a.toLocaleDateString("en-US", md)} – ${b.getDate()}`;
-  return `${a.toLocaleDateString("en-US", md)} – ${b.toLocaleDateString("en-US", md)}`;
+  const year = a.getFullYear() === parseIso(today).getFullYear() ? "" : `, ${a.getFullYear()}`;
+  if (start === end) return `${a.toLocaleDateString("en-US", md)}${year}`;
+  if (a.getMonth() === b.getMonth()) return `${a.toLocaleDateString("en-US", md)} – ${b.getDate()}${year}`;
+  return `${a.toLocaleDateString("en-US", md)} – ${b.toLocaleDateString("en-US", md)}${year}`;
 }
