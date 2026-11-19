@@ -58,8 +58,8 @@ conventional commits (one per merged PR) since the last release:
 | --- | --- |
 | a breaking change (`feat!: …`, `fix!: …`, or a `BREAKING CHANGE:` line) | major: 1.4.2 → 2.0.0 |
 | a `feat` | minor: 1.4.2 → 1.5.0 |
-| only `fix`, `perf` or `revert` | patch: 1.4.2 → 1.4.3 |
-| only `docs`, `ci`, `chore`, `test`, `refactor`, `build`, `style` | no release needed |
+| only `fix` or `perf` | patch: 1.4.2 → 1.4.3 |
+| only `docs`, `ci`, `chore`, `test`, `refactor`, `build`, `style`, `revert` | no release needed |
 
 While the version is `0.x`, a breaking change bumps the minor (0.4.2 → 0.5.0). The first release
 is `v0.1.0`.

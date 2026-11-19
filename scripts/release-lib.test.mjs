@@ -57,10 +57,10 @@ describe("parseCommit", () => {
 });
 
 describe("the version rule", () => {
-  it("feat -> minor, fix/perf/revert -> patch, others nothing", () => {
+  it("feat -> minor, fix/perf -> patch, others nothing", () => {
     expect(bumpFor([c("fix: a"), c("feat: b"), c("docs: c")])).toBe("minor");
     expect(bumpFor([c("perf: a"), c("chore: b")])).toBe("patch");
-    expect(bumpFor([c("revert: feat: a")])).toBe("patch");
+    expect(bumpFor([c("revert: feat: a")])).toBeNull();
     expect(bumpFor([c("docs: a"), c("ci: b"), c("chore(deps): c"), c("test: d"), c("refactor: e")])).toBeNull();
     expect(bumpFor([c("feat: a"), c("chore!: b")])).toBe("major");
   });

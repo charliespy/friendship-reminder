@@ -5,7 +5,7 @@
 //       Dry run: changes nothing. Prints the last release, the next version and why, and a draft
 //       of the release notes (also written to <file> with --out; --force to replace a file that
 //       is already there, which may hold notes you rewrote). Exits 3 when there is nothing to
-//       release (no feat, fix, perf, revert or breaking change since the last tag; --patch
+//       release (no feat, fix, perf or breaking change since the last tag; --patch
 //       releases a patch anyway, e.g. for dependency updates only).
 //   node scripts/release.mjs prepare <version> <notes file> [--date YYYY-MM-DD] [--drop-unreleased]
 //       Writes the notes into CHANGELOG.md as "## [<version>] - <date>" (under an emptied
@@ -13,9 +13,9 @@
 //       src-tauri/tauri.conf.json, src-tauri/Cargo.toml and Cargo.lock. Refuses a version that
 //       isn't above the last release, and, without --drop-unreleased, refuses when a line under
 //       [Unreleased] isn't in the notes (it would be lost).
-//   node scripts/release.mjs notes <version> [--out <file>]
+//   node scripts/release.mjs notes <version> [--out <file>] [--check-files]
 //       Prints the CHANGELOG.md section for <version> (the release description). Exits 1 when it
-//       is missing or empty. The release workflow publishes exactly this text.
+//       is missing or empty, or (--check-files) when a version file doesn't say <version>. The release workflow publishes exactly this text.
 //   node scripts/release.mjs dry-run
 //       What the release workflow's dry run prints: on a release PR (the files' version has a
 //       CHANGELOG.md section but no tag yet), the description tagging would publish, failing when
@@ -94,7 +94,7 @@ function currentVersion() {
 /** Commits on main's first-parent line since `since` (or all of them), oldest first. */
 function commitsSince(since) {
   const range = since ? [`${since}..HEAD`] : ["HEAD"];
-  const out = git(["log", "--first-parent", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", ...range]);
+  const out = git(["log", "--no-show-signature", "--first-parent", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", ...range]);
   return out
     .split("\x1e")
     .map((r) => r.replace(/^\n/, ""))
@@ -126,6 +126,14 @@ function fileVersions() {
   };
 }
 
+/** Fails unless every version entry says `version`. */
+function checkFileVersions(version) {
+  const wrong = Object.entries(fileVersions()).filter(([, v]) => v !== version);
+  if (wrong.length) {
+    fail(`the version files disagree with v${version}: ${wrong.map(([f, v]) => `${f} says ${v}`).join(", ")}`);
+  }
+}
+
 /** True when the version in the files has a CHANGELOG.md section but no tag yet: a release PR. */
 function preparedRelease() {
   const version = currentVersion();
@@ -151,10 +159,7 @@ function dryRun(argv) {
     if (lastTag && compareVersions(version, lastTag.slice(1)) <= 0) {
       fail(`v${version} is not above the last release (${lastTag})`);
     }
-    const wrong = Object.entries(fileVersions()).filter(([, v]) => v !== version);
-    if (wrong.length) {
-      fail(`the version files disagree with v${version}: ${wrong.map(([f, v]) => `${f} says ${v}`).join(", ")}`);
-    }
+    checkFileVersions(version);
     process.stdout.write(
       `v${version} is prepared (if it is already released, run git fetch --tags first). ` +
         "Tagging it would publish this description:\n\n",
@@ -249,14 +254,15 @@ function prepare(argv) {
 
 function notes(argv) {
   const { pos, flags } = parseArgs(argv, ["--out"]);
-  checkFlags(flags, ["--out"]);
-  if (pos.length !== 1) fail("usage: release.mjs notes <version> [--out <file>]");
+  checkFlags(flags, ["--out", "--check-files"]);
+  if (pos.length !== 1) fail("usage: release.mjs notes <version> [--out <file>] [--check-files]");
   const version = pos[0].replace(/^v/, "");
   try {
     parseVersion(version);
   } catch {
     fail(`not a release version (want X.Y.Z): ${pos[0]}`);
   }
+  if (flags["--check-files"]) checkFileVersions(version);
   const body = sectionBody(readChangelog(), version);
   if (!body) fail(`CHANGELOG.md has no notes for [${version}]: run "release.mjs prepare" in the release PR`);
   if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${body}\n`);

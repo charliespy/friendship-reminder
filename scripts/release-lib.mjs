@@ -3,9 +3,9 @@
 // Pure functions (no git, no files, no network), so they are unit-tested in release-lib.test.mjs.
 //
 // The version rule (semantic versioning, from the conventional commits since the last release):
-//   feat -> minor; fix, perf, revert -> patch; a breaking change ("!" or "BREAKING CHANGE") -> major,
+//   feat -> minor; fix, perf -> patch; a breaking change ("!" or "BREAKING CHANGE") -> major,
 //   except that while the version is 0.x a breaking change bumps the minor.
-//   Other types (docs, ci, chore, test, refactor, build, style) don't release on their own.
+//   Other types (docs, ci, chore, test, refactor, build, style, revert) don't release on their own.
 
 /** Headings of a release section, in the order they are written. */
 export const SECTIONS = ["New", "Fixed", "Changed", "Good to know"];
@@ -82,7 +82,7 @@ export function parseCommit(subject, body = "") {
 export function commitBump(commit) {
   if (commit.breaking) return "major";
   if (commit.type === "feat") return "minor";
-  if (commit.type === "fix" || commit.type === "perf" || commit.type === "revert") return "patch";
+  if (commit.type === "fix" || commit.type === "perf") return "patch";
   return null;
 }
 
@@ -145,7 +145,7 @@ export function nextRelease({ lastTag, currentVersion, commits, forcePatch = fal
   if (!bump) {
     return {
       version: null,
-      reason: `nothing to release since ${lastTag}: no feat, fix, perf, revert or breaking change (use --patch to release anyway)`,
+      reason: `nothing to release since ${lastTag}: no feat, fix, perf or breaking change (use --patch to release anyway)`,
     };
   }
   const applied = effectiveBump(base, bump);
@@ -158,7 +158,7 @@ export function nextRelease({ lastTag, currentVersion, commits, forcePatch = fal
 
 function describeBump(commits, bump) {
   const hits = commits.filter((c) => commitBump(c) === bump).length;
-  const what = { major: "breaking change", minor: "feat", patch: "fix/perf/revert" }[bump];
+  const what = { major: "breaking change", minor: "feat", patch: "fix/perf" }[bump];
   return `${hits} ${what} commit${hits === 1 ? "" : "s"} since the last release -> ${bump}`;
 }
 
@@ -166,7 +166,7 @@ function describeBump(commits, bump) {
 export function sectionFor(commit) {
   if (commit.type === "feat") return "New";
   if (commit.type === "fix") return "Fixed";
-  if (commit.type === "perf" || commit.type === "revert") return "Changed";
+  if (commit.type === "perf") return "Changed";
   if (commit.breaking) return "Changed";
   return null;
 }

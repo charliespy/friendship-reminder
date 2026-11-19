@@ -10,9 +10,9 @@ name: Release
 # run, does a dry run: it prints the release plan and notes, builds the app and keeps the .dmg
 # as a workflow artifact, but publishes nothing.
 #
-# Two jobs: the build runs npm and cargo with a read-only token, and makes the .dmg and the release
-# notes; only the small publish job, which runs no project code, may write (create the release from
-# those two files), and only for a tag.
+# Two jobs: the build runs npm and cargo with a read-only token; it cuts the release notes first,
+# before any third-party code runs, then makes the .dmg. Only the small publish job, which runs no
+# project code, may write (create the release from those two files), and only for a tag.
 on:
   push:
     tags: ["v*"]
@@ -68,9 +68,19 @@ jobs:
       - name: Take the release notes from CHANGELOG.md
         if: env.PUBLISH == 'true'
         run: |
-          mkdir -p dist-release
-          node scripts/release.mjs notes "$GITHUB_REF_NAME" --out dist-release/release-notes.md
-          cat dist-release/release-notes.md
+          mkdir -p release-notes
+          node scripts/release.mjs notes "$GITHUB_REF_NAME" --check-files --out release-notes/release-notes.md
+          cat release-notes/release-notes.md
+
+      # Uploaded now, before npm ci and the build run any third-party code.
+      - name: Keep the release notes
+        if: env.PUBLISH == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-notes
+          path: release-notes/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
 
       # On a release PR: checks the version (above the last release, the same in every file) and
       # prints the exact description tagging would publish (fails if it is empty). Otherwise the
@@ -142,7 +152,7 @@ jobs:
           mkdir -p dist-release
           cp target/universal-apple-darwin/release/bundle/dmg/*.dmg dist-release/
 
-      # The .dmg and, for a release, the notes: the publish job takes both from here.
+      # The .dmg: the publish job takes it from here.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ env.PUBLISH == 'true' && 'Friends' || 'Friends-dry-run' }}
@@ -161,13 +171,17 @@ jobs:
         with:
           name: Friends
           path: dist-release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-notes
+          path: release-notes
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The notes the build job cut from CHANGELOG.md (scripts/release.mjs notes); never
           # GitHub's generated notes, and never a release without them.
-          [ -s dist-release/release-notes.md ] || { echo "::error::no release notes"; exit 1; }
+          [ -s release-notes/release-notes.md ] || { echo "::error::no release notes"; exit 1; }
           [ "$(ls dist-release/*.dmg | wc -l)" -eq 1 ] || { echo "::error::expected exactly one .dmg"; exit 1; }
           gh release create "$GITHUB_REF_NAME" dist-release/*.dmg --repo "$GITHUB_REPOSITORY" \
-            --title "Friends $GITHUB_REF_NAME" --notes-file dist-release/release-notes.md --verify-tag
+            --title "Friends $GITHUB_REF_NAME" --notes-file release-notes/release-notes.md --verify-tag

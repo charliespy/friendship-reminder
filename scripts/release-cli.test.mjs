@@ -113,6 +113,7 @@ describe("release.mjs", { timeout: 60_000 }, () => {
     expect(r.code).toBe(1);
     expect(r.err).toMatch(/no notes for \[0\.1\.0\]/);
     expect(release("notes", "v1.0.0-rc.1").err).toMatch(/not a release version/);
+    expect(release("notes", "0.2.0", "--check-files").err).toMatch(/disagree with v0\.2\.0: package\.json says 0\.1\.0/);
   });
   it("won't overwrite a notes file unless told to", () => {
     writeFileSync(join(dir, "notes.md"), "rewritten\n");
