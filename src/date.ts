@@ -1,4 +1,4 @@
-/** Calendar dates as the Rust side sends them ("YYYY-MM-DD"), shown in the user's language. */
+/** Calendar dates as the Rust side sends them ("YYYY-MM-DD"), shown in US English. */
 import type { IsoDate } from "./api";
 
 /** The date at local midnight, so formatting never shifts it by a time zone. */

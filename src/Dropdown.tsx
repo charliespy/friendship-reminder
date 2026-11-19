@@ -21,7 +21,7 @@ function DueRow({ person, today }: { person: Person; today: string }) {
       <div className="person-text">
         <div className="person-name">{person.name}</div>
         <div className="person-meta">{dueLine(person, today)}</div>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
       </div>
       <button
         className="btn btn-done btn-sm"

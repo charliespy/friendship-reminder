@@ -115,7 +115,12 @@ impl Store {
             f.write_all(&json)?;
             f.write_all(b"\n")?;
             f.sync_all()?;
-            fs::rename(&tmp, &self.path)
+            fs::rename(&tmp, &self.path)?;
+            // Flush the folder too, so the rename itself survives a power cut.
+            if let Some(dir) = self.path.parent() {
+                fs::File::open(dir)?.sync_all()?;
+            }
+            Ok(())
         })();
         if written.is_err() {
             let _ = fs::remove_file(&tmp);
