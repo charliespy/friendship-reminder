@@ -10,6 +10,9 @@
 //!   until it is outside every range.
 //! - A weekend target is reminded about on the Monday of its week, so there is time to plan.
 //! - A missed target moves to the next run of allowed days (the next weekend, for weekends only).
+//!
+//! Changes from the Swift app, on purpose: a blocked range typed backwards blocks the days between its
+//! ends (Swift ignored it), and frequencies are capped at ten years.
 
 use chrono::{Datelike, Days, NaiveDate, Weekday};
 use serde::{Deserialize, Serialize};
@@ -125,7 +128,8 @@ pub const MAX_FREQUENCY_DAYS: u32 = 3650;
 
 /// The schedule after being in touch on `last_connected`.
 ///
-/// Dates must be in a sane range (before the year 200,000); the app checks dates before they get here.
+/// Dates must be in a sane range (before the year 200,000): `model.rs` only lets in dates from 1900 to
+/// 2200 and the four offered frequencies, typed in or loaded from the file.
 pub fn compute_schedule(
     last_connected: NaiveDate,
     frequency_days: u32,
@@ -135,8 +139,22 @@ pub fn compute_schedule(
     let raw = last_connected
         .checked_add_days(Days::new(u64::from(frequency_days.min(MAX_FREQUENCY_DAYS))))
         .expect("date out of range");
-    let target = avoid_blocked_ranges(snap_to_toggle(raw, toggle), blocked, toggle);
+    let target = avoid_blocked_ranges(raw, blocked, toggle);
     with_notification(target)
+}
+
+/// The last day of the run of allowed days that starts on `target`: the Sunday for a Saturday target
+/// under weekends only, the Friday for a weekday target under weekdays only, and the day itself under
+/// all days. A target counts as missed only once this day has gone by.
+pub fn last_day_of_run(target: NaiveDate, toggle: DayToggle) -> NaiveDate {
+    if toggle == DayToggle::AllDays || !matches(target, toggle) {
+        return target;
+    }
+    let mut last = target;
+    while matches(next_day(last), toggle) {
+        last = next_day(last);
+    }
+    last
 }
 
 /// The schedule after the target `current_target` went by without being done: the next run of allowed
@@ -155,7 +173,7 @@ pub fn push_missed_schedule(
             candidate = next_day(candidate);
         }
     }
-    let target = avoid_blocked_ranges(snap_to_toggle(candidate, toggle), blocked, toggle);
+    let target = avoid_blocked_ranges(candidate, blocked, toggle);
     with_notification(target)
 }
 
@@ -236,6 +254,26 @@ mod tests {
         let result = compute_schedule(date(2026, 7, 23), 30, DayToggle::AllDays, &[]);
         assert_eq!(result.next_target_date, date(2026, 8, 22));
         assert_eq!(result.notification_date, date(2026, 8, 17));
+    }
+
+    #[test]
+    fn a_run_of_allowed_days_ends_on_sunday_friday_or_the_same_day() {
+        assert_eq!(
+            last_day_of_run(date(2026, 8, 22), DayToggle::WeekendsOnly),
+            date(2026, 8, 23)
+        );
+        assert_eq!(
+            last_day_of_run(date(2026, 8, 23), DayToggle::WeekendsOnly),
+            date(2026, 8, 23)
+        );
+        assert_eq!(
+            last_day_of_run(date(2026, 8, 17), DayToggle::WeekdaysOnly),
+            date(2026, 8, 21)
+        );
+        assert_eq!(
+            last_day_of_run(date(2026, 8, 22), DayToggle::AllDays),
+            date(2026, 8, 22)
+        );
     }
 
     #[test]
