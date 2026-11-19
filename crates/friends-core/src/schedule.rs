@@ -10,6 +10,9 @@
 //!   until it is outside every range.
 //! - A weekend target is reminded about on the Monday of its week, so there is time to plan.
 //! - A missed target moves to the next run of allowed days (the next weekend, for weekends only).
+//!
+//! Changes from the Swift app, on purpose: a blocked range typed backwards blocks the days between its
+//! ends (Swift ignored it), and frequencies are capped at ten years.
 
 use chrono::{Datelike, Days, NaiveDate, Weekday};
 use serde::{Deserialize, Serialize};
@@ -89,7 +92,7 @@ pub fn avoid_blocked_ranges(
     ranges: &[BlockedRange],
     toggle: DayToggle,
 ) -> NaiveDate {
-    let mut candidate = date;
+    let mut candidate = snap_to_toggle(date, toggle);
     // Each move goes past the end of a range the candidate was in, so the candidate only moves forward
     // and can be inside each range at most once: this ends after at most one pass per range.
     loop {
@@ -119,7 +122,14 @@ fn with_notification(target: NaiveDate) -> ScheduleResult {
     }
 }
 
+/// The longest frequency the engine accepts, in days (ten years). Longer ones are treated as this, so
+/// a corrupt or absurd value can't push the date past what the date type holds.
+pub const MAX_FREQUENCY_DAYS: u32 = 3650;
+
 /// The schedule after being in touch on `last_connected`.
+///
+/// Dates must be in a sane range (before the year 200,000): `model.rs` only lets in dates from 1900 to
+/// 2200 and the four offered frequencies, typed in or loaded from the file.
 pub fn compute_schedule(
     last_connected: NaiveDate,
     frequency_days: u32,
@@ -127,9 +137,9 @@ pub fn compute_schedule(
     blocked: &[BlockedRange],
 ) -> ScheduleResult {
     let raw = last_connected
-        .checked_add_days(Days::new(u64::from(frequency_days)))
+        .checked_add_days(Days::new(u64::from(frequency_days.min(MAX_FREQUENCY_DAYS))))
         .expect("date out of range");
-    let target = avoid_blocked_ranges(snap_to_toggle(raw, toggle), blocked, toggle);
+    let target = avoid_blocked_ranges(raw, blocked, toggle);
     with_notification(target)
 }
 
@@ -163,7 +173,7 @@ pub fn push_missed_schedule(
             candidate = next_day(candidate);
         }
     }
-    let target = avoid_blocked_ranges(snap_to_toggle(candidate, toggle), blocked, toggle);
+    let target = avoid_blocked_ranges(candidate, blocked, toggle);
     with_notification(target)
 }
 
@@ -264,6 +274,20 @@ mod tests {
             last_day_of_run(date(2026, 8, 22), DayToggle::AllDays),
             date(2026, 8, 22)
         );
+    }
+
+    #[test]
+    fn avoiding_ranges_also_snaps_to_an_allowed_day() {
+        assert_eq!(
+            avoid_blocked_ranges(date(2026, 8, 19), &[], DayToggle::WeekendsOnly),
+            date(2026, 8, 22)
+        );
+    }
+
+    #[test]
+    fn an_absurd_frequency_is_capped_instead_of_crashing() {
+        let result = compute_schedule(date(2026, 8, 19), u32::MAX, DayToggle::AllDays, &[]);
+        assert_eq!(result.next_target_date, date(2036, 8, 16)); // 3650 days later
     }
 
     #[test]
