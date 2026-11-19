@@ -159,7 +159,8 @@ export function PeoplePane({ view }: { view: View }) {
     if (await del.run(() => api.deletePeople(chosen))) {
       setSelected(new Set());
       setConfirming(false);
-      setEditing(null);
+      // Close the edit form only if its person was deleted; another person's edit stays open.
+      if (editing !== null && chosen.includes(editing)) setEditing(null);
     }
   };
 

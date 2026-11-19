@@ -183,12 +183,18 @@ fn dropdown_origin(
     screens: &[Screen],
     fallback_scale: f64,
 ) -> (f64, f64) {
-    let screen = cursor_pt.and_then(|(cx, cy)| {
-        screens
-            .iter()
-            .copied()
-            .find(|s| cx >= s.left && cx < s.left + s.width && cy >= s.top && cy < s.top + s.height)
-    });
+    let contains = |s: &Screen, x: f64, y: f64| {
+        x >= s.left && x < s.left + s.width && y >= s.top && y < s.top + s.height
+    };
+    let screen = cursor_pt
+        .and_then(|(cx, cy)| screens.iter().copied().find(|s| contains(s, cx, cy)))
+        // No cursor to go by: the screen whose menu bar holds the icon at that screen's scale.
+        .or_else(|| {
+            screens.iter().copied().find(|s| {
+                let (x, y) = (icon_px.0 / s.scale, icon_px.1 / s.scale);
+                contains(s, x, y) && y < s.top + 40.0
+            })
+        });
     let scale = screen.map_or(fallback_scale, |s| s.scale);
     let (x, y, w, h) = (
         icon_px.0 / scale,
@@ -276,7 +282,9 @@ fn tick(app: &AppHandle) {
                 due
             }
             Err(e) => {
+                // The data was rolled back; still refresh the count and dates (the day may have moved on).
                 eprintln!("friends: couldn't save after the regular check: {e}");
+                publish(app, &a.view(day));
                 return;
             }
         }
@@ -454,8 +462,11 @@ mod tests {
             2.0,
         );
         assert_eq!(at.0, -1920.0);
-        // No cursor: centred, using the fallback scale.
-        let at = dropdown_origin((2000.0, 0.0, 40.0, 48.0), None, &[LAPTOP], 2.0);
+        // No cursor: the screen whose menu bar holds the icon (here the laptop, at its scale 2).
+        let at = dropdown_origin((2000.0, 0.0, 40.0, 48.0), None, &[LAPTOP], 1.0);
+        assert_eq!(at, (830.0, 28.0));
+        // No cursor and no screen fits: centred, using the fallback scale.
+        let at = dropdown_origin((2000.0, 0.0, 40.0, 48.0), None, &[], 2.0);
         assert_eq!(at, (830.0, 28.0));
     }
 
