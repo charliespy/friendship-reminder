@@ -158,8 +158,10 @@ fn every_command_works_end_to_end() {
 fn a_save_that_fails_is_undone_and_reported() {
     let path = temp_file("readonly");
     let mut app = App::open(Store::new(&path)).unwrap();
-    // Make the save fail: put a directory where the temporary file would go.
-    fs::create_dir_all(path.with_extension("json.tmp")).unwrap();
+    // Make the save fail: the folder can't be written to.
+    use std::os::unix::fs::PermissionsExt;
+    let dir = path.parent().unwrap().to_path_buf();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
     let err = app
         .call(
             "add_person",
@@ -167,6 +169,7 @@ fn a_save_that_fails_is_undone_and_reported() {
             today(),
         )
         .unwrap_err();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(err.kind, ErrorKind::Storage);
     assert!(app.data().people.is_empty());
 }
@@ -220,4 +223,21 @@ fn an_unreadable_file_is_reported_in_the_view() {
         .unreadable_file
         .unwrap()
         .ends_with("friends.json.unreadable-1"));
+}
+
+#[test]
+fn any_command_catches_up_before_the_regular_check_runs() {
+    let (mut app, _) = app("call-catches-up");
+    app.call(
+        "add_person",
+        json!({"name": "Ada", "frequencyDays": 30, "lastConnected": "2026-07-23"}),
+        today(),
+    )
+    .unwrap();
+    // Monday after the target weekend, before any tick.
+    let view = app
+        .call("get_view", json!(null), date(2026, 8, 24))
+        .unwrap();
+    assert_eq!(view.people[0].person.next_target, date(2026, 8, 29));
+    assert!(view.people[0].person.overdue);
 }

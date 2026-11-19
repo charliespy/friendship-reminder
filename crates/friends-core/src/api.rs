@@ -197,6 +197,8 @@ impl App {
     /// always matches the file.
     pub fn call(&mut self, cmd: &str, a: Value, today: NaiveDate) -> Result<View, ApiError> {
         let before = self.data.clone();
+        // Catch up first, so the view is right even before the regular check has run today.
+        self.data.catch_up(today);
         let result = self.apply(cmd, a, today);
         if let Err(e) = result {
             self.data = before;

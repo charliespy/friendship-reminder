@@ -1,7 +1,7 @@
 //! The app's data: the people, the blocked ranges and the settings, and every change the UI can make
 //! to them. All of it is plain data plus pure functions of "today", so it can be tested without a clock.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, Days, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::schedule::{
@@ -15,9 +15,9 @@ pub const FREQUENCIES: [u32; 4] = [30, 90, 180, 365];
 /// The longest name the app stores, in characters.
 pub const MAX_NAME_CHARS: usize = 100;
 
-/// Most times a missed target is pushed in one catch-up. Each push moves it forward by at least a day,
-/// so a backlog of years still fits; the cap only guards against a future bug looping forever.
-const MAX_PUSHES: usize = 5000;
+/// Most times a missed target is pushed in one catch-up. A long backlog first jumps to the week before
+/// today, so a few pushes always suffice; the cap only guards against a future bug looping forever.
+const MAX_PUSHES: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,7 +103,7 @@ pub struct Data {
 impl Default for Data {
     fn default() -> Self {
         Data {
-            version: 1,
+            version: crate::store::CURRENT_VERSION,
             people: Vec::new(),
             blocked: Vec::new(),
             settings: Settings::default(),
@@ -128,8 +128,13 @@ fn invalid<T>(msg: impl Into<String>) -> Result<T, Invalid> {
     Err(Invalid(msg.into()))
 }
 
+/// Trims a name or label and squeezes runs of spaces into one.
+fn squeeze(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn clean_name(name: &str) -> Result<String, Invalid> {
-    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    let name = squeeze(name);
     if name.is_empty() {
         return invalid("Give them a name.");
     }
@@ -178,7 +183,23 @@ impl Data {
             .blocked
             .iter()
             .all(|b| sane_date(b.start) && sane_date(b.end));
-        people_ok && blocked_ok
+        let mut ids: Vec<u64> = self.ids().collect();
+        let count = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        people_ok && blocked_ok && ids.len() == count
+    }
+
+    fn ids(&self) -> impl Iterator<Item = u64> + '_ {
+        self.people
+            .iter()
+            .map(|p| p.id)
+            .chain(self.blocked.iter().map(|b| b.id))
+    }
+
+    /// Makes sure new ids come after every id in use, for a file whose `lastId` is missing or behind.
+    pub fn repair_ids(&mut self) {
+        self.last_id = self.last_id.max(self.ids().max().unwrap_or(0));
     }
 
     fn next_id(&mut self) -> u64 {
@@ -235,8 +256,12 @@ impl Data {
     ) -> bool {
         let mut moved = false;
         let mut pushes = 0;
+        // Pushing from a target years back would take one step per missed run; start from the week
+        // before today instead, which lands on the same day.
+        let week_ago = today.checked_sub_days(Days::new(7)).unwrap_or(today);
         while last_day_of_run(person.next_target, toggle) < today && pushes < MAX_PUSHES {
-            person.apply(push_missed_schedule(person.next_target, toggle, ranges));
+            let from = person.next_target.max(week_ago);
+            person.apply(push_missed_schedule(from, toggle, ranges));
             pushes += 1;
             moved = true;
         }
@@ -319,7 +344,7 @@ impl Data {
         label: &str,
         today: NaiveDate,
     ) -> Result<u64, Invalid> {
-        let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
+        let label = squeeze(label);
         if label.chars().count() > MAX_NAME_CHARS {
             return invalid(format!("Keep the label under {MAX_NAME_CHARS} characters."));
         }
@@ -383,7 +408,9 @@ impl Data {
     }
 
     /// The people whose reminder came up and hasn't been notified yet, marked as notified now.
-    /// The caller sends the notifications (or not, when they're off).
+    /// The caller sends the notifications, or not when they're off: reminders that came up while they
+    /// were off count as handled, so turning them back on doesn't send a backlog all at once (the
+    /// dropdown still lists those people).
     pub fn take_notifications(&mut self, today: NaiveDate) -> Vec<Person> {
         let mut out = Vec::new();
         for person in &mut self.people {

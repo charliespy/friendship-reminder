@@ -219,3 +219,26 @@ fn a_weekday_target_stays_up_through_that_working_week() {
     assert!(data.catch_up(date(2026, 8, 22))); // the week is over
     assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 24));
 }
+
+#[test]
+fn decades_of_missed_days_catch_up_fully_under_all_days() {
+    let mut data = Data::default();
+    data.set_day_toggle(DayToggle::AllDays, today());
+    let id = data
+        .add_person("Ada", 30, date(1950, 1, 1), today())
+        .unwrap();
+    let p = data.person(id).unwrap();
+    assert_eq!(p.next_target, today());
+    assert!(p.overdue);
+    // A later check the same day changes nothing, so nothing is notified twice.
+    assert!(!data.catch_up(today()));
+}
+
+#[test]
+fn a_long_backlog_under_weekends_only_lands_on_this_weekend() {
+    let mut data = Data::default();
+    let id = data
+        .add_person("Ada", 365, date(1900, 1, 6), today())
+        .unwrap();
+    assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 22));
+}
