@@ -468,8 +468,16 @@ pub fn run() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running the Friends app");
+        .build(tauri::generate_context!())
+        .expect("error while building the Friends app")
+        .run(|app, event| {
+            // Opening Friends again from Finder or Spotlight while it runs doesn't start a second
+            // copy on macOS; the system sends the running one a "reopen". Show Preferences, so the
+            // app is reachable even when its menu bar icon is hidden (a full menu bar, the notch).
+            if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = show_preferences(app);
+            }
+        });
 }
 
 #[cfg(test)]

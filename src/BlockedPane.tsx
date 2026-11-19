@@ -1,5 +1,5 @@
 /** Preferences › Blocked dates: trips and busy stretches where no reminder should land. */
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type View } from "./api";
 import { formatRange } from "./date";
 import { useAction } from "./useView";
@@ -9,6 +9,13 @@ export function BlockedPane({ view }: { view: View }) {
   const [end, setEnd] = useState(view.today);
   const [label, setLabel] = useState("");
   const add = useAction();
+  // Preferences stays open in the background for days: until the dates are touched, keep them on today.
+  const touched = useRef(false);
+  useEffect(() => {
+    if (touched.current) return;
+    setStart(view.today);
+    setEnd(view.today);
+  }, [view.today]);
   const remove = useAction();
 
   const submit = async (e: FormEvent) => {
@@ -46,6 +53,7 @@ export function BlockedPane({ view }: { view: View }) {
               min="1900-01-01"
               max="2200-12-31"
               onChange={(e) => {
+                touched.current = true;
                 setStart(e.target.value);
                 if (e.target.value > end) setEnd(e.target.value);
               }}
@@ -59,7 +67,7 @@ export function BlockedPane({ view }: { view: View }) {
               value={end}
               min={start}
               max="2200-12-31"
-              onChange={(e) => setEnd(e.target.value)}
+              onChange={(e) => ((touched.current = true), setEnd(e.target.value))}
             />
           </label>
         </div>

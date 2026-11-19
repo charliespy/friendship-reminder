@@ -98,7 +98,7 @@ export function SettingsPane({ view }: { view: View }) {
         <p className="hint">
           Changing this reschedules everyone from the last time you were in touch.
         </p>
-        {toggle.error && <p className="error">{toggle.error}</p>}
+        {toggle.error && <p className="error" role="alert">{toggle.error}</p>}
       </fieldset>
 
       <div className="setting-group">
@@ -133,8 +133,8 @@ export function SettingsPane({ view }: { view: View }) {
             </span>
           </label>
         </div>
-        {notify.error && <p className="error">{notify.error}</p>}
-        {loginError && <p className="error">{loginError}</p>}
+        {notify.error && <p className="error" role="alert">{notify.error}</p>}
+        {loginError && <p className="error" role="alert">{loginError}</p>}
       </div>
     </section>
   );

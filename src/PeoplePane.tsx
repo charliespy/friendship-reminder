@@ -126,9 +126,14 @@ function PersonRow({
         <div className="person-meta">
           {frequencyLabel(person.frequencyDays)} · {when}
         </div>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
       </div>
-      <button className="btn btn-done btn-sm" disabled={busy} onClick={() => run(() => api.markDone(person.id))}>
+      <button
+        className="btn btn-done btn-sm"
+        disabled={busy}
+        onClick={() => run(() => api.markDone(person.id))}
+        aria-label={`Mark ${person.name} as done`}
+      >
         Done
       </button>
       <button className="btn btn-quiet btn-sm" onClick={onEdit} aria-label={`Edit ${person.name}`}>
@@ -155,6 +160,7 @@ export function PeoplePane({ view }: { view: View }) {
     else next.delete(id);
     setSelected(next);
     setConfirming(false);
+    del.setError(null);
   };
 
   const deleteChosen = async () => {
@@ -229,7 +235,7 @@ export function PeoplePane({ view }: { view: View }) {
             </>
           ) : (
             <>
-              <button className="btn btn-quiet btn-sm" onClick={() => setSelected(new Set())}>
+              <button className="btn btn-quiet btn-sm" onClick={() => (setSelected(new Set()), del.setError(null))}>
                 Deselect all
               </button>
               <button className="btn btn-outline btn-sm" onClick={() => setConfirming(true)}>
@@ -237,7 +243,7 @@ export function PeoplePane({ view }: { view: View }) {
               </button>
             </>
           )}
-          {del.error && <p className="error">{del.error}</p>}
+          {del.error && <p className="error" role="alert">{del.error}</p>}
         </div>
       )}
 
