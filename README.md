@@ -31,6 +31,9 @@ The people in these screenshots are made up.
      next to the Friends message;
    - confirm with your password.
 
+   On macOS 13 or 14 the warning has no **Done** button: Control-click **Friends** in
+   **Applications** and choose **Open** instead.
+
    Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Friends.app`.
 4. Friends appears in the menu bar. Click it to see who's due; open **Preferences** to add
    people.
