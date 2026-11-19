@@ -293,33 +293,64 @@ export function insertRelease(changelog, version, date, notes) {
   return `${before ? `${before}\n\n` : ""}${inserted}${after ? `\n${after}\n` : ""}`;
 }
 
+/** The versions that have a `## [X.Y.Z]` section in a changelog. */
+export function changelogVersions(changelog) {
+  return [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map((m) => m[1]);
+}
+
 /**
  * Checks the version given to "prepare": a first release (no tag) may keep the version in the
- * files or raise it; a later one must be above the last release. Throws otherwise.
+ * files or raise it; a later one must be above the last release, from files still at the last
+ * release. A release already prepared but not tagged (a CHANGELOG.md section newer than the last
+ * tag) must be undone first. Throws otherwise.
  */
-export function checkNewVersion({ version, currentVersion, lastTag }) {
+export function checkNewVersion({ version, currentVersion, lastTag, changelog = "" }) {
   parseVersion(version);
+  const base = lastTag ? lastTag.slice(1) : null;
+  const pending = changelogVersions(changelog).filter((v) => !base || compareVersions(v, base) > 0);
+  if (pending.length) {
+    throw new Error(
+      `CHANGELOG.md already has [${pending[0]}], which isn't tagged yet: a release is already prepared (undo it with git first)`,
+    );
+  }
   if (!lastTag) {
     if (compareVersions(version, currentVersion) < 0) {
       throw new Error(`${version} is below the version in the files (${currentVersion})`);
     }
     return;
   }
-  if (compareVersions(version, lastTag.slice(1)) <= 0) {
+  if (compareVersions(currentVersion, base) !== 0) {
+    throw new Error(`the files say ${currentVersion} but the last release is ${lastTag}: fix that first`);
+  }
+  if (compareVersions(version, base) <= 0) {
     throw new Error(`${version} is not above the last release (${lastTag})`);
   }
 }
 
+/** The entries of a release body: each bullet with its wrapped lines, or a lone line. */
+function entries(body) {
+  const out = [];
+  for (const line of body.split("\n")) {
+    if (!line.trim() || /^#{1,6}\s/.test(line)) continue;
+    if (/^\s+\S/.test(line) && out.length) out[out.length - 1] += `\n${line}`;
+    else out.push(line);
+  }
+  return out;
+}
+
+const squash = (t) => t.replace(/^[-*+]\s+/, "").replace(/\s+/g, " ").trim().toLowerCase();
+
 /**
- * The lines under [Unreleased] whose words don't appear in the notes: "prepare" empties
- * [Unreleased], so these would be lost from CHANGELOG.md.
+ * The entries under [Unreleased] that aren't in the notes: "prepare" empties [Unreleased], so these
+ * would be lost from CHANGELOG.md. An entry counts as kept when a notes entry has the same words,
+ * maybe after the "Removed: " or "Deprecated: " the draft puts in front.
  */
 export function unreleasedLinesMissing(unreleased, notes) {
-  const squash = (t) => t.replace(/^[-*+]\s+/, "").replace(/\s+/g, " ").trim().toLowerCase();
-  const have = squash(notes.split("\n").map((l) => l.trim()).join(" "));
-  return unreleased
-    .split("\n")
-    .filter((l) => l.trim() && !/^#{1,6}\s/.test(l) && !have.includes(squash(l)));
+  const have = entries(notes).map(squash);
+  return entries(unreleased).filter((e) => {
+    const want = squash(e);
+    return !have.some((h) => h === want || h === `removed: ${want}` || h === `deprecated: ${want}`);
+  });
 }
 
 /** Sets the top-level "version" of a JSON file's text (package.json, tauri.conf.json, package-lock.json). */

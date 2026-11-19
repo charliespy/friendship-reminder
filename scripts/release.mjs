@@ -150,7 +150,12 @@ function prepare(argv) {
   // Work everything out first, then write: a bad input changes no file.
   const writes = [];
   try {
-    checkNewVersion({ version, currentVersion: currentVersion(), lastTag: lastReleaseTag() });
+    checkNewVersion({
+      version,
+      currentVersion: currentVersion(),
+      lastTag: lastReleaseTag(),
+      changelog: read("CHANGELOG.md"),
+    });
     const notes = readFileSync(userPath(notesFile), "utf8");
     const missing = unreleasedLinesMissing(sectionBody(read("CHANGELOG.md"), "Unreleased") ?? "", notes);
     if (missing.length && !flags["--drop-unreleased"]) {
@@ -174,6 +179,7 @@ function prepare(argv) {
 
 function notes(argv) {
   const { pos, flags } = parseArgs(argv, ["--out"]);
+  checkFlags(flags, ["--out"]);
   if (pos.length !== 1) fail("usage: release.mjs notes <version> [--out <file>]");
   const version = pos[0].replace(/^v/, "");
   const body = sectionBody(read("CHANGELOG.md"), version);
@@ -183,7 +189,8 @@ function notes(argv) {
 }
 
 function verify(argv) {
-  const { pos } = parseArgs(argv, []);
+  const { pos, flags } = parseArgs(argv, []);
+  checkFlags(flags, []);
   if (pos.length !== 1 || !/^v\d+\.\d+\.\d+$/.test(pos[0])) fail("usage: release.mjs verify <vX.Y.Z>");
   const tag = pos[0];
   const version = tag.slice(1);

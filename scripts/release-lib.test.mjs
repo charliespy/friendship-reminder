@@ -75,6 +75,15 @@ describe("the version rule", () => {
     expect(() => checkNewVersion({ version: "0.1.0", currentVersion: "0.1.0", lastTag: "v0.1.0" })).toThrow(/not above/);
     expect(() => checkNewVersion({ version: "0.1.1", currentVersion: "0.1.0", lastTag: "v0.1.0" })).not.toThrow();
     expect(() => checkNewVersion({ version: "1.0", currentVersion: "0.1.0", lastTag: null })).toThrow(/version/);
+    // A release prepared but not tagged yet, or files that moved without a tag.
+    const prepared = "## [Unreleased]\n\n## [0.2.0] - 2026-12-01\n\n- x\n\n## [0.1.0] - 2026-11-19\n";
+    expect(() =>
+      checkNewVersion({ version: "0.1.1", currentVersion: "0.1.0", lastTag: "v0.1.0", changelog: prepared }),
+    ).toThrow(/\[0\.2\.0\].*already prepared/);
+    expect(() => checkNewVersion({ version: "0.2.0", currentVersion: "0.1.0", lastTag: null, changelog: prepared })).toThrow(
+      /\[0\.2\.0\]/,
+    );
+    expect(() => checkNewVersion({ version: "0.1.2", currentVersion: "0.1.1", lastTag: "v0.1.0" })).toThrow(/files say/);
   });
   it("finds the newest vX.Y.Z tag and ignores other tags", () => {
     expect(latestReleaseTag(["v0.9.0", "v0.10.0", "v0.2.1", "builder/NR-1/m1", "v1.0.0-rc.1", "x"])).toBe("v0.10.0");
@@ -230,6 +239,12 @@ Intro.
       "- An old button.",
     ]);
     expect(unreleasedLinesMissing("", "- x")).toEqual([]);
+    // Whole entries, not words found anywhere.
+    expect(unreleasedLinesMissing("- Tests.\n- A long\n  Reminders.", "- Unit tests.\n- Reminders.")).toEqual([
+      "- Tests.",
+      "- A long\n  Reminders.",
+    ]);
+    expect(unreleasedLinesMissing("### Removed\n- An old button.", "- Removed: An old button.")).toEqual([]);
   });
   it("reads this repo's CHANGELOG.md", () => {
     expect(sectionBody(repoFile("CHANGELOG.md"), "Unreleased")).not.toBeNull();
