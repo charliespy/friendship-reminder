@@ -66,16 +66,22 @@ fn open_data(app: &AppHandle) -> Result<App, String> {
     let path = data_file(app).map_err(|e| format!("Couldn't find the app data folder: {e}"))?;
     App::open(Store::new(path.clone())).map_err(|e| {
         let home = app.path().home_dir().ok();
-        format!("Couldn't read {}: {e}", tilde(&path, home.as_deref()))
+        // The core's error may name the file again, so the whole message is cleaned.
+        hide_home(
+            &format!("Couldn't read {}: {e}", path.display()),
+            home.as_deref(),
+        )
     })
 }
 
-/// The path with the home folder shown as ~, so an error pasted into a bug report doesn't carry the
+/// The text with the home folder shown as ~, so an error pasted into a bug report doesn't carry the
 /// user's account name.
-fn tilde(path: &std::path::Path, home: Option<&std::path::Path>) -> String {
-    match home.and_then(|h| path.strip_prefix(h).ok()) {
-        Some(rest) => format!("~/{}", rest.display()),
-        None => path.display().to_string(),
+fn hide_home(text: &str, home: Option<&std::path::Path>) -> String {
+    match home.map(|h| h.display().to_string()) {
+        Some(h) if !h.is_empty() && h != "/" => {
+            text.replace(&format!("{}/", h.trim_end_matches('/')), "~/")
+        }
+        _ => text.to_string(),
     }
 }
 
@@ -447,16 +453,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tilde_hides_the_home_folder() {
+    fn hide_home_hides_every_copy_of_the_home_folder() {
         let home = std::path::Path::new("/Users/you");
-        let file = std::path::Path::new("/Users/you/Library/Application Support/x/friends.json");
+        let text = "Couldn't read /Users/you/Library/x/friends.json: \
+                    /Users/you/Library/x/friends.json was saved by a newer version";
         assert_eq!(
-            tilde(file, Some(home)),
-            "~/Library/Application Support/x/friends.json"
+            hide_home(text, Some(home)),
+            "Couldn't read ~/Library/x/friends.json: \
+             ~/Library/x/friends.json was saved by a newer version"
         );
-        let elsewhere = std::path::Path::new("/Volumes/data/friends.json");
-        assert_eq!(tilde(elsewhere, Some(home)), "/Volumes/data/friends.json");
-        assert_eq!(tilde(file, None), file.display().to_string());
+        // Only the home folder itself, not a longer name that starts the same way.
+        let vol = std::path::Path::new("/Volumes/d/you");
+        assert_eq!(
+            hide_home("/Volumes/d/youth/x and /Volumes/d/you/x", Some(vol)),
+            "/Volumes/d/youth/x and ~/x"
+        );
+        assert_eq!(hide_home("/Users/you/x", None), "/Users/you/x");
+        assert_eq!(hide_home("/x", Some(std::path::Path::new("/"))), "/x");
     }
 
     /// A Retina laptop (1512 x 982 pt, scale 2) with a plain 1920 x 1080 monitor to its right.
