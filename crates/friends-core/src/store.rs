@@ -55,14 +55,27 @@ impl Store {
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return self.move_aside(),
             Err(e) => return Err(e),
         };
+        // Check the version before anything else: a file from a newer version of the app may hold things
+        // this one can't read or would drop on save, so it is refused and left as it is.
+        #[derive(serde::Deserialize)]
+        struct Version {
+            version: u32,
+        }
+        if let Ok(Version { version }) = serde_json::from_str::<Version>(&text) {
+            if version > CURRENT_VERSION {
+                return Err(io::Error::other(format!(
+                    "{} was saved by a newer version of Friends (format {version}). Update the app to open it.",
+                    self.path.display()
+                )));
+            }
+        }
         match serde_json::from_str::<Data>(&text) {
-            // A file from a newer version of the app may hold things this one would drop on save.
-            Ok(data) if data.version > CURRENT_VERSION => Err(io::Error::other(format!(
-                "{} was saved by a newer version of Friends (format {}). Update the app to open it.",
-                self.path.display(),
-                data.version
-            ))),
-            Ok(data) if data.is_sane() => Ok(Loaded::Existing(data)),
+            Ok(mut data) if data.is_sane() => {
+                data.repair_ids();
+                // Saved from now on in this version's format.
+                data.version = CURRENT_VERSION;
+                Ok(Loaded::Existing(data))
+            }
             // Not JSON, the wrong shape, or values the app could never have saved.
             Ok(_) | Err(_) => self.move_aside(),
         }
@@ -91,14 +104,23 @@ impl Store {
             fs::create_dir_all(dir)?;
         }
         let json = serde_json::to_vec_pretty(data).map_err(io::Error::other)?;
-        let tmp = self.path.with_extension("json.tmp");
-        {
+        // One temporary name per process, so two processes saving at once can't write into the same
+        // temporary file. (The last save still wins: the app allows one copy of itself, and the test server
+        // uses its own file.)
+        let tmp = self
+            .path
+            .with_extension(format!("json.tmp-{}", std::process::id()));
+        let written = (|| {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(&json)?;
             f.write_all(b"\n")?;
             f.sync_all()?;
+            fs::rename(&tmp, &self.path)
+        })();
+        if written.is_err() {
+            let _ = fs::remove_file(&tmp);
         }
-        fs::rename(&tmp, &self.path)
+        written
     }
 }
 
@@ -130,7 +152,7 @@ mod tests {
         data.add_person("Ada", 30, today, today).unwrap();
         store.save(&data).unwrap();
         assert_eq!(store.load().unwrap(), Loaded::Existing(data));
-        assert!(!dir.join("sub").join("friends.json.tmp").exists());
+        assert_eq!(fs::read_dir(dir.join("sub")).unwrap().count(), 1); // no temporary file left
     }
 
     #[test]
@@ -168,11 +190,42 @@ mod tests {
     }
 
     #[test]
+    fn repeated_ids_make_a_file_unreadable_and_a_stale_last_id_is_repaired() {
+        let dir = temp_dir("ids");
+        let path = dir.join("friends.json");
+        let person = |id: u64| {
+            format!(
+                r#"{{"id":{id},"name":"A","frequencyDays":30,"lastConnected":"2026-01-01","nextTarget":"2026-01-31","notificationDate":"2026-01-26"}}"#
+            )
+        };
+        fs::write(
+            &path,
+            format!(r#"{{"version":1,"people":[{},{}]}}"#, person(3), person(3)),
+        )
+        .unwrap();
+        assert!(matches!(
+            Store::new(&path).load().unwrap(),
+            Loaded::MovedAside(..)
+        ));
+        fs::write(
+            &path,
+            format!(r#"{{"version":1,"lastId":1,"people":[{}]}}"#, person(7)),
+        )
+        .unwrap();
+        assert_eq!(Store::new(&path).load().unwrap().into_data().last_id, 7);
+    }
+
+    #[test]
     fn a_file_from_a_newer_version_is_left_alone() {
         let dir = temp_dir("newer");
         let path = dir.join("friends.json");
-        fs::write(&path, r#"{"version": 99}"#).unwrap();
-        assert!(Store::new(&path).load().is_err());
-        assert_eq!(fs::read_to_string(&path).unwrap(), r#"{"version": 99}"#);
+        for text in [
+            r#"{"version": 99}"#,
+            r#"{"version":2,"settings":{"dayToggle":"custom"}}"#,
+        ] {
+            fs::write(&path, text).unwrap();
+            assert!(Store::new(&path).load().is_err());
+            assert_eq!(fs::read_to_string(&path).unwrap(), text);
+        }
     }
 }
