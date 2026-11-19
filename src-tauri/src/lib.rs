@@ -65,11 +65,10 @@ fn data_file(app: &AppHandle) -> Result<PathBuf, String> {
 fn open_data(app: &AppHandle) -> Result<App, String> {
     let path = data_file(app).map_err(|e| format!("Couldn't find the app data folder: {e}"))?;
     App::open(Store::new(path.clone())).map_err(|e| {
-        let home = app.path().home_dir().ok();
         // The core's error may name the file again, so the whole message is cleaned.
         friends_core::hide_home(
             &format!("Couldn't read {}: {e}", path.display()),
-            home.as_deref(),
+            friends_core::home_dir().as_deref(),
         )
     })
 }

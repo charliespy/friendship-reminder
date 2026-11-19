@@ -111,7 +111,7 @@ impl Store {
             .path
             .with_extension(format!("json.tmp-{}", std::process::id()));
         let written = (|| {
-            let mut f = fs::File::create(&tmp)?;
+            let mut f = create_private(&tmp)?;
             f.write_all(&json)?;
             f.write_all(b"\n")?;
             f.sync_all()?;
@@ -128,6 +128,15 @@ impl Store {
         }
         Ok(())
     }
+}
+
+/// A new file only its owner can read and write: the list names the people in someone's life.
+fn create_private(path: &Path) -> io::Result<fs::File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path)
 }
 
 #[cfg(test)]
@@ -159,6 +168,20 @@ mod tests {
         store.save(&data).unwrap();
         assert_eq!(store.load().unwrap(), Loaded::Existing(data));
         assert_eq!(fs::read_dir(dir.join("sub")).unwrap().count(), 1); // no temporary file left
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_the_owner_can_read_the_saved_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = temp_dir("private");
+        let store = Store::new(dir.join("friends.json"));
+        store.save(&Data::default()).unwrap();
+        let mode = fs::metadata(dir.join("friends.json"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 
     #[test]

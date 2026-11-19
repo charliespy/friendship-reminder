@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, formatDay, formatRange, parseIso, relativeDay, toIso } from "./date";
+import { aimDay, daysBetween, formatDay, formatRange, parseIso, relativeDay, toIso } from "./date";
 
 describe("dates", () => {
   it("round-trips ISO dates without shifting a day", () => {
@@ -11,6 +11,12 @@ describe("dates", () => {
     expect(daysBetween("2026-08-19", "2026-08-22")).toBe(3);
     expect(daysBetween("2026-03-07", "2026-03-09")).toBe(2);
     expect(daysBetween("2026-08-22", "2026-08-19")).toBe(-3);
+  });
+
+  it("aims for today from the target day on", () => {
+    expect(aimDay("2026-11-21", "2026-11-19")).toBe("Sat, Nov 21");
+    expect(aimDay("2026-11-21", "2026-11-21")).toBe("today");
+    expect(aimDay("2026-11-21", "2026-11-22")).toBe("today"); // the Sunday of a Saturday target
   });
 
   it("formats a day, with the year only when it differs", () => {
