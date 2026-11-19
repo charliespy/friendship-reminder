@@ -36,7 +36,13 @@ expect fail "tailnet name alone" text "https://tail1234.ts.net/ and foo.ts.net:4
 expect fail "a file:// link to a home folder" text "file:///Users/jane/Code/x"
 expect fail "an example domain inside another" text "jane@example.com.au, jane@example.company.com"
 expect fail "a home folder in a local dev link" text "http://localhost:1420/@fs/Users/jane/Code/x.ts"
-expect fail "a home folder in lower case" text "see /users/jane/Code"
+expect pass "web routes" text 'fetch("/api/users/list"), /api/home/feed, /settings/users/new'
+expect pass "retina names" text "icon@2x.webp, photo@3x.jpeg, a@2x.gif, b@2x.avif"
+expect fail "a linux home at the start of a path" text 'cd "/home/jane/src"'
+expect fail "a linux home in a local dev link" text "http://localhost:1420/@fs/home/jane/x.ts"
+expect fail "a linux home in a 127.0.0.1 dev link" text "http://127.0.0.1:1420/@fs/home/jane/x.ts"
+expect pass "a home route on a local dev server" text "http://localhost:1420/app/home/feed"
+expect fail "a windows home in lower case" text 'c:\\users\\jane\\x'
 expect fail "an upper-case tailnet host" text "MY-MAC.TAIL1234.TS.NET"
 expect pass "an upper-case noreply address" text "1+SOMEONE@USERS.NOREPLY.GITHUB.COM"
 expect fail "an unknown option" bash "$scan" --rnage x
@@ -86,6 +92,12 @@ git commit -qm "docs: notes"
 git rm -q notes.md
 git commit -qm "docs: remove the notes"
 expect fail "a home folder added in one commit and removed in the next" bash scripts/privacy-scan.sh --range "HEAD~2..HEAD"
+printf '++ /Users/jane/z\n' >diff.md
+git add diff.md
+git commit -qm "docs: a line starting with ++"
+git rm -q diff.md
+git commit -qm "docs: remove it"
+expect fail "an added line starting with ++" bash scripts/privacy-scan.sh --range "HEAD~2..HEAD"
 expect pass "the same commits, outside the range" bash scripts/privacy-scan.sh --range "HEAD~1..HEAD"
 
 git commit -q --allow-empty -m "chore: by someone" --author="Jane <jane@gmail.com>"

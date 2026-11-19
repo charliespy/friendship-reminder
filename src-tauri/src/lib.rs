@@ -60,6 +60,31 @@ fn data_file(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("friends.json"))
 }
 
+/// Loads the data file. A damaged file is moved aside by the core; this fails only when the file
+/// or its folder can't be read or created (permissions, a full or missing disk).
+fn open_data(app: &AppHandle) -> Result<App, String> {
+    let path = data_file(app).map_err(|e| format!("Couldn't find the app data folder: {e}"))?;
+    App::open(Store::new(path.clone())).map_err(|e| {
+        let home = app.path().home_dir().ok();
+        // The core's error may name the file again, so the whole message is cleaned.
+        hide_home(
+            &format!("Couldn't read {}: {e}", path.display()),
+            home.as_deref(),
+        )
+    })
+}
+
+/// The text with the home folder shown as ~, so an error pasted into a bug report doesn't carry the
+/// user's account name.
+fn hide_home(text: &str, home: Option<&std::path::Path>) -> String {
+    match home.map(|h| h.display().to_string()) {
+        Some(h) if !h.is_empty() && h != "/" => {
+            text.replace(&format!("{}/", h.trim_end_matches('/')), "~/")
+        }
+        _ => text.to_string(),
+    }
+}
+
 fn lock(state: &State) -> MutexGuard<'_, App> {
     // A panic while the lock is held poisons it. The data may then hold half a change, but every
     // command validates what it saves, and refusing all commands from then on would be worse.
@@ -344,14 +369,29 @@ pub fn run() {
             quit
         ])
         .setup(|app| {
-            // A menu bar app: no Dock icon, no app menu.
+            let handle = app.handle().clone();
+            let core = match open_data(&handle) {
+                Ok(core) => core,
+                Err(e) => {
+                    // A menu bar app that quits at launch would vanish without a word; say why.
+                    eprintln!("friends: {e}");
+                    rfd::MessageDialog::new()
+                        .set_level(rfd::MessageLevel::Error)
+                        .set_title("Friends can't open its data")
+                        .set_description(format!(
+                            "{e}\n\nCheck that you can read and write this folder, then open Friends again."
+                        ))
+                        .set_buttons(rfd::MessageButtons::Ok)
+                        .show();
+                    std::process::exit(1);
+                }
+            };
+            app.manage(State(Mutex::new(core)));
+
+            // A menu bar app: no Dock icon, no app menu. Switched after the data opens, so the alert
+            // above still comes to the front as a normal app's would.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            let handle = app.handle().clone();
-            let store = Store::new(data_file(&handle)?);
-            let core = App::open(store)?;
-            app.manage(State(Mutex::new(core)));
             app.manage(DropdownHiddenAt(Mutex::new(None)));
 
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
@@ -411,6 +451,26 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hide_home_hides_every_copy_of_the_home_folder() {
+        let home = std::path::Path::new("/Users/you");
+        let text = "Couldn't read /Users/you/Library/x/friends.json: \
+                    /Users/you/Library/x/friends.json was saved by a newer version";
+        assert_eq!(
+            hide_home(text, Some(home)),
+            "Couldn't read ~/Library/x/friends.json: \
+             ~/Library/x/friends.json was saved by a newer version"
+        );
+        // Only the home folder itself, not a longer name that starts the same way.
+        let vol = std::path::Path::new("/Volumes/d/you");
+        assert_eq!(
+            hide_home("/Volumes/d/youth/x and /Volumes/d/you/x", Some(vol)),
+            "/Volumes/d/youth/x and ~/x"
+        );
+        assert_eq!(hide_home("/Users/you/x", None), "/Users/you/x");
+        assert_eq!(hide_home("/x", Some(std::path::Path::new("/"))), "/x");
+    }
 
     /// A Retina laptop (1512 x 982 pt, scale 2) with a plain 1920 x 1080 monitor to its right.
     const LAPTOP: Screen = Screen {

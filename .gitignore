@@ -1,6 +1,4 @@
-.superpowers/
 .DS_Store
-.build/
 *.app
 target/
 node_modules/
