@@ -158,6 +158,8 @@ describe("dropReverted", () => {
     const two = "fix: crash on launch (#9)";
     expect(dropReverted(s(one, two, 'Revert "fix: crash on launch (#9)" (#10)'))).toEqual(s(one));
     expect(dropReverted(s(one, two))).toEqual(s(one, two));
+    // A revert that names the older PR removes that one.
+    expect(dropReverted(s(one, two, 'Revert "fix: crash on launch (#5)" (#10)'))).toEqual(s(two));
   });
 });
 
@@ -287,6 +289,11 @@ Intro.
         "[Unreleased]: https://example.com/compare\n[0.1.0]: https://example.com/v0.1.0\n",
     );
     expect(sectionBody(file, "0.1.0")).toBe("- a\n\n\n\n```\n\n\n```");
+  });
+  it("keeps a link line inside [Unreleased] with the lines after it", () => {
+    const file = "# Changelog\n\n## [Unreleased]\n\n- See [it][g].\n[g]: https://example.com\n- y\n\n## [0.1.0] - 2026-11-19\n\n- a\n";
+    expect(sectionBody(file, "Unreleased")).toBe("- See [it][g].\n[g]: https://example.com\n- y");
+    expect(unreleasedLinesMissing(sectionBody(file, "Unreleased"), "- See it.")).toContain("- y");
   });
   it("finds [Unreleased] lines the notes would lose", () => {
     const unreleased = "### Added\n- A new look.\n- Tests,\n  run on every PR.\n\n### Removed\n- An old button.";

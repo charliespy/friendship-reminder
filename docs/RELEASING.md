@@ -37,7 +37,7 @@ on `main` until then.
      refactoring);
    - keep the "Good to know" line on opening the app the first time while releases aren't signed
      with an Apple Developer ID (the draft always adds it; delete it once releases are signed);
-   - write links inline (`[text](url)`): a `[name]: url` line would end the section early;
+   - write links inline (`[text](url)`): `prepare` refuses `[name]: url` link lines;
    - no personal information (the release page is public):
      `scripts/privacy-scan.sh --stdin < release-notes.md`.
 
@@ -69,8 +69,10 @@ on `main` until then.
 
    Merge the PR once the checks and the dry run pass. Merge nothing else into `main` while it is
    open: a change merged before it would ship in this release without being in its notes or its
-   version. If something did merge, run `plan` again on the release branch (after merging `main`
-   into it) and update the version and notes.
+   version. If something did merge, close the release PR, delete its branch
+   (`git push origin --delete chore/release-vX.Y.Z`, then `git switch main && git branch -D
+   chore/release-vX.Y.Z`), and start again from step 1: `plan` reads the new change and may give
+   a different version.
 
 6. **Tag the release PR's merge commit** on `main`, by its hash (another PR may have merged after
    it), and push the tag:

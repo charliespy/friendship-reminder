@@ -182,40 +182,53 @@ export function sectionFor(commit) {
  *     the last release (the range opens with an odd flip) and whether it is in now. Out then
  *     in: it comes back under its own subject. In then out: the revert stays (a revert doesn't
  *     release by itself). Unchanged: everything about it goes.
- * Two PRs with the same title are separate changes; a revert applies to the newest one.
+ * Two PRs with the same title are separate changes; a revert applies to the one whose PR number it
+ * names, else to the newest.
  * Takes and returns { subject } objects (other fields kept), oldest first.
  */
 export function dropReverted(commits) {
   const strip = (s) => s.trim().replace(/\s*\(#\d+\)$/, "");
+  const prNumber = (s) => /\(#(\d+)\)$/.exec(s.trim())?.[1] ?? null;
+  // The base subject, how many times it was flipped, and the PR number of the change itself
+  // (the innermost subject's "(#n)", when it has one).
   const unwrap = (subject) => {
     let t = strip(subject);
     let flips = 0;
+    let pr = prNumber(subject);
     for (;;) {
       let m = /^Revert "(.+)"$/.exec(t) ?? /^revert(?:\([^)]*\))?: (.+)$/.exec(t);
+      if (!m) {
+        m = /^Reapply "(.+)"$/.exec(t);
+        if (m) flips += 1; // a reapply counts as two flips; one more is added below
+      }
       if (m) {
+        pr = prNumber(m[1]);
         t = strip(m[1]);
         flips += 1;
         continue;
       }
-      m = /^Reapply "(.+)"$/.exec(t);
-      if (m) {
-        t = strip(m[1]);
-        flips += 2;
-        continue;
-      }
-      return { base: t, flips };
+      return { base: t, flips, pr };
     }
   };
   const records = []; // { base, original, firstFlips, flips, last }, oldest first
-  const open = new Map(); // base subject -> the newest record about it
+  const byBase = new Map(); // base subject -> its records, oldest first
   for (const c of commits) {
-    const { base, flips } = unwrap(c.subject);
-    let change = open.get(base);
-    // A second PR with the same title is a separate change: only the newest is open to reverts.
-    if (!change || (flips === 0 && change.original)) {
+    const { base, flips, pr } = unwrap(c.subject);
+    const same = byBase.get(base) ?? [];
+    byBase.set(base, same);
+    // A second PR with the same title is a separate change. A revert applies to the one whose PR
+    // number it names, else to the newest.
+    let change = null;
+    if (flips > 0) {
+      change =
+        (pr && same.find((r) => r.original && prNumber(r.original.subject) === pr)) ?? same[same.length - 1] ?? null;
+    } else if (same.length && !same[same.length - 1].original) {
+      change = same[same.length - 1];
+    }
+    if (!change) {
       change = { base, original: null, firstFlips: flips, flips: 0, last: c };
       records.push(change);
-      open.set(base, change);
+      same.push(change);
     }
     if (flips === 0 && !change.original) change.original = c;
     change.flips = flips;
@@ -324,14 +337,18 @@ export function renderSections(groups) {
 const LINK_REF_RE = /^\[[^\]]+\]:\s/;
 
 /** Finds `## [<name>]` in a changelog: { start, bodyStart, end } line indexes, or null. A section
- * ends at the next "## " heading or link line. */
+ * ends at the next "## " heading, or where the block of link lines at the end of the file starts
+ * (a link line with more text after it belongs to its section). */
 function findSection(lines, name) {
   const head = `## [${name}]`;
   const start = lines.findIndex((l) => l === head || l.startsWith(`${head} `));
   if (start < 0) return null;
+  let refs = lines.length; // where the trailing block of link lines (and blank lines) starts
+  while (refs > 0 && (lines[refs - 1].trim() === "" || LINK_REF_RE.test(lines[refs - 1]))) refs -= 1;
+  while (refs < lines.length && !LINK_REF_RE.test(lines[refs])) refs += 1;
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (lines[i].startsWith("## ") || LINK_REF_RE.test(lines[i])) {
+    if (lines[i].startsWith("## ") || i === refs) {
       end = i;
       break;
     }
@@ -362,7 +379,7 @@ export function insertRelease(changelog, version, date, notes) {
   if (!body) throw new Error("the release notes are empty");
   if (/^## /m.test(body)) throw new Error('the notes may not contain "## " headings; use "### New" etc.');
   if (body.split("\n").some((l) => LINK_REF_RE.test(l))) {
-    throw new Error('the notes may not contain "[name]: url" link lines (a section ends there); write links inline');
+    throw new Error('the notes may not contain "[name]: url" link lines (the release page has no link list); write links inline');
   }
   const lines = changelog.split("\n");
   if (findSection(lines, version)) throw new Error(`CHANGELOG.md already has a [${version}] section`);
