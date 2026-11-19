@@ -212,6 +212,7 @@ export function parseSections(body) {
   let current = "Changed";
   let prefix = "";
   let last = null;
+  let blank = false;
   for (const raw of body.split("\n")) {
     const line = raw.replace(/\s+$/, "");
     const h = /^###\s+(.+)$/.exec(line);
@@ -223,14 +224,16 @@ export function parseSections(body) {
       continue;
     }
     if (!line.trim()) {
-      last = null;
+      blank = last !== null;
       continue;
     }
     if (/^\s+\S/.test(line) && last !== null) {
-      // A wrapped line of the bullet above: keep it with that bullet.
-      groups[current][last] += `\n${line}`;
+      // A wrapped line, or an indented paragraph, of the bullet above: keep it with that bullet.
+      groups[current][last] += `${blank ? "\n\n" : "\n"}${line}`;
+      blank = false;
       continue;
     }
+    blank = false;
     groups[current].push(prefix ? withPrefix(line, prefix) : line);
     last = groups[current].length - 1;
   }
@@ -341,9 +344,10 @@ export function checkNewVersion({ version, currentVersion, lastTag, changelog = 
 /** The entries of a release body: each bullet with its wrapped lines, or a lone line. */
 function entries(body) {
   const out = [];
-  let open = false; // An indented line continues only the entry right above it.
+  let open = false; // An indented line (even after a blank line) continues the entry above it.
   for (const line of body.split("\n")) {
-    if (!line.trim() || /^#{1,6}\s/.test(line)) {
+    if (!line.trim()) continue;
+    if (/^#{1,6}\s/.test(line)) {
       open = false;
       continue;
     }
@@ -367,6 +371,26 @@ export function unreleasedLinesMissing(unreleased, notes) {
     const want = squash(e);
     return !have.some((h) => h === want || h === `removed: ${want}` || h === `deprecated: ${want}`);
   });
+}
+
+/** The version a Cargo.toml's [package] table says, or null. */
+export function cargoTomlVersion(text) {
+  let inPackage = false;
+  for (const line of text.split("\n")) {
+    const table = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (table) inPackage = table[1].trim() === "package";
+    else if (inPackage) {
+      const m = /^version\s*=\s*"([^"]*)"/.exec(line);
+      if (m) return m[1];
+    }
+  }
+  return null;
+}
+
+/** The version of package `name` in a Cargo.lock, or null. */
+export function cargoLockVersion(text, name) {
+  const m = new RegExp(`\\[\\[package\\]\\]\\nname = "${name.replace(/[-.]/g, "\\$&")}"\\nversion = "([^"]*)"`).exec(text);
+  return m ? m[1] : null;
 }
 
 /** Sets the top-level "version" of a JSON file's text (package.json, tauri.conf.json, package-lock.json). */

@@ -19,15 +19,16 @@ for (const k of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"]
 function sh(cmd, args) {
   return execFileSync(cmd, args, { cwd: dir, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
-/** Copies a version file, set back to 0.1.0 so the tests hold after real releases. */
-function copyAt010(f) {
+/** Copies a version file into the scratch repo, set to `version` (0.1.0 by default, so the tests
+ * hold after real releases). */
+function copyAt(f, version = "0.1.0") {
   const text = readFileSync(join(root, f), "utf8");
   const out =
     f === "Cargo.lock"
-      ? setCargoLockVersion(text, "friends", "0.1.0")
+      ? setCargoLockVersion(text, "friends", version)
       : f.endsWith("Cargo.toml")
-        ? setCargoTomlVersion(text, "0.1.0")
-        : setJsonVersion(text, "0.1.0", { lockfile: f === "package-lock.json" });
+        ? setCargoTomlVersion(text, version)
+        : setJsonVersion(text, version, { lockfile: f === "package-lock.json" });
   writeFileSync(join(dir, f), out);
 }
 function release(...args) {
@@ -53,7 +54,7 @@ beforeEach(() => {
   writeFileSync(join(dir, "bin", "gh"), `#!/bin/sh\ncat "${join(dir, "gh.json")}"\n`);
   chmodSync(join(dir, "bin", "gh"), 0o755);
   for (const f of ["scripts/release.mjs", "scripts/release-lib.mjs"]) cpSync(join(root, f), join(dir, f));
-  for (const f of FILES) copyAt010(f);
+  for (const f of FILES) copyAt(f);
   writeFileSync(join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n- A new look.\n");
   commit("feat: first");
 });
@@ -81,13 +82,30 @@ describe("release.mjs", { timeout: 60_000 }, () => {
     release("prepare", "0.1.0", "notes.md", "--date", "2026-11-19");
     r = release("dry-run");
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/^v0\.1\.0 is prepared\. Tagging it would publish this description:\n\n### New\n\n- A new look\./);
+    expect(r.out).toMatch(/^v0\.1\.0 is prepared .*\n\n### New\n\n- A new look\./);
     commit("chore(release): v0.1.0 (#9)");
     sh("git", ["-c", "tag.gpgsign=false", "tag", "v0.1.0"]);
     commit("docs: typo (#10)");
     r = release("dry-run");
     expect(r.code).toBe(0); // Nothing to release is fine for a dry run.
     expect(r.out).toContain("Last release:  v0.1.0");
+  });
+  it("dry-run fails on a hand-edited release PR: version not above the last, or files that disagree", () => {
+    release("plan", "--out", "notes.md");
+    release("prepare", "0.1.0", "notes.md", "--date", "2026-11-19");
+    commit("chore(release): v0.1.0 (#9)");
+    sh("git", ["-c", "tag.gpgsign=false", "tag", "v0.1.0"]);
+    commit("fix: a bug (#10)");
+    writeFileSync(join(dir, "notes.md"), "### Fixed\n\n- A bug.\n");
+    expect(release("prepare", "0.1.1", "notes.md").code).toBe(0);
+    expect(release("dry-run").code).toBe(0);
+    // Cargo.toml left behind by hand.
+    writeFileSync(join(dir, "src-tauri/Cargo.toml"), setCargoTomlVersion(readFileSync(join(dir, "src-tauri/Cargo.toml"), "utf8"), "0.1.0"));
+    expect(release("dry-run").err).toMatch(/disagree with v0\.1\.1: src-tauri\/Cargo\.toml says 0\.1\.0/);
+    // A section and files for a version below the last release.
+    for (const f of FILES) copyAt(f, "0.0.9");
+    writeFileSync(join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n## [0.0.9] - 2026-11-20\n\n- x\n");
+    expect(release("dry-run").err).toMatch(/not above the last release \(v0\.1\.0\)/);
   });
   it("dry-run fails on a prepared release with an empty section", () => {
     writeFileSync(join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-11-19\n");

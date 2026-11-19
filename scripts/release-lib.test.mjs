@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyBump,
+  cargoLockVersion,
+  cargoTomlVersion,
   checkNewVersion,
   bumpFor,
   draftNotes,
@@ -253,6 +255,11 @@ Intro.
     // A wrapped-looking line right under a heading is its own entry, as in the draft.
     const odd = "### Added\n- A.\n\n### Removed\n  note";
     expect(unreleasedLinesMissing(odd, draftNotes({ unreleased: odd }))).toEqual([]);
+    // A bullet with a second, indented paragraph, drafted without changes.
+    const para = "### Added\n- Item one.\n\n  More about item one.\n- Item two.\n";
+    const drafted = draftNotes({ unreleased: para, unsigned: false });
+    expect(drafted).toBe("### New\n\n- Item one.\n\n  More about item one.\n- Item two.");
+    expect(unreleasedLinesMissing(para, drafted)).toEqual([]);
   });
   it("reads this repo's CHANGELOG.md", () => {
     expect(sectionBody(repoFile("CHANGELOG.md"), "Unreleased")).not.toBeNull();
@@ -283,6 +290,13 @@ describe("version files", () => {
     expect(changedLines(real, setCargoTomlVersion(real, "9.8.7"))).toEqual([
       'version = "9.8.7"',
     ]);
+  });
+  it("reads the Cargo versions", () => {
+    expect(cargoTomlVersion('[package]\nname = "x"\nversion = "1.2.3"\n[dependencies]\nversion = "9"\n')).toBe("1.2.3");
+    expect(cargoTomlVersion('[dependencies]\nversion = "9"\n')).toBeNull();
+    const lock = repoFile("Cargo.lock");
+    expect(cargoLockVersion(setCargoLockVersion(lock, "friends", "4.5.6"), "friends")).toBe("4.5.6");
+    expect(cargoLockVersion(lock, "nope")).toBeNull();
   });
   it("changes only the app's entry in Cargo.lock", () => {
     const lock = repoFile("Cargo.lock");

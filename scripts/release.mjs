@@ -30,7 +30,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+  cargoLockVersion,
+  cargoTomlVersion,
   checkNewVersion,
+  compareVersions,
   draftNotes,
   insertRelease,
   latestReleaseTag,
@@ -110,6 +113,19 @@ function checkFlags(flags, allowed) {
   for (const f of Object.keys(flags)) if (!allowed.includes(f)) fail(`unknown option ${f}`);
 }
 
+/** The app version each version file says. */
+function fileVersions() {
+  const lock = JSON.parse(read("package-lock.json"));
+  return {
+    "package.json": JSON.parse(read("package.json")).version,
+    "package-lock.json": lock.version,
+    'package-lock.json packages[""]': lock.packages?.[""]?.version,
+    "src-tauri/tauri.conf.json": currentVersion(),
+    "src-tauri/Cargo.toml": cargoTomlVersion(read("src-tauri/Cargo.toml")),
+    "Cargo.lock": cargoLockVersion(read("Cargo.lock"), APP_CRATE),
+  };
+}
+
 /** True when the version in the files has a CHANGELOG.md section but no tag yet: a release PR. */
 function preparedRelease() {
   const version = currentVersion();
@@ -130,7 +146,19 @@ function dryRun(argv) {
   if (pos.length) fail("usage: release.mjs dry-run");
   const version = preparedRelease();
   if (version) {
-    process.stdout.write(`v${version} is prepared. Tagging it would publish this description:\n\n`);
+    // A release PR may have been edited by hand: the version must go up, and every file agree.
+    const lastTag = lastReleaseTag();
+    if (lastTag && compareVersions(version, lastTag.slice(1)) <= 0) {
+      fail(`v${version} is not above the last release (${lastTag})`);
+    }
+    const wrong = Object.entries(fileVersions()).filter(([, v]) => v !== version);
+    if (wrong.length) {
+      fail(`the version files disagree with v${version}: ${wrong.map(([f, v]) => `${f} says ${v}`).join(", ")}`);
+    }
+    process.stdout.write(
+      `v${version} is prepared (if it is already released, run git fetch --tags first). ` +
+        "Tagging it would publish this description:\n\n",
+    );
     notes([version]);
     return;
   }
@@ -238,7 +266,13 @@ function notes(argv) {
 function verify(argv) {
   const { pos, flags } = parseArgs(argv, []);
   checkFlags(flags, []);
-  if (pos.length !== 1 || !/^v\d+\.\d+\.\d+$/.test(pos[0])) fail("usage: release.mjs verify <vX.Y.Z>");
+  let ok = pos.length === 1 && pos[0].startsWith("v");
+  try {
+    if (ok) parseVersion(pos[0].slice(1));
+  } catch {
+    ok = false;
+  }
+  if (!ok) fail("usage: release.mjs verify <vX.Y.Z>");
   const tag = pos[0];
   const version = tag.slice(1);
   let release;
