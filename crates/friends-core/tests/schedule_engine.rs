@@ -38,17 +38,26 @@ fn matches_weekdays_only_false_for_sunday() {
 
 #[test]
 fn snap_to_toggle_weekends_only_wednesday_snaps_to_saturday() {
-    assert_eq!(snap_to_toggle(date(2026, 8, 19), DayToggle::WeekendsOnly), date(2026, 8, 22));
+    assert_eq!(
+        snap_to_toggle(date(2026, 8, 19), DayToggle::WeekendsOnly),
+        date(2026, 8, 22)
+    );
 }
 
 #[test]
 fn snap_to_toggle_weekends_only_saturday_stays_saturday() {
-    assert_eq!(snap_to_toggle(date(2026, 8, 22), DayToggle::WeekendsOnly), date(2026, 8, 22));
+    assert_eq!(
+        snap_to_toggle(date(2026, 8, 22), DayToggle::WeekendsOnly),
+        date(2026, 8, 22)
+    );
 }
 
 #[test]
 fn snap_to_toggle_weekdays_only_saturday_snaps_to_monday() {
-    assert_eq!(snap_to_toggle(date(2026, 8, 22), DayToggle::WeekdaysOnly), date(2026, 8, 24));
+    assert_eq!(
+        snap_to_toggle(date(2026, 8, 22), DayToggle::WeekdaysOnly),
+        date(2026, 8, 24)
+    );
 }
 
 #[test]

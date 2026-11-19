@@ -34,7 +34,11 @@ pub struct BlockedRange {
 impl BlockedRange {
     pub fn contains(&self, date: NaiveDate) -> bool {
         // A range typed in backwards still means the days between its two ends.
-        let (lo, hi) = if self.start <= self.end { (self.start, self.end) } else { (self.end, self.start) };
+        let (lo, hi) = if self.start <= self.end {
+            (self.start, self.end)
+        } else {
+            (self.end, self.start)
+        };
         lo <= date && date <= hi
     }
 
@@ -52,7 +56,8 @@ pub struct ScheduleResult {
 }
 
 fn next_day(date: NaiveDate) -> NaiveDate {
-    date.checked_add_days(Days::new(1)).expect("date out of range")
+    date.checked_add_days(Days::new(1))
+        .expect("date out of range")
 }
 
 fn is_weekend(date: NaiveDate) -> bool {
@@ -79,7 +84,11 @@ pub fn snap_to_toggle(date: NaiveDate, toggle: DayToggle) -> NaiveDate {
 }
 
 /// The first allowed day on or after `date` that is outside every blocked range.
-pub fn avoid_blocked_ranges(date: NaiveDate, ranges: &[BlockedRange], toggle: DayToggle) -> NaiveDate {
+pub fn avoid_blocked_ranges(
+    date: NaiveDate,
+    ranges: &[BlockedRange],
+    toggle: DayToggle,
+) -> NaiveDate {
     let mut candidate = date;
     // Each move goes past the end of a range the candidate was in, so the candidate only moves forward
     // and can be inside each range at most once: this ends after at most one pass per range.
@@ -94,12 +103,20 @@ pub fn avoid_blocked_ranges(date: NaiveDate, ranges: &[BlockedRange], toggle: Da
 /// The Monday of the ISO week (Monday to Sunday) that holds `date`.
 pub fn monday_of_week(date: NaiveDate) -> NaiveDate {
     let back = u64::from(date.weekday().num_days_from_monday());
-    date.checked_sub_days(Days::new(back)).expect("date out of range")
+    date.checked_sub_days(Days::new(back))
+        .expect("date out of range")
 }
 
 fn with_notification(target: NaiveDate) -> ScheduleResult {
-    let notification_date = if is_weekend(target) { monday_of_week(target) } else { target };
-    ScheduleResult { next_target_date: target, notification_date }
+    let notification_date = if is_weekend(target) {
+        monday_of_week(target)
+    } else {
+        target
+    };
+    ScheduleResult {
+        next_target_date: target,
+        notification_date,
+    }
 }
 
 /// The schedule after being in touch on `last_connected`.
@@ -147,23 +164,44 @@ mod tests {
 
     #[test]
     fn a_range_typed_backwards_still_blocks_its_days() {
-        let blocked = [BlockedRange { start: date(2026, 8, 27), end: date(2026, 8, 20) }];
-        assert_eq!(avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::WeekendsOnly), date(2026, 8, 29));
+        let blocked = [BlockedRange {
+            start: date(2026, 8, 27),
+            end: date(2026, 8, 20),
+        }];
+        assert_eq!(
+            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::WeekendsOnly),
+            date(2026, 8, 29)
+        );
     }
 
     #[test]
     fn ranges_listed_out_of_order_are_all_skipped() {
         let blocked = [
-            BlockedRange { start: date(2026, 8, 28), end: date(2026, 8, 30) },
-            BlockedRange { start: date(2026, 8, 20), end: date(2026, 8, 27) },
+            BlockedRange {
+                start: date(2026, 8, 28),
+                end: date(2026, 8, 30),
+            },
+            BlockedRange {
+                start: date(2026, 8, 20),
+                end: date(2026, 8, 27),
+            },
         ];
-        assert_eq!(avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::WeekendsOnly), date(2026, 9, 5));
+        assert_eq!(
+            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::WeekendsOnly),
+            date(2026, 9, 5)
+        );
     }
 
     #[test]
     fn a_target_on_the_last_day_of_a_range_moves_past_it() {
-        let blocked = [BlockedRange { start: date(2026, 8, 20), end: date(2026, 8, 22) }];
-        assert_eq!(avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::AllDays), date(2026, 8, 23));
+        let blocked = [BlockedRange {
+            start: date(2026, 8, 20),
+            end: date(2026, 8, 22),
+        }];
+        assert_eq!(
+            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::AllDays),
+            date(2026, 8, 23)
+        );
     }
 
     #[test]
@@ -196,6 +234,9 @@ mod tests {
 
     #[test]
     fn day_toggle_is_stored_in_camel_case() {
-        assert_eq!(serde_json::to_string(&DayToggle::WeekendsOnly).unwrap(), "\"weekendsOnly\"");
+        assert_eq!(
+            serde_json::to_string(&DayToggle::WeekendsOnly).unwrap(),
+            "\"weekendsOnly\""
+        );
     }
 }
