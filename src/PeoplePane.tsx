@@ -29,9 +29,18 @@ function PersonForm({
   const [opened] = useState(initial);
   const [draft, setDraft] = useState(initial);
   const { run, busy, error } = useAction();
+  // A save can finish after the form was closed another way (e.g. Edit on someone else); then
+  // there's nothing left to close, and no focus to send back.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (await run(() => onSubmit({ ...draft, name: draft.name.trim() }, opened))) onCancel();
+    if ((await run(() => onSubmit({ ...draft, name: draft.name.trim() }, opened))) && mounted.current) onCancel();
   };
   return (
     <form className="card form-card" onSubmit={submit} aria-label={submitLabel} noValidate>

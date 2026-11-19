@@ -17,13 +17,14 @@ function DueRow({
   person,
   today,
   doneRef,
-  onDone,
+  onDoneStart,
+  onDoneFailed,
 }: {
   person: Person;
   today: string;
   doneRef: (el: HTMLButtonElement | null) => void;
-  /** Called before the command, and again with `false` if it fails. */
-  onDone: (started: boolean) => void;
+  onDoneStart: () => void;
+  onDoneFailed: () => void;
 }) {
   const { run, busy, error } = useAction();
   return (
@@ -39,8 +40,8 @@ function DueRow({
         className="btn btn-done btn-sm"
         disabled={busy}
         onClick={async () => {
-          onDone(true);
-          if (!(await run(() => api.markDone(person.id)))) onDone(false);
+          onDoneStart();
+          if (!(await run(() => api.markDone(person.id)))) onDoneFailed();
         }}
         aria-label={`Mark ${person.name} as done`}
       >
@@ -118,9 +119,9 @@ export function DropdownContent({ view }: { view: View }) {
                         if (el) doneButtons.current.set(p.id, el);
                         else doneButtons.current.delete(p.id);
                       }}
-                      onDone={(started) => {
-                        if (started) doneAt.current = { id: p.id, index };
-                        else if (doneAt.current?.id === p.id) doneAt.current = null;
+                      onDoneStart={() => (doneAt.current = { id: p.id, index })}
+                      onDoneFailed={() => {
+                        if (doneAt.current?.id === p.id) doneAt.current = null;
                       }}
                     />
                   ))}
