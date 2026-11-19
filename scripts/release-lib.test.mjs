@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyBump,
+  cargoLockVersion,
+  cargoTomlVersion,
   checkNewVersion,
   bumpFor,
   draftNotes,
@@ -218,9 +220,14 @@ Intro.
     expect(() => insertRelease(CHANGELOG, "0.1.0", "2026-12-01", "- x")).toThrow(/already has/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "  \n")).toThrow(/empty/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "12/01", "- x")).toThrow(/date/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-13-45", "- x")).toThrow(/date/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-02-30", "- x")).toThrow(/date/);
     expect(() => insertRelease(CHANGELOG, "0.2", "2026-12-01", "- x")).toThrow(/version/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "## [9.9.9]\n- x")).toThrow(/headings/);
     expect(() => insertRelease("# Changelog\n", "0.2.0", "2026-12-01", "- x")).toThrow(/Unreleased/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "- See [it][g].\n[g]: https://example.com\n- y")).toThrow(
+      /link lines/,
+    );
   });
   it("leaves the rest of the file byte for byte, and stops sections at link lines", () => {
     const file =
@@ -245,6 +252,14 @@ Intro.
       "- A long\n  Reminders.",
     ]);
     expect(unreleasedLinesMissing("### Removed\n- An old button.", "- Removed: An old button.")).toEqual([]);
+    // A wrapped-looking line right under a heading is its own entry, as in the draft.
+    const odd = "### Added\n- A.\n\n### Removed\n  note";
+    expect(unreleasedLinesMissing(odd, draftNotes({ unreleased: odd }))).toEqual([]);
+    // A bullet with a second, indented paragraph, drafted without changes.
+    const para = "### Added\n- Item one.\n\n  More about item one.\n- Item two.\n";
+    const drafted = draftNotes({ unreleased: para, unsigned: false });
+    expect(drafted).toBe("### New\n\n- Item one.\n\n  More about item one.\n- Item two.");
+    expect(unreleasedLinesMissing(para, drafted)).toEqual([]);
   });
   it("reads this repo's CHANGELOG.md", () => {
     expect(sectionBody(repoFile("CHANGELOG.md"), "Unreleased")).not.toBeNull();
@@ -275,6 +290,13 @@ describe("version files", () => {
     expect(changedLines(real, setCargoTomlVersion(real, "9.8.7"))).toEqual([
       'version = "9.8.7"',
     ]);
+  });
+  it("reads the Cargo versions", () => {
+    expect(cargoTomlVersion('[package]\nname = "x"\nversion = "1.2.3"\n[dependencies]\nversion = "9"\n')).toBe("1.2.3");
+    expect(cargoTomlVersion('[dependencies]\nversion = "9"\n')).toBeNull();
+    const lock = repoFile("Cargo.lock");
+    expect(cargoLockVersion(setCargoLockVersion(lock, "friends", "4.5.6"), "friends")).toBe("4.5.6");
+    expect(cargoLockVersion(lock, "nope")).toBeNull();
   });
   it("changes only the app's entry in Cargo.lock", () => {
     const lock = repoFile("Cargo.lock");

@@ -9,3 +9,5 @@ playwright-report/
 # Impeccable review captures (local only)
 .impeccable/review/
 .impeccable/hook.cache.json
+# Release notes drafted by `npm run release:plan -- --out release-notes.md`.
+release-notes.md

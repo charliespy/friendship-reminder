@@ -1,23 +1,21 @@
 # Changelog
 
-All notable changes are written here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/).
+What changed in each version of Friends, for the people who use it. Each version's section is also
+its description on [GitHub Releases](https://github.com/charliespy/friendship-reminder/releases),
+word for word, so it is short and in plain words, under **New**, **Fixed**, **Changed** and
+**Good to know**. Versions follow [Semantic Versioning](https://semver.org/):
+[CONTRIBUTING.md](CONTRIBUTING.md#releases) has the rule, and
+[docs/RELEASING.md](docs/RELEASING.md) the steps.
 
 ## [Unreleased]
 
+### New
+- A new look: calm, native macOS styling in light and dark mode.
+- If Friends can't read its data folder when it starts, it tells you in an alert instead of
+  quitting without a word.
+
 ### Changed
-- Friends is now a Tauri app (Rust + a web UI) instead of a Swift app.
-- Friends keeps its own list and sends its own notifications, instead of writing to Apple
-  Reminders.
-
-### Added
-- Unit tests for the scheduling rules and end-to-end tests of every screen, run on every PR.
-- Releases: pushing a `v*` tag builds the app and publishes it on GitHub Releases.
-- A new look: calm, native macOS styling in light and dark mode (see DESIGN.md).
-- If Friends can't read its data folder at launch, it says so in an alert instead of quitting
-  without a word.
-
-### Removed
-- The "Add Reminders for Today" and "Delete All Reminders" buttons. They only worked with
+- Friends is rebuilt as a new app (Tauri instead of Swift). It keeps its own list of people and
+  sends its own notifications, instead of writing to Apple Reminders.
+- Removed the "Add Reminders for Today" and "Delete All Reminders" buttons. They only worked with
   Apple Reminders, which Friends no longer uses.

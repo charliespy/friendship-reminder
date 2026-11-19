@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Releasing Friends, step by step (docs/RELEASING.md has the whole procedure):
 //
-//   node scripts/release.mjs plan [--patch] [--out <file>]
+//   node scripts/release.mjs plan [--patch] [--out <file> [--force]]
 //       Dry run: changes nothing. Prints the last release, the next version and why, and a draft
-//       of the release notes (also written to <file> with --out). Exits 3 when there is nothing to
+//       of the release notes (also written to <file> with --out; --force to replace a file that
+//       is already there, which may hold notes you rewrote). Exits 3 when there is nothing to
 //       release (no feat, fix, perf, revert or breaking change since the last tag; --patch
 //       releases a patch anyway, e.g. for dependency updates only).
 //   node scripts/release.mjs prepare <version> <notes file> [--date YYYY-MM-DD] [--drop-unreleased]
@@ -15,6 +16,10 @@
 //   node scripts/release.mjs notes <version> [--out <file>]
 //       Prints the CHANGELOG.md section for <version> (the release description). Exits 1 when it
 //       is missing or empty. The release workflow publishes exactly this text.
+//   node scripts/release.mjs dry-run
+//       What the release workflow's dry run prints: on a release PR (the files' version has a
+//       CHANGELOG.md section but no tag yet), the description tagging would publish, failing when
+//       it is empty; otherwise the plan (exit 0 even when there is nothing to release).
 //   node scripts/release.mjs verify <vX.Y.Z>
 //       Checks the published GitHub Release: not a draft, exactly one .dmg for that version, and
 //       a description equal to the CHANGELOG.md section at that tag. Needs `gh`.
@@ -22,15 +27,20 @@
 // Run from anywhere inside the repo; file arguments are relative to the folder you ran it from.
 // The rules themselves are in scripts/release-lib.mjs.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+  cargoLockVersion,
+  cargoTomlVersion,
   checkNewVersion,
+  compareVersions,
   draftNotes,
   insertRelease,
   latestReleaseTag,
+  lf,
   nextRelease,
   parseCommit,
+  parseVersion,
   sectionBody,
   setCargoLockVersion,
   setCargoTomlVersion,
@@ -47,7 +57,10 @@ function git(args, opts = {}) {
 
 const root = git(["rev-parse", "--show-toplevel"]).trim();
 const file = (p) => join(root, p);
+/** A file as it is on disk (prepare rewrites these, so their bytes must stay as they are). */
 const read = (p) => readFileSync(file(p), "utf8");
+/** CHANGELOG.md for reading only, with Windows line endings made "\n". */
+const readChangelog = () => lf(read("CHANGELOG.md"));
 /** A path the user typed: relative to where they ran the command (npm run moves to the repo root). */
 const userPath = (p) => resolve(process.env.INIT_CWD ?? process.cwd(), p);
 
@@ -100,9 +113,64 @@ function checkFlags(flags, allowed) {
   for (const f of Object.keys(flags)) if (!allowed.includes(f)) fail(`unknown option ${f}`);
 }
 
-function plan(argv) {
+/** The app version each version file says. */
+function fileVersions() {
+  const lock = JSON.parse(read("package-lock.json"));
+  return {
+    "package.json": JSON.parse(read("package.json")).version,
+    "package-lock.json": lock.version,
+    'package-lock.json packages[""]': lock.packages?.[""]?.version,
+    "src-tauri/tauri.conf.json": currentVersion(),
+    "src-tauri/Cargo.toml": cargoTomlVersion(read("src-tauri/Cargo.toml")),
+    "Cargo.lock": cargoLockVersion(read("Cargo.lock"), APP_CRATE),
+  };
+}
+
+/** True when the version in the files has a CHANGELOG.md section but no tag yet: a release PR. */
+function preparedRelease() {
+  const version = currentVersion();
+  let tagged = true;
+  try {
+    git(["rev-parse", "-q", "--verify", `refs/tags/v${version}`]);
+  } catch {
+    tagged = false;
+  }
+  return !tagged && sectionBody(readChangelog(), version) !== null ? version : null;
+}
+
+// The workflow's dry run: on a release PR (prepared, not tagged), the exact description tagging
+// would publish, failing when it is empty; otherwise the plan, where "nothing to release" is fine.
+function dryRun(argv) {
+  const { pos, flags } = parseArgs(argv, []);
+  checkFlags(flags, []);
+  if (pos.length) fail("usage: release.mjs dry-run");
+  const version = preparedRelease();
+  if (version) {
+    // A release PR may have been edited by hand: the version must go up, and every file agree.
+    const lastTag = lastReleaseTag();
+    if (lastTag && compareVersions(version, lastTag.slice(1)) <= 0) {
+      fail(`v${version} is not above the last release (${lastTag})`);
+    }
+    const wrong = Object.entries(fileVersions()).filter(([, v]) => v !== version);
+    if (wrong.length) {
+      fail(`the version files disagree with v${version}: ${wrong.map(([f, v]) => `${f} says ${v}`).join(", ")}`);
+    }
+    process.stdout.write(
+      `v${version} is prepared (if it is already released, run git fetch --tags first). ` +
+        "Tagging it would publish this description:\n\n",
+    );
+    notes([version]);
+    return;
+  }
+  plan([], { nothingIsFine: true });
+}
+
+function plan(argv, { nothingIsFine = false } = {}) {
   const { flags } = parseArgs(argv, ["--out"]);
-  checkFlags(flags, ["--out", "--patch"]);
+  checkFlags(flags, ["--out", "--patch", "--force"]);
+  if (flags["--out"] && existsSync(userPath(flags["--out"])) && !flags["--force"]) {
+    fail(`${flags["--out"]} is already there (your rewritten notes?): pass --force to replace it`);
+  }
   const lastTag = lastReleaseTag();
   const version = currentVersion();
   const all = commitsSince(lastTag);
@@ -118,7 +186,7 @@ function plan(argv) {
   } catch (e) {
     fail(e.message);
   }
-  const unreleased = sectionBody(read("CHANGELOG.md"), "Unreleased");
+  const unreleased = sectionBody(readChangelog(), "Unreleased");
   if (unreleased === null) fail("CHANGELOG.md has no ## [Unreleased] section");
 
   const out = [];
@@ -134,7 +202,7 @@ function plan(argv) {
     out.push("  (first release: the notes come from CHANGELOG.md's [Unreleased] section alone)");
   }
   process.stdout.write(`${out.join("\n")}\n`);
-  if (!next.version) process.exit(3);
+  if (!next.version) process.exit(nothingIsFine ? 0 : 3);
 
   const notes = draftNotes({ unreleased, commits: lastTag ? conventional.map((c) => c.parsed) : [] });
   process.stdout.write(`\nDraft notes for v${next.version} (rewrite into plain words before "prepare"):\n\n${notes}\n`);
@@ -154,17 +222,19 @@ function prepare(argv) {
       version,
       currentVersion: currentVersion(),
       lastTag: lastReleaseTag(),
-      changelog: read("CHANGELOG.md"),
+      changelog: readChangelog(),
     });
-    const notes = readFileSync(userPath(notesFile), "utf8");
-    const missing = unreleasedLinesMissing(sectionBody(read("CHANGELOG.md"), "Unreleased") ?? "", notes);
+    const notes = lf(readFileSync(userPath(notesFile), "utf8"));
+    const missing = unreleasedLinesMissing(sectionBody(readChangelog(), "Unreleased") ?? "", notes);
     if (missing.length && !flags["--drop-unreleased"]) {
       throw new Error(
         `these lines under [Unreleased] aren't in the notes, and would be lost:\n  ${missing.join("\n  ")}\n` +
           "Put them in the notes, or pass --drop-unreleased if the notes already cover them in other words.",
       );
     }
-    writes.push(["CHANGELOG.md", insertRelease(read("CHANGELOG.md"), version, date, notes)]);
+    const changelog = read("CHANGELOG.md");
+    if (changelog.includes("\r")) throw new Error("CHANGELOG.md has Windows line endings: convert it to \\n first");
+    writes.push(["CHANGELOG.md", insertRelease(changelog, version, date, notes)]);
     writes.push(["package.json", setJsonVersion(read("package.json"), version)]);
     writes.push(["package-lock.json", setJsonVersion(read("package-lock.json"), version, { lockfile: true })]);
     writes.push(["src-tauri/tauri.conf.json", setJsonVersion(read("src-tauri/tauri.conf.json"), version)]);
@@ -182,7 +252,12 @@ function notes(argv) {
   checkFlags(flags, ["--out"]);
   if (pos.length !== 1) fail("usage: release.mjs notes <version> [--out <file>]");
   const version = pos[0].replace(/^v/, "");
-  const body = sectionBody(read("CHANGELOG.md"), version);
+  try {
+    parseVersion(version);
+  } catch {
+    fail(`not a release version (want X.Y.Z): ${pos[0]}`);
+  }
+  const body = sectionBody(readChangelog(), version);
   if (!body) fail(`CHANGELOG.md has no notes for [${version}]: run "release.mjs prepare" in the release PR`);
   if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${body}\n`);
   else process.stdout.write(`${body}\n`);
@@ -191,7 +266,13 @@ function notes(argv) {
 function verify(argv) {
   const { pos, flags } = parseArgs(argv, []);
   checkFlags(flags, []);
-  if (pos.length !== 1 || !/^v\d+\.\d+\.\d+$/.test(pos[0])) fail("usage: release.mjs verify <vX.Y.Z>");
+  let ok = pos.length === 1 && pos[0].startsWith("v");
+  try {
+    if (ok) parseVersion(pos[0].slice(1));
+  } catch {
+    ok = false;
+  }
+  if (!ok) fail("usage: release.mjs verify <vX.Y.Z>");
   const tag = pos[0];
   const version = tag.slice(1);
   let release;
@@ -216,14 +297,14 @@ function verify(argv) {
   }
   let changelog = null;
   try {
-    changelog = git(["show", `${tag}:CHANGELOG.md`]);
+    changelog = lf(git(["show", `${tag}:CHANGELOG.md`]));
   } catch {
     problems.push(`can't read CHANGELOG.md at ${tag} (fetch the tags first: git fetch --tags)`);
   }
   const expected = changelog === null ? null : sectionBody(changelog, version);
   if (changelog !== null && expected === null) problems.push(`CHANGELOG.md at ${tag} has no [${version}] section`);
   if (expected === "") problems.push(`the [${version}] section of CHANGELOG.md at ${tag} is empty`);
-  if (expected && release.body.trim() !== expected) {
+  if (expected && lf(release.body).trim() !== expected) {
     problems.push("the release description differs from the CHANGELOG.md section");
   }
   if (problems.length) fail(`${tag} at ${release.url}:\n  - ${problems.join("\n  - ")}`);
@@ -237,6 +318,8 @@ function localDate() {
 }
 
 const [command, ...rest] = process.argv.slice(2);
-const commands = { plan, prepare, notes, verify };
-if (!commands[command]) fail("usage: release.mjs plan | prepare | notes | verify (see the top of scripts/release.mjs)");
+const commands = { plan, prepare, notes, verify, "dry-run": dryRun };
+if (!Object.hasOwn(commands, command)) {
+  fail("usage: release.mjs plan | prepare | notes | verify | dry-run (see the top of scripts/release.mjs)");
+}
 commands[command](rest);
