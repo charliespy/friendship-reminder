@@ -1,7 +1,7 @@
 //! The app's data: the people, the blocked ranges and the settings, and every change the UI can make
 //! to them. All of it is plain data plus pure functions of "today", so it can be tested without a clock.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, Days, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::schedule::{
@@ -15,9 +15,9 @@ pub const FREQUENCIES: [u32; 4] = [30, 90, 180, 365];
 /// The longest name the app stores, in characters.
 pub const MAX_NAME_CHARS: usize = 100;
 
-/// Most times a missed target is pushed in one catch-up. Each push moves it forward by at least a day,
-/// so a backlog of years still fits; the cap only guards against a future bug looping forever.
-const MAX_PUSHES: usize = 5000;
+/// Most times a missed target is pushed in one catch-up. A long backlog first jumps to the week before
+/// today, so a few pushes always suffice; the cap only guards against a future bug looping forever.
+const MAX_PUSHES: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,8 +41,10 @@ pub struct Person {
 
 impl Person {
     /// The reminder is showing: its day has come and you haven't marked it done.
+    /// A missed target stays up too, even before its new reminder day (under weekdays only, a missed
+    /// week is pushed on the Saturday, and the person shouldn't vanish for the weekend).
     pub fn is_due(&self, today: NaiveDate) -> bool {
-        self.notification_date <= today
+        self.overdue || self.notification_date <= today
     }
 
     fn apply(&mut self, s: ScheduleResult) {
@@ -103,7 +105,7 @@ pub struct Data {
 impl Default for Data {
     fn default() -> Self {
         Data {
-            version: 1,
+            version: crate::store::CURRENT_VERSION,
             people: Vec::new(),
             blocked: Vec::new(),
             settings: Settings::default(),
@@ -128,8 +130,13 @@ fn invalid<T>(msg: impl Into<String>) -> Result<T, Invalid> {
     Err(Invalid(msg.into()))
 }
 
+/// Trims a name or label and squeezes runs of spaces into one.
+fn squeeze(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn clean_name(name: &str) -> Result<String, Invalid> {
-    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    let name = squeeze(name);
     if name.is_empty() {
         return invalid("Give them a name.");
     }
@@ -153,6 +160,15 @@ pub fn sane_date(date: NaiveDate) -> bool {
     (1900..=2200).contains(&date.year())
 }
 
+/// Whether a worked-out date (a target, a reminder day, a range's end) is one a saved file may hold:
+/// from 1900 to 2300, so targets pushed past a range ending ten years out still load.
+pub fn sane_target(date: NaiveDate) -> bool {
+    (1900..=2300).contains(&date.year())
+}
+
+/// Ids stay below this, so they never overflow and stay exact as JavaScript numbers.
+pub const MAX_ID: u64 = 1 << 53;
+
 fn check_last_connected(date: NaiveDate, today: NaiveDate) -> Result<(), Invalid> {
     if !sane_date(date) {
         return invalid("Pick a date between 1900 and today.");
@@ -170,20 +186,45 @@ impl Data {
     pub fn is_sane(&self) -> bool {
         let people_ok = self.people.iter().all(|p| {
             FREQUENCIES.contains(&p.frequency_days)
-                && [p.last_connected, p.next_target, p.notification_date]
+                && sane_date(p.last_connected)
+                && [p.next_target, p.notification_date]
                     .into_iter()
-                    .all(sane_date)
+                    .all(sane_target)
         });
         let blocked_ok = self
             .blocked
             .iter()
-            .all(|b| sane_date(b.start) && sane_date(b.end));
-        people_ok && blocked_ok
+            .all(|b| sane_date(b.start) && sane_target(b.end));
+        let mut ids: Vec<u64> = self.ids().collect();
+        let count = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        let ids_ok =
+            ids.len() == count && self.last_id < MAX_ID && ids.last().is_none_or(|&id| id < MAX_ID);
+        people_ok && blocked_ok && ids_ok
     }
 
-    fn next_id(&mut self) -> u64 {
+    fn ids(&self) -> impl Iterator<Item = u64> + '_ {
+        self.people
+            .iter()
+            .map(|p| p.id)
+            .chain(self.blocked.iter().map(|b| b.id))
+    }
+
+    /// Makes sure new ids come after every id in use, for a file whose `lastId` is missing or behind.
+    pub fn repair_ids(&mut self) {
+        self.last_id = self.last_id.max(self.ids().max().unwrap_or(0));
+    }
+
+    /// A new id, refused at MAX_ID so the saved file stays one the app will load.
+    fn next_id(&mut self) -> Result<u64, Invalid> {
+        if self.last_id + 1 >= MAX_ID {
+            return invalid(
+                "Friends has run out of ids. Remove some people or blocked dates first.",
+            );
+        }
         self.last_id += 1;
-        self.last_id
+        Ok(self.last_id)
     }
 
     fn ranges(&self) -> Vec<BlockedRange> {
@@ -235,8 +276,12 @@ impl Data {
     ) -> bool {
         let mut moved = false;
         let mut pushes = 0;
+        // Pushing from a target years back would take one step per missed run; start from the week
+        // before today instead, which lands on the same day.
+        let week_ago = today.checked_sub_days(Days::new(7)).unwrap_or(today);
         while last_day_of_run(person.next_target, toggle) < today && pushes < MAX_PUSHES {
-            person.apply(push_missed_schedule(person.next_target, toggle, ranges));
+            let from = person.next_target.max(week_ago);
+            person.apply(push_missed_schedule(from, toggle, ranges));
             pushes += 1;
             moved = true;
         }
@@ -256,7 +301,7 @@ impl Data {
         let name = clean_name(name)?;
         check_frequency(frequency_days)?;
         check_last_connected(last_connected, today)?;
-        let id = self.next_id();
+        let id = self.next_id()?;
         let mut person = Person {
             id,
             name,
@@ -282,9 +327,12 @@ impl Data {
     ) -> Result<(), Invalid> {
         let name = clean_name(name)?;
         check_frequency(frequency_days)?;
-        check_last_connected(last_connected, today)?;
         let (toggle, ranges) = (self.settings.day_toggle, self.ranges());
         let person = self.person_mut(id)?;
+        // Only a changed date is checked: a stored one can be "tomorrow" after a time zone change.
+        if person.last_connected != last_connected {
+            check_last_connected(last_connected, today)?;
+        }
         let schedule_changed =
             person.frequency_days != frequency_days || person.last_connected != last_connected;
         person.name = name;
@@ -319,17 +367,20 @@ impl Data {
         label: &str,
         today: NaiveDate,
     ) -> Result<u64, Invalid> {
-        let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
+        let label = squeeze(label);
         if label.chars().count() > MAX_NAME_CHARS {
             return invalid(format!("Keep the label under {MAX_NAME_CHARS} characters."));
         }
-        if !sane_date(start) || !sane_date(end) {
-            return invalid("Pick dates between 1900 and 2200.");
+        // Ten years ahead at most: targets get pushed past the range, and they must stay inside the
+        // dates a saved file may hold.
+        let horizon = today.checked_add_days(Days::new(3653)).unwrap_or(today);
+        if !sane_date(start) || end > horizon {
+            return invalid("Pick dates from 1900 up to ten years from now.");
         }
         if end < start {
             return invalid("The range has to end on or after the day it starts.");
         }
-        let id = self.next_id();
+        let id = self.next_id()?;
         self.blocked.push(Blocked {
             id,
             start,
@@ -383,11 +434,15 @@ impl Data {
     }
 
     /// The people whose reminder came up and hasn't been notified yet, marked as notified now.
-    /// The caller sends the notifications (or not, when they're off).
+    /// The caller sends the notifications, or not when they're off: reminders that came up while they
+    /// were off count as handled, so turning them back on doesn't send a backlog all at once (the
+    /// dropdown still lists those people).
     pub fn take_notifications(&mut self, today: NaiveDate) -> Vec<Person> {
         let mut out = Vec::new();
         for person in &mut self.people {
-            if person.is_due(today) && person.notified_for != Some(person.notification_date) {
+            if person.notification_date <= today
+                && person.notified_for != Some(person.notification_date)
+            {
                 person.notified_for = Some(person.notification_date);
                 out.push(person.clone());
             }

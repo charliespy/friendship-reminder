@@ -219,3 +219,97 @@ fn a_weekday_target_stays_up_through_that_working_week() {
     assert!(data.catch_up(date(2026, 8, 22))); // the week is over
     assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 24));
 }
+
+#[test]
+fn decades_of_missed_days_catch_up_fully_under_all_days() {
+    let mut data = Data::default();
+    data.set_day_toggle(DayToggle::AllDays, today());
+    let id = data
+        .add_person("Ada", 30, date(1950, 1, 1), today())
+        .unwrap();
+    let p = data.person(id).unwrap();
+    assert_eq!(p.next_target, today());
+    assert!(p.overdue);
+    // A later check the same day changes nothing, so nothing is notified twice.
+    assert!(!data.catch_up(today()));
+}
+
+#[test]
+fn a_long_backlog_under_weekends_only_lands_on_this_weekend() {
+    let mut data = Data::default();
+    let id = data
+        .add_person("Ada", 365, date(1900, 1, 6), today())
+        .unwrap();
+    assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 22));
+}
+
+#[test]
+fn blocked_dates_more_than_ten_years_out_are_refused() {
+    let mut data = Data::default();
+    assert!(data
+        .add_blocked(date(2036, 8, 1), date(2036, 8, 10), "Fine", today())
+        .is_ok());
+    assert!(data
+        .add_blocked(date(2026, 8, 25), date(2200, 12, 31), "Typo", today())
+        .is_err());
+}
+
+#[test]
+fn targets_pushed_past_a_far_range_still_make_a_loadable_file() {
+    let mut data = Data::default();
+    data.add_person("Ada", 30, date(2026, 7, 23), today())
+        .unwrap();
+    data.add_blocked(date(2026, 8, 20), date(2036, 8, 1), "Away", today())
+        .unwrap();
+    assert!(data.is_sane());
+}
+
+#[test]
+fn a_missed_weekday_target_stays_up_over_the_weekend_without_an_early_notification() {
+    let mut data = Data::default();
+    data.set_day_toggle(DayToggle::WeekdaysOnly, today());
+    let id = data
+        .add_person("Ada", 30, date(2026, 7, 18), today())
+        .unwrap(); // target Mon Aug 17
+    data.take_notifications(today());
+    data.catch_up(date(2026, 8, 22)); // Saturday: pushed to Mon Aug 24
+    let p = data.person(id).unwrap();
+    assert!(p.is_due(date(2026, 8, 22)));
+    assert!(data.take_notifications(date(2026, 8, 22)).is_empty());
+    assert_eq!(data.take_notifications(date(2026, 8, 24)).len(), 1);
+}
+
+#[test]
+fn huge_ids_make_a_file_unreadable() {
+    let mut data = Data::default();
+    data.add_person("Ada", 30, today(), today()).unwrap();
+    data.last_id = u64::MAX;
+    assert!(!data.is_sane());
+}
+
+#[test]
+fn ids_stop_short_of_the_limit_instead_of_saving_an_unloadable_file() {
+    let mut data = Data {
+        last_id: friends_core::model::MAX_ID - 2,
+        ..Data::default()
+    };
+    assert!(data.add_person("A", 30, today(), today()).is_ok());
+    assert!(data.add_person("B", 30, today(), today()).is_err());
+    assert!(data.is_sane());
+}
+
+#[test]
+fn renaming_works_when_the_stored_date_is_after_today() {
+    let mut data = Data::default();
+    let id = data
+        .add_person("Ada", 30, date(2026, 8, 20), date(2026, 8, 20))
+        .unwrap();
+    // A day earlier, after a time zone change: the unchanged date isn't re-checked.
+    data.update_person(id, "Ada L.", 30, date(2026, 8, 20), today())
+        .unwrap();
+    assert_eq!(data.person(id).unwrap().name, "Ada L.");
+    // A changed date still is.
+    assert!(data
+        .update_person(id, "Ada L.", 30, date(2026, 8, 21), today())
+        .is_err());
+}

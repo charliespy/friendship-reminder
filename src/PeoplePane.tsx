@@ -32,7 +32,7 @@ function PersonForm({
     if (await run(() => onSubmit({ ...draft, name: draft.name.trim() }))) onCancel();
   };
   return (
-    <form className="card form-card" onSubmit={submit} aria-label={submitLabel}>
+    <form className="card form-card" onSubmit={submit} aria-label={submitLabel} noValidate>
       <div className="form-row">
         <label className="field grow">
           <span>Name</span>
