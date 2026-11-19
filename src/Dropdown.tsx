@@ -24,7 +24,7 @@ function DueRow({ person, today }: { person: Person; today: string }) {
         {error && <p className="error">{error}</p>}
       </div>
       <button
-        className="btn btn-primary btn-sm"
+        className="btn btn-done btn-sm"
         disabled={busy}
         onClick={() => run(() => api.markDone(person.id))}
         aria-label={`Mark ${person.name} as done`}

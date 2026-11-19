@@ -14,7 +14,7 @@
   /* Inks */
   --ink: #1d2233;
   --ink-2: #4f5568;
-  --ink-3: #6b7184;
+  --ink-3: #5c6275;
   --rule: rgb(29 34 51 / 11%);
   --rule-strong: rgb(29 34 51 / 20%);
 
@@ -25,6 +25,7 @@
   --on-press: #ffffff;
   --sea: #1c7d66;
   --sea-tint: rgb(28 125 102 / 11%);
+  --on-sea: #ffffff;
   --amber: #96600c;
   --amber-tint: rgb(150 96 12 / 11%);
   --plum: #7c4a86;
@@ -37,7 +38,6 @@
   /* Depth: a raised sheet, and the impression a pressed control leaves in the stock. */
   --lift: 0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%);
   --press-in: inset 0 1px 2px rgb(10 14 30 / 28%);
-  --deboss: inset 0 1px 1.5px rgb(10 14 30 / 22%), inset 0 -0.5px 0 rgb(255 255 255 / 25%);
 
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
 
@@ -89,12 +89,13 @@
     --rule: rgb(233 235 242 / 10%);
     --rule-strong: rgb(233 235 242 / 18%);
 
-    --press: #7f8fff;
-    --press-down: #6a7bf0;
-    --press-tint: rgb(127 143 255 / 16%);
-    --on-press: #10132a;
+    --press: #4a5bd4;
+    --press-down: #3f4fbf;
+    --press-tint: rgb(122 138 240 / 16%);
+    --on-press: #ffffff;
     --sea: #5fcbae;
     --sea-tint: rgb(95 203 174 / 14%);
+    --on-sea: #0d2a23;
     --amber: #e3b25c;
     --amber-tint: rgb(227 178 92 / 14%);
     --plum: #c99ad3;
@@ -106,7 +107,6 @@
 
     --lift: 0 0 0 0.5px rgb(255 255 255 / 6%), 0 1px 2px rgb(0 0 0 / 30%);
     --press-in: inset 0 1px 2px rgb(0 0 0 / 45%);
-    --deboss: inset 0 1px 1.5px rgb(0 0 0 / 35%), inset 0 -0.5px 0 rgb(255 255 255 / 8%);
 
     color-scheme: dark;
   }
@@ -265,6 +265,19 @@ h3 {
   font-size: var(--text-sm);
 }
 
+/* "Done" in the dropdown is printed in the sea-green ink: it means done, not navigate. */
+.btn-done {
+  background: var(--sea-tint);
+  color: var(--sea);
+  font-weight: 600;
+}
+
+.btn-done:hover:not(:disabled),
+.btn-done:active:not(:disabled) {
+  background: var(--sea);
+  color: var(--on-sea);
+}
+
 /* Small pieces */
 
 /* A printed disc: the initial in white, pressed into an ink colour. */
@@ -275,7 +288,6 @@ h3 {
   width: var(--disc);
   height: var(--disc);
   border-radius: 50%;
-  box-shadow: var(--deboss);
   color: #fff;
   font-size: var(--text-md);
   font-weight: 600;
@@ -291,7 +303,7 @@ h3 {
 }
 
 .avatar[data-tone="2"] {
-  background: #9a6410;
+  background: #4d5a73;
 }
 
 .avatar[data-tone="3"] {
@@ -637,8 +649,8 @@ input[type="radio"] {
 
 .person-name .tag {
   margin-left: var(--space-2);
-  background: var(--press-tint);
-  color: var(--press);
+  background: var(--amber-tint);
+  color: var(--amber);
   vertical-align: 1px;
 }
 
@@ -689,10 +701,6 @@ input[type="radio"] {
 
 .choice + .choice {
   border-top: 0.5px solid var(--rule);
-}
-
-.choice:has(input:checked:not([type="checkbox"])) {
-  background: var(--press-tint);
 }
 
 .choice input {
