@@ -47,8 +47,8 @@ apply() {
 
 check() {
   local fail=0 id live want
-  settings=$(gh api "repos/$repo" --jq '[.allow_auto_merge, .allow_squash_merge, .delete_branch_on_merge, .squash_merge_commit_title] | map(tostring) | join(" ")')
-  if [ "$settings" != "true true true PR_TITLE" ]; then
+  settings=$(gh api "repos/$repo" --jq '[.allow_auto_merge, .allow_squash_merge, .delete_branch_on_merge, .squash_merge_commit_title, .squash_merge_commit_message] | map(tostring) | join(" ")')
+  if [ "$settings" != "true true true PR_TITLE COMMIT_MESSAGES" ]; then
     echo "repo-settings: auto-merge, squash merges, deleting merged branches and squash titles from the PR title must all be on (got: $settings)" >&2
     fail=1
   fi

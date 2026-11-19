@@ -5,8 +5,9 @@ focused too.
 
 ## Set up
 
-You need macOS, [Node.js](https://nodejs.org/) 22 or newer, and [Rust](https://rustup.rs/)
-(stable).
+You need macOS, [Node.js](https://nodejs.org/) 22 or newer, [Rust](https://rustup.rs/)
+(stable), and [jq](https://jqlang.org/) 1.6 or newer (built into macOS 15 and later; otherwise
+`brew install jq`) for the script tests in `npm run check` and for `scripts/repo-settings.sh`.
 
 ```sh
 npm install
@@ -83,6 +84,10 @@ Rust crates and GitHub Actions. It proposes a release only once it is 3 days old
 - A package still at 0.x whose middle number changes (0.4 → 0.5), or a 0.0.x one whose last
   number does, is a breaking change under npm and Cargo rules, so that PR waits for a maintainer
   too.
+- Tauri's Rust crates (`tauri*`) and npm packages (`@tauri-apps/*`) must share the same
+  major.minor version, and Dependabot updates them in separate PRs. So a PR that moves a Tauri
+  package to a new minor version waits for a maintainer, who updates both sides together. Tauri
+  patch updates still merge by themselves.
 - Dependabot pushes newer versions onto a PR that is still open. When a push turns a PR into one
   that has to wait, the workflow turns its auto-merge off again, even auto-merge a maintainer
   turned on by hand: turn it on again after checking the new push. (Between a push and that job,

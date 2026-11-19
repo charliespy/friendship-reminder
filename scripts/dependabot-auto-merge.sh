@@ -15,7 +15,9 @@
 # Merges: minor and patch updates of npm and Cargo packages.
 # Waits for a maintainer: major updates; a 0.x package whose middle number changes (0.4 -> 0.5),
 # or a 0.0.x one whose last number does, because npm and Cargo treat those as breaking although
-# they're reported as minor or patch; anything it can't read or classify; and GitHub Actions
+# they're reported as minor or patch; a Tauri package (tauri*, @tauri-apps/*) whose middle number
+# changes, because the Rust and npm halves must share major.minor and arrive in separate PRs;
+# anything it can't read or classify; and GitHub Actions
 # updates (they change .github/workflows/, which the workflow's own token isn't allowed to merge).
 # Whenever a PR waits, auto-merge is turned off: Dependabot pushes newer versions onto an open PR,
 # so a PR cleared for one push may need to wait after the next.
@@ -87,7 +89,14 @@ while read -r name old new; do
     wait_for_maintainer "can't read the versions of $name ('$old' -> '$new')."
   fi
   IFS=. read -r old_major old_minor old_patch _ <<<"$old"
-  IFS=. read -r _ new_minor new_patch _ <<<"$new"
+  IFS=. read -r new_major new_minor new_patch _ <<<"$new"
+  case "$name" in
+    tauri | tauri-* | @tauri-apps/*)
+      if [ "$old_major.$old_minor" != "$new_major.$new_minor" ]; then
+        wait_for_maintainer "$name $old -> $new: Tauri's Rust and npm packages must move to a new minor version together."
+      fi
+      ;;
+  esac
   if [ "$old_major" = 0 ] && { [ "$old_minor" != "$new_minor" ] ||
     { [ "$old_minor" = 0 ] && [ "$old_patch" != "$new_patch" ]; }; }; then
     wait_for_maintainer "$name $old -> $new is a breaking change for a 0.x package."

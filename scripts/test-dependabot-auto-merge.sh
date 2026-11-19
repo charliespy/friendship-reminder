@@ -63,10 +63,16 @@ expect "GitHub Actions patch waits" "$off" github_actions version-update:semver-
 expect "unknown update type waits" "$off" npm_and_yarn ""
 expect "unknown ecosystem waits" "$off" pip version-update:semver-patch
 expect "dry run changes nothing" none cargo version-update:semver-minor "$one" 1
-group='[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"tauri","prevVersion":"2.8.5","newVersion":"2.9.0"}]'
+group='[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"notify-rust","prevVersion":"4.11.3","newVersion":"4.12.0"}]'
 expect "a group of safe updates merges" "$on" cargo version-update:semver-minor "$group"
 expect "0.x middle number changes waits" "$off" cargo version-update:semver-minor \
   '[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"chrono","prevVersion":"0.4.41","newVersion":"0.5.0"}]'
+expect "a Tauri crate minor update waits" "$off" cargo version-update:semver-minor \
+  '[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"tauri-build","prevVersion":"2.5.1","newVersion":"2.6.0"}]'
+expect "a Tauri npm minor update waits" "$off" npm_and_yarn version-update:semver-minor \
+  '[{"dependencyName":"@tauri-apps/api","prevVersion":"2.12.5","newVersion":"2.13.0"}]'
+expect "a Tauri patch update merges" "$on" cargo version-update:semver-patch \
+  '[{"dependencyName":"tauri","prevVersion":"2.12.7","newVersion":"2.12.8"},{"dependencyName":"@tauri-apps/cli","prevVersion":"2.12.1","newVersion":"2.12.2"}]'
 expect "0.x patch merges" "$on" cargo version-update:semver-patch \
   '[{"dependencyName":"chrono","prevVersion":"0.4.41","newVersion":"0.4.42"}]'
 expect "0.0.x patch waits" "$off" npm_and_yarn version-update:semver-patch \
