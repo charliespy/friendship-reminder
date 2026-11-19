@@ -126,6 +126,13 @@ describe("dropReverted", () => {
     );
     expect(dropReverted(s("feat: add export (#12)", "revert: feat: add export (#13)"))).toEqual([]);
   });
+  it("brings a commit back when its revert is reverted, or it is reapplied", () => {
+    const feat = "feat: add export (#12)";
+    const revert = 'Revert "feat: add export (#12)" (#13)';
+    expect(dropReverted(s(feat, revert, 'Revert "Revert "feat: add export (#12)"" (#14)'))).toEqual(s(feat));
+    expect(dropReverted(s(feat, revert, 'Reapply "feat: add export (#12)" (#14)'))).toEqual(s(feat));
+    expect(dropReverted(s('Reapply "feat: old (#3)" (#14)'))).toEqual(s('Reapply "feat: old (#3)" (#14)'));
+  });
   it("keeps a revert of something released earlier", () => {
     expect(dropReverted(s('Revert "feat: old (#3)" (#13)'))).toEqual(s('Revert "feat: old (#3)" (#13)'));
   });

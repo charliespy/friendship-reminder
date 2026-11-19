@@ -155,6 +155,7 @@ jobs:
           name: ${{ env.PUBLISH == 'true' && 'Friends' || 'Friends-dry-run' }}
           path: dist-release/
           if-no-files-found: error
+          overwrite: true
           retention-days: 7
 
   publish:

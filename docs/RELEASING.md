@@ -25,9 +25,9 @@ on `main` until then.
 
    It prints the last release, the next version and why, and drafts the notes into
    `release-notes.md` (it won't replace a file that is already there; add `--force` for a fresh
-   draft). With `npm run`, options go after `--`. If it says there is nothing to release (exit code 3), stop and say so; only
-   when the maintainer still wants a release (for example, dependency updates only) run it again
-   with `--patch`.
+   draft). With `npm run`, options go after `--`. If it says there is nothing to release (exit
+   code 3), stop and say so; only when the maintainer still wants a release (for example,
+   dependency updates only) run it again with `--patch`.
 
 3. **Write the notes.** Edit `release-notes.md` into a short description for people who use the
    app, not for developers:
@@ -38,7 +38,8 @@ on `main` until then.
    - keep the "Good to know" line on opening the app the first time while releases aren't signed
      with an Apple Developer ID (the draft always adds it; delete it once releases are signed);
    - write links inline (`[text](url)`): a `[name]: url` line would end the section early;
-   - no personal information (the release page is public): `scripts/privacy-scan.sh --stdin < release-notes.md`.
+   - no personal information (the release page is public):
+     `scripts/privacy-scan.sh --stdin < release-notes.md`.
 
 4. **Prepare** the release on a branch:
 
@@ -108,14 +109,20 @@ on `main` until then.
 
 `plan` reads one commit per merged PR: the squash-merge commits on `main` (`feat: … (#12)`) since
 the last `vX.Y.Z` tag. A commit undone by GitHub's revert button (`Revert "feat: … (#12)"`) is
-left out together with its revert. PRs are squash-merged, so this is every change; a PR merged with a merge
-commit would show up only as "Merge pull request …", which isn't a conventional commit and is left
-out. Before the first release there is no tag, so the notes come from `[Unreleased]` alone.
+left out together with its revert; reverting that revert (or `Reapply "…"`) brings it back. PRs
+are squash-merged, so this is every change; a PR merged with a merge commit would show up only as
+"Merge pull request …", which isn't a conventional commit and is left out. Before the first
+release there is no tag, so the notes come from `[Unreleased]` alone.
 
 ## When something goes wrong
 
-- **The workflow fails before publishing** (the tag doesn't match the version, the notes are
-  missing, the build breaks): nothing was published. Fix the cause on `main` with a normal PR,
+- **The tag is wrong** (it isn't on the release PR's merge commit, or doesn't match the version
+  in the files): the workflow stops before publishing, and the tag would block every later
+  `plan`. Only the maintainer deletes it (`git push origin :refs/tags/vX.Y.Z`, then
+  `git tag -d vX.Y.Z`), and then the right commit is tagged as in step 6. This is the one time a
+  tag already on GitHub is removed, and only because nothing was published from it.
+- **The workflow fails before publishing for another reason** (the notes are missing, the build
+  breaks): nothing was published. Fix the cause on `main` with a normal PR,
   then release the next patch version (`npm run release:plan -- --patch` when the fix is not a
   `fix:`). Its notes must also carry everything in the unpublished version's section, since
   nobody has seen it: copy those lines into the new notes. Never move or re-push a tag that is
