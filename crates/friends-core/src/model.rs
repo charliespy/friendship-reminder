@@ -416,7 +416,12 @@ impl Data {
     pub fn recompute_all(&mut self, today: NaiveDate) {
         let (toggle, ranges) = (self.settings.day_toggle, self.ranges());
         for person in &mut self.people {
+            // A new plan can't make anyone "missed": a target the old plan never aimed for may already
+            // be over (a blocked range removed after the fact). Someone already missed stays missed
+            // while their new target is still behind them.
+            let was_overdue = person.overdue;
             Self::reschedule(person, toggle, &ranges, today);
+            person.overdue &= was_overdue;
         }
     }
 

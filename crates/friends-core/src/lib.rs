@@ -5,6 +5,13 @@ pub mod model;
 pub mod schedule;
 pub mod store;
 
+/// The user's home folder, from `$HOME` (what macOS sets for every app).
+pub fn home_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|h| !h.is_empty())
+        .map(std::path::PathBuf::from)
+}
+
 /// The text with the home folder shown as ~, so an error pasted into a bug report doesn't carry the
 /// user's account name.
 pub fn hide_home(text: &str, home: Option<&std::path::Path>) -> String {

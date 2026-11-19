@@ -2,14 +2,14 @@
 import { useEffect } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
-import { formatDay, relativeDay } from "./date";
+import { aimDay, formatDay, relativeDay } from "./date";
 import { useAction, useView } from "./useView";
 
 /** How many upcoming people the dropdown lists. */
 const UPCOMING = 5;
 
 function dueLine(p: Person, today: string): string {
-  const day = p.nextTarget === today ? "today" : formatDay(p.nextTarget, today);
+  const day = aimDay(p.nextTarget, today);
   return p.overdue ? `Missed last time · aim for ${day}` : `Aim for ${day}`;
 }
 

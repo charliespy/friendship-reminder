@@ -7,6 +7,8 @@
 #   FRIENDS_DATA_FILE=x.json npm run dev:web another scratch file
 #   FRIENDS_TODAY=2026-12-05 npm run dev:web pretend it's that day
 #   FRIENDS_DEVSERVER_PORT=1430              the devserver's port (default 1430)
+#   FRIENDS_DEV_ALLOWED_HOSTS=.example.net   extra host names Vite answers to, comma-separated
+#                                            (for viewing the dev server through a tunnel)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

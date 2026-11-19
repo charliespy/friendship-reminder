@@ -111,6 +111,41 @@ fn a_new_blocked_range_reschedules_everyone() {
 }
 
 #[test]
+fn removing_a_blocked_range_doesnt_mark_anyone_as_missed() {
+    // Weekends only, monthly. The natural target, Sat Nov 14, is blocked, so the plan is Sat Nov 21.
+    let mut data = Data::default();
+    let id = data
+        .add_person("Ada", 30, date(2026, 10, 10), date(2026, 10, 12))
+        .unwrap();
+    data.add_blocked(
+        date(2026, 11, 13),
+        date(2026, 11, 15),
+        "Trip",
+        date(2026, 10, 12),
+    )
+    .unwrap();
+    assert_eq!(data.person(id).unwrap().next_target, date(2026, 11, 21));
+    // Removed once it's over: Nov 14 has gone by, but nobody was asked to aim for it.
+    let blocked_id = data.blocked[0].id;
+    assert!(data.delete_blocked(blocked_id, date(2026, 11, 18)));
+    let p = data.person(id).unwrap();
+    assert_eq!(p.next_target, date(2026, 11, 21));
+    assert!(!p.overdue);
+}
+
+#[test]
+fn someone_already_missed_stays_missed_after_a_recompute() {
+    let mut data = Data::default();
+    let id = data
+        .add_person("Grace", 30, date(2025, 1, 1), today())
+        .unwrap();
+    assert!(data.person(id).unwrap().overdue);
+    data.add_blocked(date(2026, 9, 1), date(2026, 9, 3), "Trip", today())
+        .unwrap();
+    assert!(data.person(id).unwrap().overdue);
+}
+
+#[test]
 fn changing_the_day_setting_reschedules_everyone() {
     let mut data = Data::default();
     let id = data

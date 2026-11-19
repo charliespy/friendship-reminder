@@ -2,7 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
-import { formatDay, relativeDay } from "./date";
+import { aimDay, formatDay, relativeDay } from "./date";
 import { FREQUENCIES, frequencyLabel } from "./format";
 import { useAction } from "./useView";
 
@@ -106,8 +106,8 @@ function PersonRow({
   const { run, busy, error } = useAction();
   const when = person.due
     ? person.overdue
-      ? `Missed last time · aim for ${formatDay(person.nextTarget, today)}`
-      : `Due · aim for ${formatDay(person.nextTarget, today)}`
+      ? `Missed last time · aim for ${aimDay(person.nextTarget, today)}`
+      : `Due · aim for ${aimDay(person.nextTarget, today)}`
     : `Reminder ${relativeDay(person.notificationDate, today)}, ${formatDay(person.notificationDate, today)}`;
   return (
     <li className="list-row" data-testid="person-row" data-overdue={person.overdue}>

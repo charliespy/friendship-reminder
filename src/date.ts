@@ -29,6 +29,14 @@ export function formatDay(iso: IsoDate, today: IsoDate): string {
   });
 }
 
+/**
+ * The day to aim for, as said to the user: "today" from the target day on. A target is behind today
+ * only while its run of allowed days lasts (the Sunday of a Saturday target), so today still counts.
+ */
+export function aimDay(target: IsoDate, today: IsoDate): string {
+  return target <= today ? "today" : formatDay(target, today);
+}
+
 /** "today", "tomorrow", "in 5 days", "in 3 weeks", "yesterday", "4 days ago". */
 export function relativeDay(iso: IsoDate, today: IsoDate): string {
   const n = daysBetween(today, iso);

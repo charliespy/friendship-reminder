@@ -12,6 +12,7 @@ You need macOS, [Node.js](https://nodejs.org/) 22 or newer, and [Rust](https://r
 npm install
 npm run tauri dev      # the real app, in the menu bar
 npm run dev:web        # the UI in a browser, against a scratch data file
+                       # (FRIENDS_DEV_ALLOWED_HOSTS=<host> to view it through a tunnel)
 ```
 
 ## How the code is laid out

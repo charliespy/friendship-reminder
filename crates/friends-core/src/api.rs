@@ -185,8 +185,7 @@ impl App {
             settings: self.data.settings.clone(),
             unreadable_file: self.unreadable_file.as_ref().map(|p| {
                 // Shown in the app, where it may end up in a screenshot for a bug report.
-                let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-                crate::hide_home(&p.display().to_string(), home.as_deref())
+                crate::hide_home(&p.display().to_string(), crate::home_dir().as_deref())
             }),
         }
     }
