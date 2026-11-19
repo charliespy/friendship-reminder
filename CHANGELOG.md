@@ -17,6 +17,8 @@ All notable changes are written here. The format follows
 - A new look: calm, native macOS styling in light and dark mode (see DESIGN.md).
 - If Friends can't read its data folder at launch, it says so in an alert instead of quitting
   without a word.
+- For contributors: `main` is protected (changes come through PRs whose checks pass), PR titles
+  must be conventional commits, and Dependabot keeps dependencies up to date each week.
 
 ### Removed
 - The "Add Reminders for Today" and "Delete All Reminders" buttons. They only worked with

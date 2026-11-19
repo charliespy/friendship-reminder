@@ -33,7 +33,7 @@ npm run e2e            # end-to-end tests in WebKit
 npm run privacy        # no personal info in files or commits
 ```
 
-CI runs all three on every PR.
+CI runs all three on every PR, along with a check of the PR title (see below).
 
 - **Tests first** for a change to the scheduling rules: add a failing test in
   `crates/friends-core/tests/`, then make it pass.
@@ -44,6 +44,44 @@ CI runs all three on every PR.
   made-up people).
 - **One change per PR**, with a short description of what and why, and a screenshot for
   anything you can see.
+
+## How a PR reaches `main`
+
+`main` is protected by a branch ruleset, kept in [`.github/rulesets/main.json`](.github/rulesets/main.json):
+
+- Every change comes through a pull request. Nobody can push to `main` directly, force-push it
+  or delete it.
+- These checks must pass before a PR can merge:
+  - **Check (types, lint, unit tests, Rust)**: `npm run check`.
+  - **End-to-end (Playwright, WebKit)**: `npm run e2e`.
+  - **Privacy scan**: `npm run privacy` on the PR's files and commits.
+  - **PR title and description**: the same scan on the PR's text, which is public too.
+  - **PR title (conventional commit)**: `scripts/pr-title-check.sh`. The title becomes the commit
+    on `main` when the PR is squash-merged, so it must read like `feat: snooze a reminder` or
+    `fix(tray): keep the dropdown under the icon`.
+- No approving review is required: the project has one maintainer. Admins can bypass the rules
+  only when merging a PR, for an emergency fix whose checks can't pass.
+- A merged PR's branch is deleted automatically.
+
+Maintainers set this up, or check it, with `scripts/repo-settings.sh` (`apply` creates or
+updates the ruleset and turns on auto-merge; `check` compares GitHub with the files and changes
+nothing; `verify-push` checks that a direct push to `main` is refused). To change the
+protection, edit the JSON in a PR, then run `scripts/repo-settings.sh apply` after it merges.
+
+## Dependency updates
+
+[Dependabot](.github/dependabot.yml) looks for new versions every Monday, for npm packages,
+Rust crates and GitHub Actions:
+
+- Minor and patch updates come as **one PR per ecosystem** (the `minor-and-patch` group). For
+  npm and Cargo, [a workflow](.github/workflows/dependabot-auto-merge.yml) turns on auto-merge, so
+  the PR squash-merges by itself once every required check passes. A failing check stops it.
+- GitHub Actions updates change the workflow files, which that workflow's token can't merge, so
+  they wait for a maintainer.
+- Major updates come as a PR each and always wait for a maintainer.
+
+`scripts/dependabot-auto-merge.sh` makes that decision; `npm run check:scripts` tests it, along
+with the PR title check and `repo-settings.sh check`.
 
 ## Releases
 
