@@ -18,8 +18,15 @@ args=(--port "$port" --data "$data")
 [ -n "${FRIENDS_TODAY:-}" ] && args+=(--today "$FRIENDS_TODAY")
 
 cargo build -q -p friends-devserver
-target/debug/friends-devserver "${args[@]}" &
+"${CARGO_TARGET_DIR:-target}/debug/friends-devserver" "${args[@]}" &
 server=$!
 trap 'kill "$server" 2>/dev/null || true' EXIT INT TERM
+
+# Start Vite only once the devserver answers (it exits at once if the port is taken).
+for _ in $(seq 1 50); do
+  kill -0 "$server" 2>/dev/null || { echo "dev-web: friends-devserver didn't start (is port $port in use?)" >&2; exit 1; }
+  curl -fs "http://127.0.0.1:$port/__test/health" >/dev/null && break
+  sleep 0.2
+done
 
 FRIENDS_DEVSERVER_PORT="$port" VITE_BROWSER_BRIDGE=1 npx vite

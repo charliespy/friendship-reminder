@@ -87,7 +87,9 @@ struct UpdatePersonArgs {
     id: u64,
     name: String,
     frequency_days: u32,
-    last_connected: NaiveDate,
+    /// Left out when the form didn't change it, so a "Done" made meanwhile isn't undone.
+    #[serde(default)]
+    last_connected: Option<NaiveDate>,
 }
 
 #[derive(Deserialize)]
@@ -229,7 +231,12 @@ impl App {
             }
             "update_person" => {
                 let p: UpdatePersonArgs = args(cmd, a)?;
-                d.update_person(p.id, &p.name, p.frequency_days, p.last_connected, today)
+                let last_connected = match p.last_connected {
+                    Some(day) => day,
+                    // An unknown id falls through to update_person, which reports it.
+                    None => d.person(p.id).map_or(today, |x| x.last_connected),
+                };
+                d.update_person(p.id, &p.name, p.frequency_days, last_connected, today)
                     .map_err(invalid)?;
             }
             "delete_people" => {
