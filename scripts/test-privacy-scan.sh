@@ -35,6 +35,11 @@ expect fail "tailnet host" text "https://my-mac.tail1234.ts.net:4100/"
 expect fail "tailnet name alone" text "https://tail1234.ts.net/ and foo.ts.net:4100"
 expect fail "a file:// link to a home folder" text "file:///Users/jane/Code/x"
 expect fail "an example domain inside another" text "jane@example.com.au, jane@example.company.com"
+expect fail "a home folder in a local dev link" text "http://localhost:1420/@fs/Users/jane/Code/x.ts"
+expect fail "a home folder in lower case" text "see /users/jane/Code"
+expect fail "an upper-case tailnet host" text "MY-MAC.TAIL1234.TS.NET"
+expect pass "an upper-case noreply address" text "1+SOMEONE@USERS.NOREPLY.GITHUB.COM"
+expect fail "an unknown option" bash "$scan" --rnage x
 expect fail "noreply inside another domain" text "bob@users.noreply.github.com.evil.io"
 expect fail "co-author trailer" text "Co-authored-by: Someone <someone@example.com>"
 
@@ -74,6 +79,14 @@ git commit -qm "test: binary"
 expect pass "binary files are skipped" bash scripts/privacy-scan.sh --range "HEAD~1..HEAD"
 git rm -q blob.bin
 git commit -qm "test: remove it"
+
+printf 'see /Users/jane/notes\n' >notes.md
+git add notes.md
+git commit -qm "docs: notes"
+git rm -q notes.md
+git commit -qm "docs: remove the notes"
+expect fail "a home folder added in one commit and removed in the next" bash scripts/privacy-scan.sh --range "HEAD~2..HEAD"
+expect pass "the same commits, outside the range" bash scripts/privacy-scan.sh --range "HEAD~1..HEAD"
 
 git commit -q --allow-empty -m "chore: by someone" --author="Jane <jane@gmail.com>"
 expect fail "personal author" bash scripts/privacy-scan.sh --range "HEAD~1..HEAD"

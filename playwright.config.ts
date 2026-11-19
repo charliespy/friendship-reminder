@@ -1,12 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
+import { SERVER_PORT as serverPort, WEB_PORT as webPort } from "./e2e/ports";
 
 /**
  * End-to-end tests: the built UI in WebKit (the engine of the macOS app's web view), talking to
  * friends-devserver, which runs the real rules over a scratch data file with a fixed "today".
- * Ports come from FRIENDS_E2E_SERVER_PORT / FRIENDS_E2E_WEB_PORT (defaults 1430 / 1431).
+ * Ports: e2e/ports.ts (FRIENDS_E2E_SERVER_PORT / FRIENDS_E2E_WEB_PORT, defaults 1440 / 1441).
  */
-const serverPort = Number(process.env.FRIENDS_E2E_SERVER_PORT ?? 1430);
-const webPort = Number(process.env.FRIENDS_E2E_WEB_PORT ?? 1431);
 
 export default defineConfig({
   testDir: "e2e/tests",

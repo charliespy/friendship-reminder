@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { SERVER_PORT } from "../ports";
 
-const server = `http://127.0.0.1:${process.env.FRIENDS_E2E_SERVER_PORT ?? 1430}`;
+const server = `http://127.0.0.1:${SERVER_PORT}`;
 /** The devserver only takes JSON posts (so a web page can't drive it). */
 const JSON_HEADERS = { "Content-Type": "application/json" };
 

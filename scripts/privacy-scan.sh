@@ -19,9 +19,10 @@ email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 home_path='(/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+|[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9._-]+)'
 # Placeholders a doc may use for a home folder, and the system's shared folders.
 allowed_path='[\\/](Users|home)[\\/]+(you|me|runner|USER|\$USER|<[^>]*>|example|name|username|Shared|Public|Default|All Users)$'
-# Web links: a /home/... or /Users/... inside one is a page, not a folder on someone's disk.
-# Only web links: a file:// link is a folder on someone's disk.
-url='(https?|ftp)://[^[:space:]<>"()]+'
+# A web link to a named site (example.com): a /home/... or /Users/... in it is a page, not a folder.
+# Other links do point at folders on someone's disk, and are checked: file://..., and local dev
+# servers (http://localhost:1420/@fs/Users/...).
+url='(https?|ftp)://([A-Za-z0-9-]+\.)+[A-Za-z]{2,}(:[0-9]+)?(/[^[:space:]<>"()]*)?'
 private_host='([A-Za-z0-9-]+\.)+ts\.net'
 attribution='(Co-authored-by:|Generated with \[?Claude|noreply@anthropic\.com)'
 
@@ -31,13 +32,13 @@ scan_text() {
   text=$(cat)
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "email address in $where: $hit"
-  done < <(printf '%s\n' "$text" | grep -oE "$email" | grep -vE "$allowed_email" || true)
+  done < <(printf '%s\n' "$text" | grep -oE "$email" | grep -viE "$allowed_email" || true)
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "home-folder path in $where: $hit"
-  done < <(printf '%s\n' "$text" | sed -E "s#$url##g" | grep -oE "$home_path" | grep -vE "$allowed_path" || true)
+  done < <(printf '%s\n' "$text" | sed -E "s#$url##g" | grep -oiE "$home_path" | grep -viE "$allowed_path" || true)
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "private host name in $where: $hit"
-  done < <(printf '%s\n' "$text" | grep -oE "$private_host" || true)
+  done < <(printf '%s\n' "$text" | grep -oiE "$private_host" || true)
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "AI attribution in $where: $hit"
   done < <(printf '%s\n' "$text" | grep -iE "$attribution" || true)
@@ -53,6 +54,13 @@ finish() {
 }
 
 mode=${1:-}
+case "$mode" in
+  "" | --all | --range | --stdin) ;;
+  *)
+    echo "usage: privacy-scan.sh [--all | --range A..B | --stdin]" >&2
+    exit 2
+    ;;
+esac
 if [ "$mode" = "--stdin" ]; then
   scan_text "the text"
   finish
@@ -84,11 +92,11 @@ fi
 # Fields split by \x1f: read would merge tabs, and an empty author would shift the fields.
 while IFS=$'\x1f' read -r sha author committer; do
   [ -n "$sha" ] || continue
-  if ! printf '%s' "$author" | grep -qE "$allowed_email"; then
+  if ! printf '%s' "$author" | grep -qiE "$allowed_email"; then
     report "commit ${sha:0:12} has a personal author address ($author); use your GitHub noreply address"
   fi
   # GitHub itself commits web edits and PR merges as noreply@github.com.
-  if [ "$committer" != "noreply@github.com" ] && ! printf '%s' "$committer" | grep -qE "$allowed_email"; then
+  if [ "$committer" != "noreply@github.com" ] && ! printf '%s' "$committer" | grep -qiE "$allowed_email"; then
     report "commit ${sha:0:12} has a personal committer address ($committer)"
   fi
 done < <(git log --format='%H%x1f%ae%x1f%ce' "$range")
@@ -97,5 +105,14 @@ while IFS= read -r -d '' record; do
   [ -n "$sha" ] || continue
   scan_text "the message of commit ${sha:0:12}" < <(printf '%s\n' "${record#*$'\n'}")
 done < <(git log -z --format='%H%n%B' "$range")
+
+# 3. What the commits added: something added in one commit and removed in the next is gone from
+#    the files but stays public in the history. Same files skipped as above.
+scan_text "the changes in $range" < <(
+  git log -p --no-ext-diff --no-color --format= "$range" -- . \
+    ':(glob,exclude)**/package-lock.json' ':(glob,exclude)**/Cargo.lock' \
+    ':(exclude)scripts/privacy-scan.sh' ':(exclude)scripts/test-privacy-scan.sh' |
+    grep '^+' | grep -v '^+++' || true
+)
 
 finish
