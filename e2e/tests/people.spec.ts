@@ -67,6 +67,22 @@ test("mark a person done from the list", async ({ page, request }) => {
   await expect(page.getByRole("tab", { name: "People" })).toHaveText("People");
 });
 
+test("saving an edit keeps a Done made while the form was open", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE.slice(0, 1) });
+  await openPreferences(page);
+  const row = page.getByTestId("person-row");
+  await page.getByRole("button", { name: `Edit ${SAMPLE[0].name}` }).click();
+  const form = page.getByRole("form", { name: "Save changes" });
+  // With the form open, the person is marked done (as from the menu bar dropdown).
+  await row.getByRole("button", { name: "Done" }).click();
+  await expect(row).toContainText("Reminder in 4 weeks, Mon, Dec 14");
+  await form.getByLabel("Name").fill("Maya C.");
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(row).toContainText("Maya C.");
+  await expect(row).toContainText("Monthly · Reminder in 4 weeks, Mon, Dec 14");
+});
+
 test("delete several people after confirming", async ({ page, request }) => {
   await seed(request, { people: SAMPLE });
   await openPreferences(page);
