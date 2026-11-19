@@ -44,3 +44,20 @@ test("dates more than ten years out are refused with a reason", async ({ page, r
   await form.getByRole("button", { name: "Block dates" }).click();
   await expect(form.getByRole("alert")).toHaveText("Pick dates from 1900 up to ten years from now.");
 });
+
+test("ranges in another year show their year", async ({ page, request }) => {
+  await seed(request, {
+    blocked: [
+      { start: "2025-12-01", end: "2025-12-05", label: "Last year's trip" },
+      { start: "2026-12-01", end: "2026-12-05", label: "Work trip" },
+      { start: "2027-11-30", end: "2027-11-30", label: "One day next year" },
+    ],
+  });
+  await openPreferences(page, "Blocked dates");
+  const rows = page.getByTestId("blocked-row");
+  await expect(rows.filter({ hasText: "Last year's trip" })).toContainText("Dec 1 – 5, 2025");
+  await expect(rows.filter({ hasText: "Work trip" }).locator(".person-meta")).toHaveText("Dec 1 – 5");
+  const nextYear = rows.filter({ hasText: "One day next year" });
+  await expect(nextYear).toContainText("Nov 30, 2027");
+  await expect(nextYear.getByRole("button", { name: "Remove One day next year Nov 30, 2027" })).toBeVisible();
+});

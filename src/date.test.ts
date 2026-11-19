@@ -35,9 +35,21 @@ describe("dates", () => {
   });
 
   it("formats ranges compactly", () => {
-    expect(formatRange("2026-08-20", "2026-08-27")).toBe("Aug 20 – 27");
-    expect(formatRange("2026-08-30", "2026-09-02")).toBe("Aug 30 – Sep 2");
-    expect(formatRange("2026-08-20", "2026-08-20")).toBe("Aug 20");
-    expect(formatRange("2026-12-28", "2027-01-03")).toBe("Dec 28, 2026 – Jan 3, 2027");
+    const today = "2026-11-18";
+    expect(formatRange("2026-08-20", "2026-08-27", today)).toBe("Aug 20 – 27");
+    expect(formatRange("2026-08-30", "2026-09-02", today)).toBe("Aug 30 – Sep 2");
+    expect(formatRange("2026-08-20", "2026-08-20", today)).toBe("Aug 20");
+    expect(formatRange("2026-12-28", "2027-01-03", today)).toBe("Dec 28, 2026 – Jan 3, 2027");
+  });
+
+  it("adds the year to ranges that aren't in this year", () => {
+    const today = "2026-11-18";
+    expect(formatRange("2025-12-01", "2025-12-05", today)).toBe("Dec 1 – 5, 2025");
+    expect(formatRange("2027-12-01", "2027-12-05", today)).toBe("Dec 1 – 5, 2027");
+    expect(formatRange("2027-11-30", "2027-11-30", today)).toBe("Nov 30, 2027");
+    expect(formatRange("2027-08-30", "2027-09-02", today)).toBe("Aug 30 – Sep 2, 2027");
+    expect(formatRange("2025-08-30", "2025-09-02", today)).toBe("Aug 30 – Sep 2, 2025");
+    expect(formatRange("2024-12-28", "2025-01-03", today)).toBe("Dec 28, 2024 – Jan 3, 2025");
+    expect(formatRange("2026-12-01", "2026-12-05", today)).toBe("Dec 1 – 5");
   });
 });
