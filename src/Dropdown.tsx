@@ -1,5 +1,5 @@
 /** The menu bar dropdown: who to reach out to now, who's coming up, and the way to Preferences. */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
 import { aimDay, formatDay, relativeDay } from "./date";
@@ -13,7 +13,19 @@ function dueLine(p: Person, today: string): string {
   return p.overdue ? `Missed last time · aim for ${day}` : `Aim for ${day}`;
 }
 
-function DueRow({ person, today }: { person: Person; today: string }) {
+function DueRow({
+  person,
+  today,
+  doneRef,
+  onDoneStart,
+  onDoneFailed,
+}: {
+  person: Person;
+  today: string;
+  doneRef: (el: HTMLButtonElement | null) => void;
+  onDoneStart: () => void;
+  onDoneFailed: () => void;
+}) {
   const { run, busy, error } = useAction();
   return (
     <li className="person-row" data-testid="due-person" data-overdue={person.overdue}>
@@ -24,9 +36,13 @@ function DueRow({ person, today }: { person: Person; today: string }) {
         {error && <p className="error" role="alert">{error}</p>}
       </div>
       <button
+        ref={doneRef}
         className="btn btn-done btn-sm"
         disabled={busy}
-        onClick={() => run(() => api.markDone(person.id))}
+        onClick={async () => {
+          onDoneStart();
+          if (!(await run(() => api.markDone(person.id)))) onDoneFailed();
+        }}
         aria-label={`Mark ${person.name} as done`}
       >
         Done
@@ -52,6 +68,23 @@ function UpcomingRow({ person, today }: { person: Person; today: string }) {
 export function DropdownContent({ view }: { view: View }) {
   const due = view.people.filter((p) => p.due);
   const upcoming = view.people.filter((p) => !p.due).slice(0, UPCOMING);
+
+  // A Done moves its row out of "Reach out now", taking the focused button with it. Focus then goes
+  // to the Done button of the row that took its place (or the one before it), or to the
+  // caught-up message when nobody is left, so keyboard users don't land back at the top.
+  const doneButtons = useRef(new Map<number, HTMLButtonElement>());
+  const caughtUp = useRef<HTMLParagraphElement>(null);
+  const doneAt = useRef<{ id: number; index: number } | null>(null);
+  useEffect(() => {
+    const pending = doneAt.current;
+    if (!pending || due.some((p) => p.id === pending.id)) return;
+    doneAt.current = null;
+    // Only if focus was lost with the row; never take it from somewhere the user moved it.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const next = due[Math.min(pending.index, due.length - 1)];
+    (next ? doneButtons.current.get(next.id) : caughtUp.current)?.focus();
+  });
+
   return (
     <>
       <div className="dropdown-body">
@@ -72,11 +105,25 @@ export function DropdownContent({ view }: { view: View }) {
                 Reach out now
               </h2>
               {due.length === 0 ? (
-                <p className="caught-up">You're all caught up.</p>
+                <p className="caught-up" ref={caughtUp} tabIndex={-1}>
+                  You're all caught up.
+                </p>
               ) : (
                 <ul className="list due-list">
-                  {due.map((p) => (
-                    <DueRow key={p.id} person={p} today={view.today} />
+                  {due.map((p, index) => (
+                    <DueRow
+                      key={p.id}
+                      person={p}
+                      today={view.today}
+                      doneRef={(el) => {
+                        if (el) doneButtons.current.set(p.id, el);
+                        else doneButtons.current.delete(p.id);
+                      }}
+                      onDoneStart={() => (doneAt.current = { id: p.id, index })}
+                      onDoneFailed={() => {
+                        if (doneAt.current?.id === p.id) doneAt.current = null;
+                      }}
+                    />
                   ))}
                 </ul>
               )}

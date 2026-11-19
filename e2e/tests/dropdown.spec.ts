@@ -39,3 +39,15 @@ test("everyone done says all caught up", async ({ page, request }) => {
   await page.goto("/");
   await expect(page.getByText("You're all caught up.")).toBeVisible();
 });
+
+test("Done sends focus to the next person to reach out to, then to the caught-up message", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE.slice(0, 2) });
+  await page.goto("/");
+  await expect(page.getByTestId("due-person")).toHaveCount(2);
+  await page.getByRole("button", { name: "Mark Maya Chen as done" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("due-person")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Mark Jonah Okafor as done" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("You're all caught up.")).toBeFocused();
+});
