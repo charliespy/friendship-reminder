@@ -1,0 +1,63 @@
+name: Dependabot auto-merge
+
+# Turns on GitHub's auto-merge for Dependabot's minor and patch updates of npm and Cargo packages,
+# so they squash-merge once every required check on main passes (.github/rulesets/main.json).
+# Major updates, breaking 0.x updates, Tauri minor updates (whose Rust and npm halves must move
+# together) and GitHub Actions updates wait for a maintainer. A merge made
+# this way doesn't start CI's run on main (GitHub starts no workflows for its own token's actions);
+# the PR was tested before it merged. scripts/dependabot-auto-merge.sh
+# makes the call; scripts/test-dependabot-auto-merge.sh tests it.
+#
+# pull_request_target, because Dependabot's pull_request runs only get a read-only token. That event
+# runs this file as it is on main, with a token that can write, so it must never run the PR's code:
+# it checks out main (the default for this event), not the PR, and runs no package manager.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Turn on auto-merge
+    # Only Dependabot's own PRs, from a branch in this repo (never a fork), in this repo.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.repository == 'charliespy/friendship-reminder'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out main (never the PR)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Read what Dependabot is updating
+        id: metadata
+        # Fails unless the PR's first commit is Dependabot's own, signed; the update details come
+        # from that commit.
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      - name: Turn on auto-merge for minor and patch updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          UPDATED_DEPENDENCIES: ${{ steps.metadata.outputs.updated-dependencies-json }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/dependabot-auto-merge.sh
+      - name: Make sure auto-merge is off if anything above failed
+        # An earlier push may have turned it on; a PR this run couldn't judge must not merge itself.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/dependabot-auto-merge.sh --disable

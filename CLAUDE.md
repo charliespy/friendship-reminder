@@ -29,6 +29,15 @@ npm run e2e       # Playwright (WebKit) against the browser dev mode
 npm run privacy   # personal-info scan
 ```
 
+`main` is protected (`.github/rulesets/main.json`, applied with `scripts/repo-settings.sh`):
+changes reach it only through PRs whose required checks pass: `npm run check`, `npm run e2e`,
+the privacy scan of files, commits and PR text, and a conventional-commit PR title
+(`scripts/pr-title-check.sh`). Never push to `main`, and
+never merge with `gh pr merge --admin`: that bypass is for the owner's emergencies; wait for the
+checks or use `--auto`. Dependabot's minor and patch npm/Cargo PRs
+merge themselves once those checks pass (`.github/workflows/dependabot-auto-merge.yml`); keep
+`scripts/test-*.sh` passing (`npm run check:scripts`) when you change these scripts.
+
 Ports for local runs: `FRIENDS_E2E_SERVER_PORT` / `FRIENDS_E2E_WEB_PORT` 
 for e2e (defaults 1440/1441, in `e2e/ports.ts`), `FRIENDS_DEVSERVER_PORT` for `npm run dev:web`.
 

@@ -25,6 +25,8 @@ text() { printf '%s\n' "$1" | bash "$scan" --stdin; }
 expect pass "plain text" text "feat: snooze a reminder"
 expect pass "noreply and example addresses" text "42754940+someone@users.noreply.github.com, ada@example.com"
 expect pass "git remote and retina image" text "git@github.com:owner/repo.git, icon@2x.png"
+expect pass "Dependabot sign-off" text "Signed-off-by: dependabot[bot] <support@github.com>"
+expect fail "another github.com address" text "jane@github.com"
 expect pass "placeholder and system folders" text "/Users/you, /home/<name>, /Users/Shared, C:\\Users\\Public"
 expect pass "a link with /home/ in it" text "https://example.com/home/page and https://example.com/Users/list"
 expect fail "personal email" text "write to jane.doe@gmail.com"

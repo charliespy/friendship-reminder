@@ -22,7 +22,7 @@ The people in these screenshots are made up.
 ## Install
 
 1. Download `Friends_<version>_universal.dmg` from the
-   [latest release](https://github.com/charliespy/networking-reminder/releases/latest).
+   [latest release](https://github.com/charliespy/friendship-reminder/releases/latest).
 2. Open it and drag **Friends** to **Applications**.
 3. Friends isn't signed with an Apple Developer ID yet, so macOS stops the first launch with
    "Apple could not verify Friends is free of malware". To open it anyway:
@@ -53,6 +53,9 @@ npm run tauri build      # build Friends.app and a .dmg into target/release/bund
 npm run check            # types, lint, unit tests, Rust checks
 npm run e2e              # end-to-end tests (Playwright, WebKit)
 ```
+
+Every PR runs these on GitHub, plus a privacy scan and a check that the title is a conventional
+commit. They all have to pass before anything reaches `main`; CONTRIBUTING.md explains how.
 
 ## How the reminders work
 
