@@ -1,0 +1,365 @@
+// @vitest-environment node
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import {
+  applyBump,
+  dropReverted,
+  cargoLockVersion,
+  cargoTomlVersion,
+  checkNewVersion,
+  bumpFor,
+  draftNotes,
+  insertRelease,
+  latestReleaseTag,
+  nextRelease,
+  parseCommit,
+  parseSections,
+  sectionBody,
+  sentence,
+  setCargoLockVersion,
+  setCargoTomlVersion,
+  setJsonVersion,
+  UNSIGNED_NOTE,
+  unreleasedLinesMissing,
+} from "./release-lib.mjs";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const repoFile = (p) => readFileSync(join(root, p), "utf8");
+const c = (subject, body = "") => parseCommit(subject, body);
+/** The lines of `after` that differ from `before` (same line count). */
+function changedLines(before, after) {
+  const old = before.split("\n");
+  return after.split("\n").filter((l, i) => l !== old[i]);
+}
+
+describe("parseCommit", () => {
+  it("reads type, scope and description, and drops the PR number", () => {
+    expect(c("feat(snooze): snooze a reminder (#14)")).toEqual({
+      type: "feat",
+      scope: "snooze",
+      breaking: false,
+      description: "snooze a reminder",
+    });
+  });
+  it("sees a breaking change from ! or the footer", () => {
+    expect(c("feat!: new data file").breaking).toBe(true);
+    expect(c("refactor(core)!: drop old format").breaking).toBe(true);
+    expect(c("fix: x", "Some text.\n\nBREAKING CHANGE: the file moved").breaking).toBe(true);
+    expect(c("fix: x", "BREAKING-CHANGE: the file moved").breaking).toBe(true);
+    expect(c("fix: x", "this is not a BREAKING CHANGE: mid-line").breaking).toBe(false);
+  });
+  it("returns null for subjects that aren't conventional", () => {
+    expect(c("Fix window resizing")).toBeNull();
+    expect(c("Revert \"feat: x\"")).toBeNull();
+    expect(c("feat:no space")).toBeNull();
+  });
+});
+
+describe("the version rule", () => {
+  it("feat -> minor, fix/perf -> patch, others nothing", () => {
+    expect(bumpFor([c("fix: a"), c("feat: b"), c("docs: c")])).toBe("minor");
+    expect(bumpFor([c("perf: a"), c("chore: b")])).toBe("patch");
+    expect(bumpFor([c("revert: feat: a")])).toBeNull();
+    expect(bumpFor([c("docs: a"), c("ci: b"), c("chore(deps): c"), c("test: d"), c("refactor: e")])).toBeNull();
+    expect(bumpFor([c("feat: a"), c("chore!: b")])).toBe("major");
+  });
+  it("applies bumps, and a breaking change on 0.x bumps the minor", () => {
+    expect(applyBump("1.2.3", "major")).toBe("2.0.0");
+    expect(applyBump("1.2.3", "minor")).toBe("1.3.0");
+    expect(applyBump("1.2.3", "patch")).toBe("1.2.4");
+    expect(applyBump("0.4.2", "major")).toBe("0.5.0");
+  });
+  it("only lets a release go up", () => {
+    expect(() => checkNewVersion({ version: "0.1.0", currentVersion: "0.1.0", lastTag: null })).not.toThrow();
+    expect(() => checkNewVersion({ version: "0.2.0", currentVersion: "0.1.0", lastTag: null })).not.toThrow();
+    expect(() => checkNewVersion({ version: "0.0.9", currentVersion: "0.1.0", lastTag: null })).toThrow(/below/);
+    expect(() => checkNewVersion({ version: "0.1.0", currentVersion: "0.1.0", lastTag: "v0.1.0" })).toThrow(/not above/);
+    expect(() => checkNewVersion({ version: "0.1.1", currentVersion: "0.1.0", lastTag: "v0.1.0" })).not.toThrow();
+    expect(() => checkNewVersion({ version: "1.0", currentVersion: "0.1.0", lastTag: null })).toThrow(/version/);
+    // A release prepared but not tagged yet, or files that moved without a tag.
+    const prepared = "## [Unreleased]\n\n## [0.2.0] - 2026-12-01\n\n- x\n\n## [0.1.0] - 2026-11-19\n";
+    expect(() =>
+      checkNewVersion({ version: "0.1.1", currentVersion: "0.1.0", lastTag: "v0.1.0", changelog: prepared }),
+    ).toThrow(/\[0\.2\.0\].*already prepared/);
+    expect(() => checkNewVersion({ version: "0.2.0", currentVersion: "0.1.0", lastTag: null, changelog: prepared })).toThrow(
+      /\[0\.2\.0\]/,
+    );
+    expect(() => checkNewVersion({ version: "0.1.2", currentVersion: "0.1.1", lastTag: "v0.1.0" })).toThrow(/files say/);
+  });
+  it("finds the newest vX.Y.Z tag and ignores other tags", () => {
+    expect(latestReleaseTag(["v0.9.0", "v0.10.0", "v0.2.1", "builder/NR-1/m1", "v1.0.0-rc.1", "x"])).toBe("v0.10.0");
+    expect(latestReleaseTag(["builder/NR-1/m1"])).toBeNull();
+  });
+});
+
+describe("nextRelease", () => {
+  it("first release: the version already in the files", () => {
+    const r = nextRelease({ lastTag: null, currentVersion: "0.1.0", commits: [c("feat: a")] });
+    expect(r.version).toBe("0.1.0");
+    expect(r.reason).toMatch(/first release/);
+  });
+  it("bumps from the last tag", () => {
+    expect(nextRelease({ lastTag: "v0.1.0", currentVersion: "0.1.0", commits: [c("fix: a")] }).version).toBe("0.1.1");
+    expect(nextRelease({ lastTag: "v0.1.0", currentVersion: "0.1.0", commits: [c("feat: a")] }).version).toBe("0.2.0");
+    const breaking = nextRelease({ lastTag: "v0.1.0", currentVersion: "0.1.0", commits: [c("feat!: a")] });
+    expect(breaking).toMatchObject({ version: "0.2.0", bump: "minor" });
+    expect(breaking.reason).toMatch(/0\.x/);
+    expect(nextRelease({ lastTag: "v1.4.0", currentVersion: "1.4.0", commits: [c("fix!: a")] }).version).toBe("2.0.0");
+  });
+  it("has nothing to release without a feat or fix, unless forced", () => {
+    const commits = [c("docs: a"), c("chore(deps): b")];
+    expect(nextRelease({ lastTag: "v0.1.0", currentVersion: "0.1.0", commits }).version).toBeNull();
+    expect(nextRelease({ lastTag: "v0.1.0", currentVersion: "0.1.0", commits, forcePatch: true }).version).toBe("0.1.1");
+  });
+  it("refuses when the files and the last tag disagree", () => {
+    expect(() => nextRelease({ lastTag: "v0.1.0", currentVersion: "0.2.0", commits: [] })).toThrow(/files say 0.2.0/);
+  });
+});
+
+describe("dropReverted", () => {
+  const s = (...subjects) => subjects.map((subject) => ({ subject }));
+  it("drops a reverted commit and its revert", () => {
+    expect(dropReverted(s("feat: add export (#12)", 'Revert "feat: add export (#12)" (#13)', "fix: crash (#14)"))).toEqual(
+      s("fix: crash (#14)"),
+    );
+    expect(dropReverted(s("feat: add export (#12)", "revert: feat: add export (#13)"))).toEqual([]);
+  });
+  it("brings a commit back when its revert is reverted, or it is reapplied", () => {
+    const feat = "feat: add export (#12)";
+    const revert = 'Revert "feat: add export (#12)" (#13)';
+    expect(dropReverted(s(feat, revert, 'Revert "Revert "feat: add export (#12)"" (#14)'))).toEqual(s(feat));
+    expect(dropReverted(s(feat, revert, 'Reapply "feat: add export (#12)" (#14)'))).toEqual(s(feat));
+    // Reapplying something released before brings it back under its own subject.
+    expect(dropReverted(s('Reapply "feat: old (#3)" (#14)'))).toEqual(s("feat: old"));
+    expect(dropReverted(s('Revert "Revert "feat: old (#3)"" (#14)'))).toEqual(s("feat: old"));
+  });
+  it("the last revert or reapply wins, however many there are", () => {
+    const feat = "feat: add export (#12)";
+    const r1 = 'Revert "feat: add export (#12)" (#13)';
+    expect(dropReverted(s(feat, r1, 'Reapply "feat: add export (#12)" (#14)', 'Revert "Reapply "feat: add export (#12)" (#14)" (#15)'))).toEqual([]);
+    expect(dropReverted(s(feat, r1, 'Revert "Revert "feat: add export (#12)" (#13)" (#14)', 'Revert "Revert "Revert "feat: add export (#12)" (#13)" (#14)" (#15)'))).toEqual([]);
+    expect(dropReverted(s("fix: a (#1)", feat, "fix: b (#2)", r1))).toEqual(s("fix: a (#1)", "fix: b (#2)"));
+  });
+  it("keeps a revert of something released earlier", () => {
+    expect(dropReverted(s('Revert "feat: old (#3)" (#13)'))).toEqual(s('Revert "feat: old (#3)" (#13)'));
+  });
+  it("drops a released change that is reverted and restored since the last release", () => {
+    const revert = 'Revert "feat: old (#3)" (#20)';
+    expect(dropReverted(s(revert, 'Revert "Revert "feat: old (#3)" (#20)" (#21)'))).toEqual([]);
+    expect(dropReverted(s(revert, 'Reapply "feat: old (#3)" (#21)'))).toEqual([]);
+    expect(dropReverted(s(revert, 'Reapply "feat: old (#3)" (#21)', 'Revert "Reapply "feat: old (#3)" (#21)" (#22)'))).toEqual(
+      s('Revert "Reapply "feat: old (#3)" (#21)" (#22)'),
+    );
+  });
+  it("treats two PRs with the same title as separate changes", () => {
+    const one = "fix: crash on launch (#5)";
+    const two = "fix: crash on launch (#9)";
+    expect(dropReverted(s(one, two, 'Revert "fix: crash on launch (#9)" (#10)'))).toEqual(s(one));
+    expect(dropReverted(s(one, two))).toEqual(s(one, two));
+    // A revert that names the older PR removes that one.
+    expect(dropReverted(s(one, two, 'Revert "fix: crash on launch (#5)" (#10)'))).toEqual(s(two));
+    // A revert of the released #3 doesn't cancel the new #9 with the same title.
+    expect(dropReverted(s("feat: x (#9)", 'Revert "feat: x (#3)" (#10)'))).toEqual(s("feat: x (#9)", 'Revert "feat: x (#3)" (#10)'));
+  });
+});
+
+describe("draftNotes", () => {
+  it("groups user-facing commits and leaves the rest out", () => {
+    const notes = draftNotes({
+      commits: [
+        c("feat(snooze): snooze a reminder (#14)"),
+        c("fix: the menu opened on the wrong screen (#15)"),
+        c("perf: open Preferences faster"),
+        c("docs: typo"),
+        c("ci: pin actions"),
+        c("chore(deps): bump react"),
+        c("chore(deps-dev): bump vitest"),
+        c("refactor!: new data file format"),
+      ],
+      unsigned: false,
+    });
+    expect(notes).toBe(
+      [
+        "### New",
+        "",
+        "- Snooze a reminder.",
+        "",
+        "### Fixed",
+        "",
+        "- The menu opened on the wrong screen.",
+        "",
+        "### Changed",
+        "",
+        "- Open Preferences faster.",
+        "- **Breaking:** New data file format.",
+        "- Updated the libraries Friends is built on.",
+      ].join("\n"),
+    );
+    // Build and test tools alone don't change the app.
+    expect(draftNotes({ commits: [c("chore(deps-dev): bump vitest")], unsigned: false })).not.toContain("libraries");
+  });
+  it("keeps what is under [Unreleased], mapping old headings, and adds the unsigned note once", () => {
+    const unreleased = "### Added\n- A new look.\n- Tests,\n  run on every PR.\n\n### Removed\n- An old button.\n";
+    const notes = draftNotes({ unreleased, commits: [c("feat: a new look")] });
+    const groups = parseSections(notes);
+    expect(groups.New).toEqual(["- A new look.", "- Tests,\n  run on every PR."]);
+    expect(groups.Changed).toEqual(["- Removed: An old button."]);
+    expect(parseSections("### Removed\n* A star bullet.\nNot a bullet.").Changed).toEqual([
+      "* Removed: A star bullet.",
+      "- Removed: Not a bullet.",
+    ]);
+    expect(groups["Good to know"]).toEqual([`- ${UNSIGNED_NOTE}`]);
+    expect(parseSections(draftNotes({ unreleased: notes }))["Good to know"]).toHaveLength(1);
+  });
+  it("writes sentences", () => {
+    expect(sentence("add x")).toBe("Add x.");
+    expect(sentence("macOS notifications fire twice")).toBe("macOS notifications fire twice.");
+    expect(sentence("Done!")).toBe("Done!");
+  });
+});
+
+const CHANGELOG = `# Changelog
+
+Intro.
+
+## [Unreleased]
+
+### New
+- Something.
+
+## [0.1.0] - 2026-11-19
+
+### Fixed
+- Old fix.
+`;
+
+describe("CHANGELOG.md", () => {
+  it("reads a section's body", () => {
+    expect(sectionBody(CHANGELOG, "0.1.0")).toBe("### Fixed\n- Old fix.");
+    expect(sectionBody(CHANGELOG, "Unreleased")).toBe("### New\n- Something.");
+    expect(sectionBody(CHANGELOG, "0.2.0")).toBeNull();
+    expect(sectionBody("## [0.1.00] - x\n- no\n", "0.1.0")).toBeNull();
+  });
+  it("inserts a release under an emptied [Unreleased]", () => {
+    const out = insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "### New\n\n- Something.\n");
+    expect(out).toBe(`# Changelog
+
+Intro.
+
+## [Unreleased]
+
+## [0.2.0] - 2026-12-01
+
+### New
+
+- Something.
+
+## [0.1.0] - 2026-11-19
+
+### Fixed
+- Old fix.
+`);
+    expect(sectionBody(out, "Unreleased")).toBe("");
+    expect(sectionBody(out, "0.2.0")).toBe("### New\n\n- Something.");
+  });
+  it("inserts the first release into a file with only [Unreleased]", () => {
+    const out = insertRelease("# Changelog\n\n## [Unreleased]\n\n- x\n", "0.1.0", "2026-11-19", "### New\n- x");
+    expect(out).toBe("# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-11-19\n\n### New\n- x\n");
+  });
+  it("refuses bad input", () => {
+    expect(() => insertRelease(CHANGELOG, "0.1.0", "2026-12-01", "- x")).toThrow(/already has/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "  \n")).toThrow(/empty/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "12/01", "- x")).toThrow(/date/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-13-45", "- x")).toThrow(/date/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-02-30", "- x")).toThrow(/date/);
+    expect(() => insertRelease(CHANGELOG, "0.2", "2026-12-01", "- x")).toThrow(/version/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "## [9.9.9]\n- x")).toThrow(/headings/);
+    expect(() => insertRelease("# Changelog\n", "0.2.0", "2026-12-01", "- x")).toThrow(/Unreleased/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "- See [it][g].\n[g]: https://example.com\n- y")).toThrow(
+      /link lines/,
+    );
+  });
+  it("leaves the rest of the file byte for byte, and stops sections at link lines", () => {
+    const file =
+      "# Changelog\n\n## [Unreleased]\n\n- x\n\n## [0.1.0] - 2026-11-19\n\n- a\n\n\n\n```\n\n\n```\n\n" +
+      "[Unreleased]: https://example.com/compare\n[0.1.0]: https://example.com/v0.1.0\n";
+    const out = insertRelease(file, "0.2.0", "2026-12-01", "- x");
+    expect(out).toBe(
+      "# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-12-01\n\n- x\n\n## [0.1.0] - 2026-11-19\n\n- a\n\n\n\n```\n\n\n```\n\n" +
+        "[Unreleased]: https://example.com/compare\n[0.1.0]: https://example.com/v0.1.0\n",
+    );
+    expect(sectionBody(file, "0.1.0")).toBe("- a\n\n\n\n```\n\n\n```");
+  });
+  it("keeps a link line inside [Unreleased] with the lines after it", () => {
+    const file = "# Changelog\n\n## [Unreleased]\n\n- See [it][g].\n[g]: https://example.com\n- y\n\n## [0.1.0] - 2026-11-19\n\n- a\n";
+    expect(sectionBody(file, "Unreleased")).toBe("- See [it][g].\n[g]: https://example.com\n- y");
+    expect(unreleasedLinesMissing(sectionBody(file, "Unreleased"), "- See it.")).toContain("- y");
+  });
+  it("finds [Unreleased] lines the notes would lose", () => {
+    const unreleased = "### Added\n- A new look.\n- Tests,\n  run on every PR.\n\n### Removed\n- An old button.";
+    expect(unreleasedLinesMissing(unreleased, "### New\n\n- A new look.\n- Tests, run\n  on every PR.")).toEqual([
+      "- An old button.",
+    ]);
+    expect(unreleasedLinesMissing("", "- x")).toEqual([]);
+    // Whole entries, not words found anywhere.
+    expect(unreleasedLinesMissing("- Tests.\n- A long\n  Reminders.", "- Unit tests.\n- Reminders.")).toEqual([
+      "- Tests.",
+      "- A long\n  Reminders.",
+    ]);
+    expect(unreleasedLinesMissing("### Removed\n- An old button.", "- Removed: An old button.")).toEqual([]);
+    // A wrapped-looking line right under a heading is its own entry, as in the draft.
+    const odd = "### Added\n- A.\n\n### Removed\n  note";
+    expect(unreleasedLinesMissing(odd, draftNotes({ unreleased: odd }))).toEqual([]);
+    // A bullet with a second, indented paragraph, drafted without changes.
+    const para = "### Added\n- Item one.\n\n  More about item one.\n- Item two.\n";
+    const drafted = draftNotes({ unreleased: para, unsigned: false });
+    expect(drafted).toBe("### New\n\n- Item one.\n\n  More about item one.\n- Item two.");
+    expect(unreleasedLinesMissing(para, drafted)).toEqual([]);
+  });
+  it("reads this repo's CHANGELOG.md", () => {
+    expect(sectionBody(repoFile("CHANGELOG.md"), "Unreleased")).not.toBeNull();
+  });
+});
+
+describe("version files", () => {
+  it("changes only the version in this repo's JSON files", () => {
+    for (const [p, opts] of [
+      ["package.json", {}],
+      ["src-tauri/tauri.conf.json", {}],
+      ["package-lock.json", { lockfile: true }],
+    ]) {
+      const text = repoFile(p);
+      const version = JSON.parse(text).version;
+      // Writing the same version back gives the same bytes: nothing else in the file moves.
+      expect(setJsonVersion(text, version, opts)).toBe(text);
+      const bumped = JSON.parse(setJsonVersion(text, "9.8.7", opts));
+      expect(bumped.version).toBe("9.8.7");
+      if (opts.lockfile) expect(bumped.packages[""].version).toBe("9.8.7");
+    }
+  });
+  it("changes only the [package] version of a Cargo.toml", () => {
+    const toml = '[package]\nname = "friends"\nversion = "0.1.0"\n\n[dependencies]\nfoo = { version = "1" }\n';
+    expect(setCargoTomlVersion(toml, "0.2.0")).toBe(toml.replace('version = "0.1.0"', 'version = "0.2.0"'));
+    expect(() => setCargoTomlVersion('[dependencies]\nversion = "1"\n', "0.2.0")).toThrow(/package/);
+    const real = repoFile("src-tauri/Cargo.toml");
+    expect(changedLines(real, setCargoTomlVersion(real, "9.8.7"))).toEqual([
+      'version = "9.8.7"',
+    ]);
+  });
+  it("reads the Cargo versions", () => {
+    expect(cargoTomlVersion('[package]\nname = "x"\nversion = "1.2.3"\n[dependencies]\nversion = "9"\n')).toBe("1.2.3");
+    expect(cargoTomlVersion('[dependencies]\nversion = "9"\n')).toBeNull();
+    const lock = repoFile("Cargo.lock");
+    expect(cargoLockVersion(setCargoLockVersion(lock, "friends", "4.5.6"), "friends")).toBe("4.5.6");
+    expect(cargoLockVersion(lock, "nope")).toBeNull();
+  });
+  it("changes only the app's entry in Cargo.lock", () => {
+    const lock = repoFile("Cargo.lock");
+    const out = setCargoLockVersion(lock, "friends", "9.8.7");
+    expect(out).toContain('name = "friends"\nversion = "9.8.7"\n');
+    expect(changedLines(lock, out)).toEqual(['version = "9.8.7"']);
+    expect(() => setCargoLockVersion(lock, "nope", "1.0.0")).toThrow(/no package/);
+  });
+});

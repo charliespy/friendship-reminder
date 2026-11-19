@@ -103,9 +103,31 @@ with the PR title check and `repo-settings.sh check`.
 
 ## Releases
 
-Maintainers release by bumping the version in `package.json`, `src-tauri/tauri.conf.json` and
-`src-tauri/Cargo.toml`, moving the notes under a new heading in `CHANGELOG.md`, and pushing a
-`vX.Y.Z` tag. The release workflow builds the app and publishes it.
+Releases happen only when a maintainer decides to release; merging a PR doesn't release anything.
+[docs/RELEASING.md](docs/RELEASING.md) has the step-by-step, and `npm run release:plan` shows what
+the next release would be without changing anything.
+
+**Version numbers** follow [Semantic Versioning](https://semver.org/) and come from the
+conventional commits (one per merged PR) since the last release:
+
+| Since the last release | Next version |
+| --- | --- |
+| a breaking change (`feat!: …`, `fix!: …`, or a `BREAKING CHANGE:` line) | major: 1.4.2 → 2.0.0 |
+| a `feat` | minor: 1.4.2 → 1.5.0 |
+| only `fix` or `perf` | patch: 1.4.2 → 1.4.3 |
+| only `docs`, `ci`, `chore`, `test`, `refactor`, `build`, `style`, `revert` | no release needed |
+
+While the version is `0.x`, a breaking change bumps the minor (0.4.2 → 0.5.0). The first release
+is `v0.1.0`.
+
+**Release notes**: each release's section in [CHANGELOG.md](CHANGELOG.md) is also its description
+on GitHub Releases, word for word. It is short and in plain words, under **New**, **Fixed**,
+**Changed** and **Good to know**. You may add a line under `## [Unreleased]` in your PR for a change
+users will notice; the person releasing turns it, and the PR titles since the last release, into the
+notes.
+
+**Tags**: only `vX.Y.Z` release tags are pushed to this repository. Pushing one runs the release
+workflow, which builds the app and publishes the release.
 
 ## Code of conduct
 

@@ -20,6 +20,9 @@ needs. `CLAUDE.md` and `AGENTS.md` hold the same text: change both together.
 - **Scheduling changes are test-first**: a failing test in `crates/friends-core/tests/`, then the
   fix.
 - macOS file names ignore case: `src/dropdown.tsx` and `src/Dropdown.tsx` are the same file.
+- **Releases only when the maintainer asks**, by following `docs/RELEASING.md` (the version comes
+  from the commits; the notes go in `CHANGELOG.md`). Push no tags other than `vX.Y.Z` release
+  tags.
 
 ## Checks
 
