@@ -83,6 +83,8 @@ Rust crates and GitHub Actions. It proposes a release only once it is 3 days old
 - A package still at 0.x whose middle number changes (0.4 → 0.5), or a 0.0.x one whose last
   number does, is a breaking change under npm and Cargo rules, so that PR waits for a maintainer
   too.
+- Dependabot pushes newer versions onto a PR that is still open. When a push turns a PR into one
+  that has to wait, the workflow turns its auto-merge off again.
 - GitHub Actions updates change the workflow files, which that workflow's token can't merge, so
   they wait for a maintainer.
 - Major updates come as a PR each and always wait for a maintainer.
