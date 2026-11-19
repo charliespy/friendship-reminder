@@ -17,8 +17,10 @@ report() { echo "privacy-scan: $1" >&2; fail=1; }
 allowed_email='(users\.noreply\.github\.com|@example\.(com|org|net)|@localhost|^git@github\.com|@[0-9]+x\.(png|jpg|svg))'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 home_path='(/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+|[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9._-]+)'
-# Placeholders a doc may use for a home folder.
-allowed_path='[\\/](Users|home)[\\/]+(you|me|runner|USER|\$USER|<[^>]*>|example|name|username)$'
+# Placeholders a doc may use for a home folder, and the system's shared folders.
+allowed_path='[\\/](Users|home)[\\/]+(you|me|runner|USER|\$USER|<[^>]*>|example|name|username|Shared|Public|Default|All Users)$'
+# Web links: a /home/... or /Users/... inside one is a page, not a folder on someone's disk.
+url='[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]<>"()]+'
 private_host='[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.ts\.net'
 attribution='(Co-authored-by:|Generated with \[?Claude|noreply@anthropic\.com)'
 
@@ -31,7 +33,7 @@ scan_text() {
   done < <(printf '%s\n' "$text" | grep -oE "$email" | grep -vE "$allowed_email" || true)
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "home-folder path in $where: $hit"
-  done < <(printf '%s\n' "$text" | grep -oE "$home_path" | grep -vE "$allowed_path" || true)
+  done < <(printf '%s\n' "$text" | sed -E "s#$url##g" | grep -oE "$home_path" | grep -vE "$allowed_path" || true)
   while IFS= read -r hit; do
     [ -n "$hit" ] && report "private host name in $where: $hit"
   done < <(printf '%s\n' "$text" | grep -oE "$private_host" || true)
@@ -55,32 +57,14 @@ if [ "$mode" = "--stdin" ]; then
   finish
 fi
 
-# 1. Tracked text files. Lock files are generated package metadata; this script names the patterns.
-#    grep -I skips binary files.
-skip='(^|/)(package-lock\.json|Cargo\.lock)$|^scripts/privacy-scan\.sh$'
-files=()
+# 1. Tracked text files, one at a time (grep -I skips binary ones). Lock files are generated package
+#    metadata; this script and its test name the patterns.
+skip='(^|/)(package-lock\.json|Cargo\.lock)$|^scripts/(test-)?privacy-scan\.sh$'
 while IFS= read -r -d '' f; do
-  if ! printf '%s' "$f" | grep -qE "$skip"; then files+=("$f"); fi
+  printf '%s' "$f" | grep -qE "$skip" && continue
+  [ -f "$f" ] && grep -Iq . -- "$f" 2>/dev/null || continue
+  scan_text "$f" < "$f"
 done < <(git ls-files -z)
-if [ ${#files[@]} -gt 0 ]; then
-  # Each hit is file:line:match; the allow-lists look at the match only.
-  while IFS= read -r hit; do
-    if [ -n "$hit" ] && ! printf '%s' "${hit#*:*:}" | grep -qE "$allowed_email"; then
-      report "email address in $hit"
-    fi
-  done < <(grep -IHnoE "$email" -- "${files[@]}" 2>/dev/null || true)
-  while IFS= read -r hit; do
-    if [ -n "$hit" ] && ! printf '%s' "${hit#*:*:}" | grep -qE "$allowed_path"; then
-      report "home-folder path in $hit"
-    fi
-  done < <(grep -IHnoE "$home_path" -- "${files[@]}" 2>/dev/null || true)
-  while IFS= read -r hit; do
-    [ -n "$hit" ] && report "private host name in $hit"
-  done < <(grep -IHnoE "$private_host" -- "${files[@]}" 2>/dev/null || true)
-  while IFS= read -r hit; do
-    [ -n "$hit" ] && report "AI attribution in $hit"
-  done < <(grep -IHniE "$attribution" -- "${files[@]}" 2>/dev/null || true)
-fi
 
 # 2. Commits: authors, committers and messages.
 case "$mode" in
@@ -91,6 +75,11 @@ case "$mode" in
     range=${base:+$base..}HEAD
     ;;
 esac
+# A range git can't resolve (a typo, or a push's old tip after a force-push) must fail, not pass.
+if ! git rev-list --quiet "$range" -- 2>/dev/null; then
+  echo "privacy-scan: can't read the commits in $range" >&2
+  exit 1
+fi
 while IFS=$'\t' read -r sha author committer; do
   [ -n "$sha" ] || continue
   if ! printf '%s' "$author" | grep -qE "$allowed_email"; then

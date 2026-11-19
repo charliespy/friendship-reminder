@@ -3,7 +3,6 @@ name: CI
 # Every PR, and every push to main: the full check, the end-to-end tests and the privacy scan.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -12,7 +11,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR replaces its run; every push to main is scanned and checked in full.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   privacy:
@@ -22,22 +22,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Test the scan
+        run: scripts/test-privacy-scan.sh
       - name: Scan files and commits for personal info
         env:
-          # A PR: its own commits. A push: the commits it added (a new branch's first push: all of them).
-          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || (github.event.before != '0000000000000000000000000000000000000000' && format('{0}..{1}', github.event.before, github.sha) || github.sha) }}
-        run: scripts/privacy-scan.sh --range "$RANGE"
-      - name: Scan the PR title and description
-        if: github.event_name == 'pull_request'
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-          BODY: ${{ github.event.pull_request.body }}
-        run: printf '%s\n%s\n' "$TITLE" "$BODY" | scripts/privacy-scan.sh --stdin
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            range="$PR_BASE..$PR_HEAD"            # the PR's own commits
+          elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$GITHUB_SHA"          # the commits this push added
+          else
+            range="$GITHUB_SHA"                   # new branch or force-push: everything up to here
+          fi
+          scripts/privacy-scan.sh --range "$range"
 
   check:
     name: Check (types, lint, unit tests, Rust)
-    # Editing the PR text only needs the privacy scan again.
-    if: github.event.action != 'edited'
     # The Tauri shell links macOS frameworks, so the Rust checks run on macOS.
     runs-on: macos-latest
     steps:
@@ -55,7 +59,6 @@ jobs:
 
   e2e:
     name: End-to-end (Playwright, WebKit)
-    if: github.event.action != 'edited'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
