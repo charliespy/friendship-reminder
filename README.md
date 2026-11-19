@@ -26,10 +26,13 @@ The people in these screenshots are made up.
 2. Open it and drag **Friends** to **Applications**.
 3. Friends isn't signed with an Apple Developer ID yet, so macOS stops the first launch with
    "Apple could not verify Friends is free of malware". To open it anyway:
-   - open **Friends** once and click **Done**;
-   - go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**
-     next to the Friends message;
-   - confirm with your password.
+   - on macOS 13 or 14, where the warning has no **Done** button: Control-click **Friends** in
+     **Applications** and choose **Open**;
+   - on macOS 15 or later:
+     - open **Friends** once and click **Done**;
+     - go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**
+       next to the Friends message;
+     - confirm with your password.
 
    Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Friends.app`.
 4. Friends appears in the menu bar. Click it to see who's due; open **Preferences** to add

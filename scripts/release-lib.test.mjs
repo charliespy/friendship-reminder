@@ -213,6 +213,21 @@ describe("draftNotes", () => {
     expect(groups["Good to know"]).toEqual([`- ${UNSIGNED_NOTE}`]);
     expect(parseSections(draftNotes({ unreleased: notes }))["Good to know"]).toHaveLength(1);
   });
+  it("writes the unsigned note wrapped, with the steps for macOS 13 and 14 too", () => {
+    const notes = draftNotes({ commits: [c("fix: a bug")] });
+    const bullet = `- ${UNSIGNED_NOTE}`;
+    expect(notes).toContain(bullet);
+    for (const line of bullet.split("\n")) expect(line.length).toBeLessThanOrEqual(100);
+    expect(bullet.split("\n").length).toBeGreaterThan(1);
+    expect(bullet.split("\n").slice(1).every((l) => l.startsWith("  ") && !l.startsWith("   "))).toBe(true);
+    expect(UNSIGNED_NOTE).toContain("**Open Anyway**");
+    expect(UNSIGNED_NOTE.replace(/\s+/g, " ")).toContain(
+      "On macOS 13 or 14, Control-click Friends in Applications and choose **Open** instead.",
+    );
+    // A note rewrapped by hand, with "Open Anyway" split across lines, isn't added again.
+    const rewrapped = "### Good to know\n- Unsigned: click **Open\n  Anyway** in Privacy & Security.\n";
+    expect(parseSections(draftNotes({ unreleased: rewrapped }))["Good to know"]).toHaveLength(1);
+  });
   it("writes sentences", () => {
     expect(sentence("add x")).toBe("Add x.");
     expect(sentence("macOS notifications fire twice")).toBe("macOS notifications fire twice.");
