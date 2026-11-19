@@ -172,50 +172,51 @@ export function sectionFor(commit) {
 }
 
 /**
- * Drops each commit that a later revert undid, and the revert itself. GitHub's revert button
- * makes `Revert "<subject>"` (a squash merge adds " (#n)"); `revert: <subject>` works too.
- * Reverting that revert, or git's `Reapply "<subject>"`, brings the commit back.
- * Takes and returns { subject } objects, oldest first.
+ * Applies reverts. Each commit is unwrapped to the change it is about and how many times it
+ * flips it: `Revert "<subject>"` (GitHub's revert button; a squash merge adds " (#n)") and
+ * `revert: <subject>` flip it once, git's `Reapply "<subject>"` twice. The last commit about a
+ * change decides: an even count means it is in. Then:
+ *   - in, and its original commit is in the range: the original stays, the reverts go;
+ *   - in, but the original is older (released before): it comes back under its own subject;
+ *   - out, and the original is in the range: everything about it goes;
+ *   - out, and the original is older: the revert stays (a revert doesn't release by itself).
+ * Takes and returns { subject } objects (other fields kept), oldest first.
  */
 export function dropReverted(commits) {
   const strip = (s) => s.trim().replace(/\s*\(#\d+\)$/, "");
-  const parse = (s) => {
-    const t = strip(s);
-    const m = /^Revert "(.+)"$/.exec(t) ?? /^revert(?:\([^)]*\))?: (.+)$/.exec(t);
-    if (m) return { undo: strip(m[1]) };
-    const r = /^Reapply "(.+)"$/.exec(t);
-    return r ? { redo: strip(r[1]) } : null;
+  const unwrap = (subject) => {
+    let t = strip(subject);
+    let flips = 0;
+    for (;;) {
+      let m = /^Revert "(.+)"$/.exec(t) ?? /^revert(?:\([^)]*\))?: (.+)$/.exec(t);
+      if (m) {
+        t = strip(m[1]);
+        flips += 1;
+        continue;
+      }
+      m = /^Reapply "(.+)"$/.exec(t);
+      if (m) {
+        t = strip(m[1]);
+        flips += 2;
+        continue;
+      }
+      return { base: t, flips };
+    }
   };
-  const kept = [];
-  const cancelled = new Map(); // A revert's subject -> the commit it took out.
-  const undone = new Map(); // An original's subject -> that commit, while it is reverted.
+  const changes = new Map(); // base subject -> { original, flips, last }, in first-seen order
   for (const c of commits) {
-    const p = parse(c.subject);
-    if (!p) {
-      kept.push(c);
-      continue;
-    }
-    if (p.redo !== undefined) {
-      const back = undone.get(p.redo);
-      if (back) {
-        undone.delete(p.redo);
-        kept.push(back);
-      } else kept.push(c);
-      continue;
-    }
-    // The newest earlier commit with that subject goes; a revert of a revert brings it back.
-    let i = kept.length - 1;
-    while (i >= 0 && strip(kept[i].subject) !== p.undo) i--;
-    if (i >= 0) {
-      const [gone] = kept.splice(i, 1);
-      cancelled.set(strip(c.subject), gone);
-      undone.set(strip(gone.subject), gone);
-    } else if (cancelled.has(p.undo)) {
-      const back = cancelled.get(p.undo);
-      cancelled.delete(p.undo);
-      undone.delete(strip(back.subject));
-      kept.push(back);
-    } else kept.push(c);
+    const { base, flips } = unwrap(c.subject);
+    const change = changes.get(base) ?? { original: null, flips: 0, last: c };
+    if (flips === 0 && !change.original) change.original = c;
+    change.flips = flips;
+    change.last = c;
+    changes.set(base, change);
+  }
+  const kept = [];
+  for (const [base, { original, flips, last }] of changes) {
+    const isIn = flips % 2 === 0;
+    if (isIn) kept.push(original ?? { ...last, subject: base });
+    else if (!original) kept.push(last);
   }
   return kept;
 }
@@ -247,7 +248,8 @@ export function draftNotes({ unreleased = "", commits = [], unsigned = true }) {
     const line = `- ${c.breaking ? "**Breaking:** " : ""}${sentence(c.description)}`;
     if (!groups[section].includes(line)) groups[section].push(line);
   }
-  if (commits.some((c) => c.scope === "deps" && (c.type === "chore" || c.type === "build"))) {
+  // Dependabot's commits: chore(deps): … and chore(deps-dev): …
+  if (commits.some((c) => /^deps/.test(c.scope ?? "") && (c.type === "chore" || c.type === "build"))) {
     const line = "- Updated the libraries Friends is built on.";
     if (!groups.Changed.includes(line)) groups.Changed.push(line);
   }

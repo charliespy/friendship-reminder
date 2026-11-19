@@ -117,10 +117,11 @@ release there is no tag, so the notes come from `[Unreleased]` alone.
 ## When something goes wrong
 
 - **The tag is wrong** (it isn't on the release PR's merge commit, or doesn't match the version
-  in the files): the workflow stops before publishing, and the tag would block every later
-  `plan`. Only the maintainer deletes it (`git push origin :refs/tags/vX.Y.Z`, then
-  `git tag -d vX.Y.Z`), and then the right commit is tagged as in step 6. This is the one time a
-  tag already on GitHub is removed, and only because nothing was published from it.
+  in the files): the workflow checks both and stops before publishing, and the tag would block
+  every later `plan`. Only the maintainer deletes it (`git push origin :refs/tags/vX.Y.Z`, then
+  `git tag -d vX.Y.Z`; other clones run `git tag -d vX.Y.Z` too), and then the right commit is
+  tagged as in step 6. This is the one time a tag already on GitHub is removed, and only because
+  nothing was published from it.
 - **The workflow fails before publishing for another reason** (the notes are missing, the build
   breaks): nothing was published. Fix the cause on `main` with a normal PR,
   then release the next patch version (`npm run release:plan -- --patch` when the fix is not a
@@ -129,4 +130,5 @@ release there is no tag, so the notes come from `[Unreleased]` alone.
   already on GitHub.
 - **The release is published but wrong** (a bad `.dmg`, a mistake in the notes): fix it on `main`
   and release the next patch version. A typo in the description alone can be edited on the release
-  page; change `CHANGELOG.md` to match in the next PR.
+  page; change `CHANGELOG.md` to match in the next PR (`release:verify` for that version then
+  reports the difference, since it reads `CHANGELOG.md` as it was at the tag).

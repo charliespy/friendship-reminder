@@ -172,15 +172,17 @@ function dryRun(argv) {
 }
 
 function plan(argv, { nothingIsFine = false } = {}) {
-  const { flags } = parseArgs(argv, ["--out"]);
+  const { pos, flags } = parseArgs(argv, ["--out"]);
   checkFlags(flags, ["--out", "--patch", "--force"]);
+  if (pos.length) fail(`unexpected ${pos[0]} (to write the draft to a file: --out ${pos[0]})`);
   if (flags["--out"] && existsSync(userPath(flags["--out"])) && !flags["--force"]) {
     fail(`${flags["--out"]} is already there (your rewritten notes?): pass --force to replace it`);
   }
   const lastTag = lastReleaseTag();
   const version = currentVersion();
   const all = commitsSince(lastTag);
-  const kept = dropReverted(all);
+  // A commit brought back by a reapply gets its original subject: read it again.
+  const kept = dropReverted(all).map((c) => ({ ...c, parsed: parseCommit(c.subject, c.body) }));
   const conventional = kept.filter((c) => c.parsed);
   let next;
   try {

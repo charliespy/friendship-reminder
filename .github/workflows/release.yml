@@ -49,7 +49,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check the tag is a release tag
+      - name: Check the tag is a release tag on the release commit
         if: env.PUBLISH == 'true'
         run: |
           # Only vX.Y.Z tags are releases (no pre-releases).
@@ -57,6 +57,15 @@ jobs:
             echo "::error::$GITHUB_REF_NAME is not a vX.Y.Z release tag"
             exit 1
           fi
+          # On the release PR's merge commit (docs/RELEASING.md step 6), not on a later one.
+          subject=$(git log -1 --format=%s)
+          case "$subject" in
+            "chore(release): $GITHUB_REF_NAME"|"chore(release): $GITHUB_REF_NAME (#"*")") ;;
+            *)
+              echo "::error::$GITHUB_REF_NAME is on \"$subject\", not on the chore(release): $GITHUB_REF_NAME commit"
+              exit 1
+              ;;
+          esac
 
       # Before the long setup and build: a release without its notes stops here, and publishes nothing.
       - name: Take the release notes from CHANGELOG.md
@@ -67,7 +76,8 @@ jobs:
           node scripts/release.mjs notes "$GITHUB_REF_NAME" --check-files --out release-notes/release-notes.md
           cat release-notes/release-notes.md
 
-      # Uploaded now, before npm ci and the build run any third-party code.
+      # Uploaded now, before npm ci and the build run any third-party code (that guards against
+      # mistakes; code that could tamper with this job could also tamper with the .dmg).
       - name: Keep the release notes
         if: env.PUBLISH == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

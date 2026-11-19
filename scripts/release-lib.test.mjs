@@ -131,7 +131,16 @@ describe("dropReverted", () => {
     const revert = 'Revert "feat: add export (#12)" (#13)';
     expect(dropReverted(s(feat, revert, 'Revert "Revert "feat: add export (#12)"" (#14)'))).toEqual(s(feat));
     expect(dropReverted(s(feat, revert, 'Reapply "feat: add export (#12)" (#14)'))).toEqual(s(feat));
-    expect(dropReverted(s('Reapply "feat: old (#3)" (#14)'))).toEqual(s('Reapply "feat: old (#3)" (#14)'));
+    // Reapplying something released before brings it back under its own subject.
+    expect(dropReverted(s('Reapply "feat: old (#3)" (#14)'))).toEqual(s("feat: old"));
+    expect(dropReverted(s('Revert "Revert "feat: old (#3)"" (#14)'))).toEqual(s("feat: old"));
+  });
+  it("the last revert or reapply wins, however many there are", () => {
+    const feat = "feat: add export (#12)";
+    const r1 = 'Revert "feat: add export (#12)" (#13)';
+    expect(dropReverted(s(feat, r1, 'Reapply "feat: add export (#12)" (#14)', 'Revert "Reapply "feat: add export (#12)" (#14)" (#15)'))).toEqual([]);
+    expect(dropReverted(s(feat, r1, 'Revert "Revert "feat: add export (#12)" (#13)" (#14)', 'Revert "Revert "Revert "feat: add export (#12)" (#13)" (#14)" (#15)'))).toEqual([]);
+    expect(dropReverted(s("fix: a (#1)", feat, "fix: b (#2)", r1))).toEqual(s("fix: a (#1)", "fix: b (#2)"));
   });
   it("keeps a revert of something released earlier", () => {
     expect(dropReverted(s('Revert "feat: old (#3)" (#13)'))).toEqual(s('Revert "feat: old (#3)" (#13)'));
@@ -148,6 +157,7 @@ describe("draftNotes", () => {
         c("docs: typo"),
         c("ci: pin actions"),
         c("chore(deps): bump react"),
+        c("chore(deps-dev): bump vitest"),
         c("refactor!: new data file format"),
       ],
       unsigned: false,
