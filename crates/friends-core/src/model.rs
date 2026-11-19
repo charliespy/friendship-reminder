@@ -219,9 +219,7 @@ impl Data {
     /// A new id, refused at MAX_ID so the saved file stays one the app will load.
     fn next_id(&mut self) -> Result<u64, Invalid> {
         if self.last_id + 1 >= MAX_ID {
-            return invalid(
-                "Friends has run out of ids. Remove some people or blocked dates first.",
-            );
+            return invalid("Friends has run out of ids.");
         }
         self.last_id += 1;
         Ok(self.last_id)
