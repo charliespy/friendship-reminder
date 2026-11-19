@@ -255,6 +255,41 @@ describe("PeoplePane", () => {
     expect(document.activeElement).toBe(button("Add person"));
   });
 
+  it("after a delete, focuses the person in the deleted one's place when the new view came first", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    fireEvent.click(screen.getByLabelText("Select Theo Marsh"));
+    await click(button("Delete selected…"));
+    button("Delete").focus();
+    let finish!: (v: View) => void;
+    deletePeople.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    await click(button("Delete"));
+    // The new view, without Theo, arrives before the command returns.
+    rerender(<PeoplePane view={view([MAYA, LENA])} />);
+    await act(async () => finish(view([MAYA, LENA])));
+    expect(document.activeElement).toBe(screen.getByLabelText("Select Lena Fischer"));
+  });
+
+  it("after a delete, focuses the person who took the deleted one's place even if the list was reordered", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    fireEvent.click(screen.getByLabelText("Select Maya Chen"));
+    await click(button("Delete selected…"));
+    button("Delete").focus();
+    await click(button("Delete"));
+    rerender(<PeoplePane view={view([LENA, THEO])} />);
+    expect(document.activeElement).toBe(screen.getByLabelText("Select Theo Marsh"));
+  });
+
+  it("after deleting everyone while adding someone, focuses the add form", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA])} />);
+    await click(button("Add person"));
+    fireEvent.click(screen.getByLabelText("Select Maya Chen"));
+    await click(button("Delete selected…"));
+    button("Delete").focus();
+    await click(button("Delete"));
+    rerender(<PeoplePane view={view([])} />);
+    expect(document.activeElement).toBe(screen.getByLabelText("Name"));
+  });
+
   it("leaves focus alone after a delete if the user moved it", async () => {
     const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
     fireEvent.click(screen.getByLabelText("Select Maya Chen"));
