@@ -48,12 +48,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
-        with:
-          toolchain: stable
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: npm ci
 
       - name: Check the tag matches the app version
         if: env.PUBLISH == 'true'
@@ -70,7 +64,7 @@ jobs:
             exit 1
           fi
 
-      # Before the long build: a release without its notes stops here, and publishes nothing.
+      # Before the long setup and build: a release without its notes stops here, and publishes nothing.
       - name: Take the release notes from CHANGELOG.md
         if: env.PUBLISH == 'true'
         run: |
@@ -83,6 +77,15 @@ jobs:
       - name: Dry run of the release plan and notes
         if: env.PUBLISH != 'true'
         run: node scripts/release.mjs dry-run
+
+      # The steps above need only Node (the release script has no dependencies), so they fail
+      # fast; the Rust toolchain and the npm packages come now.
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: npm ci
 
       - name: Decide whether to sign
         id: signing

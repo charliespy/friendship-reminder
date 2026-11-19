@@ -37,6 +37,7 @@ import {
   lf,
   nextRelease,
   parseCommit,
+  parseVersion,
   sectionBody,
   setCargoLockVersion,
   setCargoTomlVersion,
@@ -223,7 +224,11 @@ function notes(argv) {
   checkFlags(flags, ["--out"]);
   if (pos.length !== 1) fail("usage: release.mjs notes <version> [--out <file>]");
   const version = pos[0].replace(/^v/, "");
-  if (!/^\d+\.\d+\.\d+$/.test(version)) fail(`not a release version (want X.Y.Z): ${pos[0]}`);
+  try {
+    parseVersion(version);
+  } catch {
+    fail(`not a release version (want X.Y.Z): ${pos[0]}`);
+  }
   const body = sectionBody(readChangelog(), version);
   if (!body) fail(`CHANGELOG.md has no notes for [${version}]: run "release.mjs prepare" in the release PR`);
   if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${body}\n`);

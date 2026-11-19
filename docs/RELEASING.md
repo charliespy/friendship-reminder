@@ -68,12 +68,13 @@ on `main` until then.
 
    Merge the PR once the checks and the dry run pass.
 
-6. **Tag the merge commit** on `main` and push the tag:
+6. **Tag the release PR's merge commit** on `main`, by its hash (another PR may have merged after
+   it), and push the tag:
 
    ```sh
    git switch main && git pull
-   git log -1 --format='%H %s'       # must be "chore(release): vX.Y.Z (#n)"
-   git tag -a vX.Y.Z -m "Friends vX.Y.Z"
+   git log --first-parent --format='%H %s' | grep -m1 ' chore(release): vX.Y.Z (#'
+   git tag -a vX.Y.Z <the hash it printed> -m "Friends vX.Y.Z"
    git push origin vX.Y.Z
    ```
 
@@ -109,7 +110,9 @@ out. Before the first release there is no tag, so the notes come from `[Unreleas
 - **The workflow fails before publishing** (the tag doesn't match the version, the notes are
   missing, the build breaks): nothing was published. Fix the cause on `main` with a normal PR,
   then release the next patch version (`npm run release:plan -- --patch` when the fix is not a
-  `fix:`). Never move or re-push a tag that is already on GitHub.
+  `fix:`). Its notes must also carry everything in the unpublished version's section, since
+  nobody has seen it: copy those lines into the new notes. Never move or re-push a tag that is
+  already on GitHub.
 - **The release is published but wrong** (a bad `.dmg`, a mistake in the notes): fix it on `main`
   and release the next patch version. A typo in the description alone can be edited on the release
   page; change `CHANGELOG.md` to match in the next PR.
