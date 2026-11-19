@@ -169,17 +169,12 @@ impl App {
                 due: p.is_due(today),
             })
             .collect();
-        people.sort_by(|a, b| {
+        people.sort_by_cached_key(|p| {
             (
-                a.person.notification_date,
-                a.person.name.to_lowercase(),
-                a.person.id,
+                p.person.notification_date,
+                p.person.name.to_lowercase(),
+                p.person.id,
             )
-                .cmp(&(
-                    b.person.notification_date,
-                    b.person.name.to_lowercase(),
-                    b.person.id,
-                ))
         });
         View {
             today,
@@ -196,9 +191,13 @@ impl App {
     /// Runs one command and saves. If the change can't be saved, it is undone, so what the app shows
     /// always matches the file.
     pub fn call(&mut self, cmd: &str, a: Value, today: NaiveDate) -> Result<View, ApiError> {
+        // Catch up first, so the view is right even before the regular check has run today. Catching up
+        // can always be worked out again, so if saving it fails the app keeps going and the next save
+        // writes it.
+        if self.data.catch_up(today) {
+            let _ = self.store.save(&self.data);
+        }
         let before = self.data.clone();
-        // Catch up first, so the view is right even before the regular check has run today.
-        self.data.catch_up(today);
         let result = self.apply(cmd, a, today);
         if let Err(e) = result {
             self.data = before;

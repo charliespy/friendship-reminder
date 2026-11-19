@@ -241,3 +241,21 @@ fn any_command_catches_up_before_the_regular_check_runs() {
     assert_eq!(view.people[0].person.next_target, date(2026, 8, 29));
     assert!(view.people[0].person.overdue);
 }
+
+#[test]
+fn the_view_still_loads_when_saving_the_catch_up_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let (mut app, path) = app("catch-up-save-fails");
+    app.call(
+        "add_person",
+        json!({"name": "Ada", "frequencyDays": 30, "lastConnected": "2026-07-23"}),
+        today(),
+    )
+    .unwrap();
+    let dir = path.parent().unwrap().to_path_buf();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+    let view = app.call("get_view", json!(null), date(2026, 8, 24));
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+    let view = view.unwrap();
+    assert_eq!(view.people[0].person.next_target, date(2026, 8, 29));
+}

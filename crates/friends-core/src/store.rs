@@ -72,6 +72,8 @@ impl Store {
         match serde_json::from_str::<Data>(&text) {
             Ok(mut data) if data.is_sane() => {
                 data.repair_ids();
+                // Saved from now on in this version's format.
+                data.version = CURRENT_VERSION;
                 Ok(Loaded::Existing(data))
             }
             // Not JSON, the wrong shape, or values the app could never have saved.
@@ -102,17 +104,23 @@ impl Store {
             fs::create_dir_all(dir)?;
         }
         let json = serde_json::to_vec_pretty(data).map_err(io::Error::other)?;
-        // One temporary name per process, so two processes saving the same file can't mix their writes.
+        // One temporary name per process, so two processes saving at once can't write into the same
+        // temporary file. (The last save still wins: the app allows one copy of itself, and the test server
+        // uses its own file.)
         let tmp = self
             .path
             .with_extension(format!("json.tmp-{}", std::process::id()));
-        {
+        let written = (|| {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(&json)?;
             f.write_all(b"\n")?;
             f.sync_all()?;
+            fs::rename(&tmp, &self.path)
+        })();
+        if written.is_err() {
+            let _ = fs::remove_file(&tmp);
         }
-        fs::rename(&tmp, &self.path)
+        written
     }
 }
 

@@ -41,8 +41,10 @@ pub struct Person {
 
 impl Person {
     /// The reminder is showing: its day has come and you haven't marked it done.
+    /// A missed target stays up too, even before its new reminder day (under weekdays only, a missed
+    /// week is pushed on the Saturday, and the person shouldn't vanish for the weekend).
     pub fn is_due(&self, today: NaiveDate) -> bool {
-        self.notification_date <= today
+        self.overdue || self.notification_date <= today
     }
 
     fn apply(&mut self, s: ScheduleResult) {
@@ -158,6 +160,15 @@ pub fn sane_date(date: NaiveDate) -> bool {
     (1900..=2200).contains(&date.year())
 }
 
+/// Whether a worked-out date (a target, a reminder day, a range's end) is one a saved file may hold:
+/// from 1900 to 2300, so targets pushed past a range ending ten years out still load.
+pub fn sane_target(date: NaiveDate) -> bool {
+    (1900..=2300).contains(&date.year())
+}
+
+/// Ids stay below this, so they never overflow and stay exact as JavaScript numbers.
+pub const MAX_ID: u64 = 1 << 53;
+
 fn check_last_connected(date: NaiveDate, today: NaiveDate) -> Result<(), Invalid> {
     if !sane_date(date) {
         return invalid("Pick a date between 1900 and today.");
@@ -175,19 +186,22 @@ impl Data {
     pub fn is_sane(&self) -> bool {
         let people_ok = self.people.iter().all(|p| {
             FREQUENCIES.contains(&p.frequency_days)
-                && [p.last_connected, p.next_target, p.notification_date]
+                && sane_date(p.last_connected)
+                && [p.next_target, p.notification_date]
                     .into_iter()
-                    .all(sane_date)
+                    .all(sane_target)
         });
         let blocked_ok = self
             .blocked
             .iter()
-            .all(|b| sane_date(b.start) && sane_date(b.end));
+            .all(|b| sane_date(b.start) && sane_target(b.end));
         let mut ids: Vec<u64> = self.ids().collect();
         let count = ids.len();
         ids.sort_unstable();
         ids.dedup();
-        people_ok && blocked_ok && ids.len() == count
+        let ids_ok =
+            ids.len() == count && self.last_id < MAX_ID && ids.last().is_none_or(|&id| id < MAX_ID);
+        people_ok && blocked_ok && ids_ok
     }
 
     fn ids(&self) -> impl Iterator<Item = u64> + '_ {
@@ -203,6 +217,7 @@ impl Data {
     }
 
     fn next_id(&mut self) -> u64 {
+        // is_sane keeps ids under MAX_ID, so this can't overflow.
         self.last_id += 1;
         self.last_id
     }
@@ -348,8 +363,11 @@ impl Data {
         if label.chars().count() > MAX_NAME_CHARS {
             return invalid(format!("Keep the label under {MAX_NAME_CHARS} characters."));
         }
-        if !sane_date(start) || !sane_date(end) {
-            return invalid("Pick dates between 1900 and 2200.");
+        // Ten years ahead at most: targets get pushed past the range, and they must stay inside the
+        // dates a saved file may hold.
+        let horizon = today.checked_add_days(Days::new(3653)).unwrap_or(today);
+        if !sane_date(start) || end > horizon {
+            return invalid("Pick dates from 1900 up to ten years from now.");
         }
         if end < start {
             return invalid("The range has to end on or after the day it starts.");
@@ -414,7 +432,9 @@ impl Data {
     pub fn take_notifications(&mut self, today: NaiveDate) -> Vec<Person> {
         let mut out = Vec::new();
         for person in &mut self.people {
-            if person.is_due(today) && person.notified_for != Some(person.notification_date) {
+            if person.notification_date <= today
+                && person.notified_for != Some(person.notification_date)
+            {
                 person.notified_for = Some(person.notification_date);
                 out.push(person.clone());
             }
