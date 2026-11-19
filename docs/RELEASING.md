@@ -84,9 +84,12 @@ on `main` until then.
    `CHANGELOG.md` section as its description):
 
    ```sh
-   gh run list --workflow release.yml --limit 1
+   gh run list --workflow release.yml --event push --branch vX.Y.Z --limit 1
    gh run watch <run id> --exit-status
    ```
+
+   List the tag's own run, not just the newest one (that may still be the release PR's dry run).
+   If the list is empty, GitHub hasn't started it yet: wait a few seconds and list again.
 
 8. **Verify** the published release:
 
