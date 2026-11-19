@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // Browser dev mode and the e2e tests send the app's commands to friends-devserver through this
-// proxy. Only /invoke goes through; changeOrigin sends the Host the devserver accepts.
+// proxy (vite preview uses the same one). Only /invoke goes through; changeOrigin sends the Host the devserver accepts.
 const devserverProxy = {
   "/__friends/invoke": {
     target: `http://127.0.0.1:${process.env.FRIENDS_DEVSERVER_PORT ?? 1430}`,
@@ -26,7 +26,6 @@ export default defineConfig({
     // In browser dev mode (npm run dev:web) the commands go to friends-devserver.
     proxy: devserverProxy,
   },
-  preview: { proxy: devserverProxy },
   build: {
     target: "safari16",
     rollupOptions: {

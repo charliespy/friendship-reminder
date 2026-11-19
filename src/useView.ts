@@ -16,16 +16,15 @@ export function useView() {
       .getView()
       .then((v) => live && setView(v))
       .catch((e) => live && setLoadError(errorMessage(e)));
-    // Back from sleep or after midnight the dates move on: ask again when the window shows.
+    // Back from sleep or after midnight the dates move on: ask again when the window comes forward
+    // (both windows are focused when shown; one trigger, so one request).
     const refresh = () => {
-      if (document.visibilityState === "visible") api.getView().then((v) => live && setView(v), () => {});
+      api.getView().then((v) => live && setView(v), () => {});
     };
-    document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
     return () => {
       live = false;
       unlisten.then((f) => f(), () => {});
-      document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
   }, []);
