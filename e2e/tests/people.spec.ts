@@ -99,3 +99,34 @@ test("delete several people after confirming", async ({ page, request }) => {
   await expect(page.getByText("Maya Chen")).toHaveCount(0);
   await expect(bar).toHaveCount(0);
 });
+
+test("closing a form sends focus back to the button that opened it", async ({ page, request }) => {
+  await seed(request, { people: [{ name: "Theo Marsh", frequencyDays: 90, lastConnected: "2026-09-29" }] });
+  await openPreferences(page);
+  const addButton = page.getByRole("button", { name: "Add person" });
+
+  // Add with the keyboard: Enter in the form adds the person and closes it.
+  await addButton.focus();
+  await page.keyboard.press("Enter");
+  const addForm = page.getByRole("form", { name: "Add person" });
+  await expect(addForm.getByLabel("Name")).toBeFocused();
+  await page.keyboard.type("Nora Quill");
+  await page.keyboard.press("Enter");
+  await expect(addForm).toHaveCount(0);
+  await expect(page.getByTestId("person-row")).toHaveCount(2);
+  await expect(addButton).toBeFocused();
+
+  // Cancel goes back to Add person too.
+  await addButton.click();
+  await addForm.getByRole("button", { name: "Cancel" }).click();
+  await expect(addForm).toHaveCount(0);
+  await expect(addButton).toBeFocused();
+
+  // Save changes goes back to that person's Edit button.
+  const edit = page.getByRole("button", { name: "Edit Theo Marsh" });
+  await edit.click();
+  const editForm = page.getByRole("form", { name: "Save changes" });
+  await editForm.getByRole("button", { name: "Save changes" }).click();
+  await expect(editForm).toHaveCount(0);
+  await expect(edit).toBeFocused();
+});

@@ -1,5 +1,5 @@
 /** Preferences › People: add, edit, mark done and delete the people Friends reminds you about. */
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
 import { aimDay, formatDay, relativeDay } from "./date";
@@ -96,12 +96,14 @@ function PersonRow({
   selected,
   onSelect,
   onEdit,
+  editRef,
 }: {
   person: Person;
   today: string;
   selected: boolean;
   onSelect: (on: boolean) => void;
   onEdit: () => void;
+  editRef: (el: HTMLButtonElement | null) => void;
 }) {
   const { run, busy, error } = useAction();
   const when = person.due
@@ -136,7 +138,7 @@ function PersonRow({
       >
         Done
       </button>
-      <button className="btn btn-quiet btn-sm" onClick={onEdit} aria-label={`Edit ${person.name}`}>
+      <button ref={editRef} className="btn btn-quiet btn-sm" onClick={onEdit} aria-label={`Edit ${person.name}`}>
         Edit
       </button>
     </li>
@@ -149,6 +151,20 @@ export function PeoplePane({ view }: { view: View }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const del = useAction();
+
+  // When a form closes, focus goes back to the button that opened it (Add person, or the person's
+  // Edit), so keyboard and screen reader users don't land back at the top of the window.
+  const addButton = useRef<HTMLButtonElement>(null);
+  const editButtons = useRef(new Map<number, HTMLButtonElement>());
+  const returnFocus = useRef<"add" | number | null>(null);
+  useEffect(() => {
+    const target = returnFocus.current;
+    if (target === null) return;
+    returnFocus.current = null;
+    // Only if focus was lost with the form; never take it from somewhere the user moved it.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    (target === "add" ? addButton.current : editButtons.current.get(target))?.focus();
+  });
 
   // Forget selections of people who are gone.
   const present = new Set(view.people.map((p) => p.id));
@@ -182,7 +198,7 @@ export function PeoplePane({ view }: { view: View }) {
           <p>Who you want to keep up with, and how often.</p>
         </div>
         {!adding && (
-          <button className="btn btn-primary" onClick={() => (setAdding(true), setEditing(null))}>
+          <button ref={addButton} className="btn btn-primary" onClick={() => (setAdding(true), setEditing(null))}>
             Add person
           </button>
         )}
@@ -194,7 +210,7 @@ export function PeoplePane({ view }: { view: View }) {
           today={view.today}
           submitLabel="Add person"
           onSubmit={(d) => api.addPerson(d)}
-          onCancel={() => setAdding(false)}
+          onCancel={() => ((returnFocus.current = "add"), setAdding(false))}
         />
       )}
 
@@ -216,7 +232,7 @@ export function PeoplePane({ view }: { view: View }) {
               ...(d.lastConnected !== opened.lastConnected && { lastConnected: d.lastConnected }),
             })
           }
-          onCancel={() => setEditing(null)}
+          onCancel={() => ((returnFocus.current = editingPerson.id), setEditing(null))}
         />
       )}
 
@@ -264,6 +280,10 @@ export function PeoplePane({ view }: { view: View }) {
               selected={chosen.includes(p.id)}
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}
+              editRef={(el) => {
+                if (el) editButtons.current.set(p.id, el);
+                else editButtons.current.delete(p.id);
+              }}
             />
           ))}
         </ul>
