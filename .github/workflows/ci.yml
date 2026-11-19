@@ -1,6 +1,8 @@
 name: CI
 
 # Every PR, and every push to main: the full check, the end-to-end tests and the privacy scan.
+# (Dependabot PRs that auto-merge are the exception on main: GitHub starts no workflow for a merge
+# made by a workflow's own token. They ran all of this as PRs before they merged.)
 on:
   pull_request:
   push:

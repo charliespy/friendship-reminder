@@ -4,14 +4,18 @@
 # .github/workflows/dependabot-auto-merge.yml runs it with what dependabot/fetch-metadata found.
 #
 #   UPDATE_TYPE   the highest update in the PR: version-update:semver-major|minor|patch
+#   UPDATED_DEPENDENCIES  fetch-metadata's updated-dependencies-json: each package's old and new
+#                 version
 #   ECOSYSTEM     npm_and_yarn, cargo or github_actions (fetch-metadata's package-ecosystem)
 #   PR_URL        the PR
 #   HEAD_SHA      the commit the decision is about; auto-merge is tied to it
 #   DRY_RUN=1     print what it would do, change nothing
 #
 # Merges: minor and patch updates of npm and Cargo packages.
-# Waits for a maintainer: major updates, anything it can't classify, and GitHub Actions updates
-# (they change .github/workflows/, which the workflow's own token isn't allowed to merge).
+# Waits for a maintainer: major updates; a 0.x package whose middle number changes (0.4 -> 0.5),
+# or a 0.0.x one whose last number does, because npm and Cargo treat those as breaking although
+# they're reported as minor or patch; anything it can't read or classify; and GitHub Actions
+# updates (they change .github/workflows/, which the workflow's own token isn't allowed to merge).
 set -euo pipefail
 
 update_type=${UPDATE_TYPE-}
@@ -47,6 +51,28 @@ case "$update_type" in
     exit 0
     ;;
 esac
+
+# Each package's old and new version, as "<name> <old> <new>" lines; a package without both versions
+# can't be checked, so it makes the whole PR wait.
+if ! deps=$(printf '%s' "${UPDATED_DEPENDENCIES-}" | jq -er '
+    if type == "array" and length > 0 then .[] else error("no packages") end
+    | "\(.dependencyName // "?") \(.prevVersion // "") \(.newVersion // "")"' 2>/dev/null); then
+  say "Waits for a maintainer: can't read which packages are updated."
+  exit 0
+fi
+while read -r name old new; do
+  if [ -z "$old" ] || [ -z "$new" ]; then
+    say "Waits for a maintainer: no old and new version for $name."
+    exit 0
+  fi
+  IFS=. read -r old_major old_minor old_patch _ <<<"${old#v}"
+  IFS=. read -r _ new_minor new_patch _ <<<"${new#v}"
+  if [ "$old_major" = 0 ] && { [ "$old_minor" != "$new_minor" ] ||
+    { [ "$old_minor" = 0 ] && [ "$old_patch" != "$new_patch" ]; }; }; then
+    say "Waits for a maintainer: $name $old -> $new is a breaking change for a 0.x package."
+    exit 0
+  fi
+done <<<"$deps"
 
 if [ "${DRY_RUN-}" = 1 ]; then
   say "Dry run: would turn on auto-merge (squash) for $PR_URL at $HEAD_SHA ($ecosystem, $update_type)."

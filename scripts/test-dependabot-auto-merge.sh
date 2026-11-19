@@ -16,12 +16,14 @@ failures=0
 url=https://github.com/owner/repo/pull/7
 sha=0123456789abcdef0123456789abcdef01234567
 
-# expect <name> <expected gh call, or "none"> <ecosystem> <update type> [DRY_RUN]
+one='[{"dependencyName":"vite","prevVersion":"7.1.2","newVersion":"7.2.0"}]'
+
+# expect <name> <expected gh call, or "none"> <ecosystem> <update type> [packages json] [DRY_RUN]
 expect() {
   local name=$1 want=$2 got
   : >"$work/calls"
   if ! PATH="$work/bin:$PATH" GH_CALLS="$work/calls" GITHUB_STEP_SUMMARY="" PR_URL=$url HEAD_SHA=$sha \
-    ECOSYSTEM=$3 UPDATE_TYPE=$4 DRY_RUN=${5-} bash "$script" >"$work/out" 2>&1; then
+    ECOSYSTEM=$3 UPDATE_TYPE=$4 UPDATED_DEPENDENCIES=${5-$one} DRY_RUN=${6-} bash "$script" >"$work/out" 2>&1; then
     echo "FAIL $name: the script failed"
     sed 's/^/     /' "$work/out"
     failures=$((failures + 1))
@@ -47,7 +49,22 @@ expect "cargo major waits" none cargo version-update:semver-major
 expect "GitHub Actions patch waits" none github_actions version-update:semver-patch
 expect "unknown update type waits" none npm_and_yarn ""
 expect "unknown ecosystem waits" none pip version-update:semver-patch
-expect "dry run changes nothing" none cargo version-update:semver-minor 1
+expect "dry run changes nothing" none cargo version-update:semver-minor "$one" 1
+group='[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"tauri","prevVersion":"2.8.5","newVersion":"2.9.0"}]'
+expect "a group of safe updates merges" "$on" cargo version-update:semver-minor "$group"
+expect "0.x middle number changes waits" none cargo version-update:semver-minor \
+  '[{"dependencyName":"serde","prevVersion":"1.0.219","newVersion":"1.0.228"},{"dependencyName":"chrono","prevVersion":"0.4.41","newVersion":"0.5.0"}]'
+expect "0.x patch merges" "$on" cargo version-update:semver-patch \
+  '[{"dependencyName":"chrono","prevVersion":"0.4.41","newVersion":"0.4.42"}]'
+expect "0.0.x patch waits" none npm_and_yarn version-update:semver-patch \
+  '[{"dependencyName":"tiny","prevVersion":"0.0.3","newVersion":"0.0.4"}]'
+expect "a v-prefixed 0.x version waits" none npm_and_yarn version-update:semver-minor \
+  '[{"dependencyName":"x","prevVersion":"v0.4.1","newVersion":"v0.5.0"}]'
+expect "a package without its old version waits" none cargo version-update:semver-patch \
+  '[{"dependencyName":"serde","newVersion":"1.0.228"}]'
+expect "no package list waits" none cargo version-update:semver-patch ""
+expect "an empty package list waits" none cargo version-update:semver-patch "[]"
+expect "unreadable package list waits" none cargo version-update:semver-patch "not json"
 
 # Without the PR or its head commit it must fail, not guess.
 if PATH="$work/bin:$PATH" GH_CALLS="$work/calls" ECOSYSTEM=cargo UPDATE_TYPE=version-update:semver-patch \

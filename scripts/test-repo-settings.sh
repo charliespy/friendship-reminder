@@ -23,7 +23,7 @@ r=repos_owner_repo
 
 # A GitHub that matches: the file as GitHub returns it, with fields of its own added.
 good() {
-  echo '{"allow_auto_merge":true,"allow_squash_merge":true,"delete_branch_on_merge":true}' >"$a/$r.json"
+  echo '{"allow_auto_merge":true,"allow_squash_merge":true,"delete_branch_on_merge":true,"squash_merge_commit_title":"PR_TITLE"}' >"$a/$r.json"
   echo '[{"id":7,"name":"main","source_type":"Repository"},{"id":8,"name":"main","source_type":"Organization"}]' >"$a/${r}_rulesets.json"
   jq '. + {id: 7, source_type: "Repository", current_user_can_bypass: "pull_requests_only"}
       | .rules |= map(if .type == "pull_request" then .parameters += {automatic_copilot_code_review_enabled: false} else . end)
@@ -49,6 +49,8 @@ good
 expect pass "GitHub matches the file"
 good; edit "$r.json" '.allow_auto_merge = false'
 expect fail "auto-merge off"
+good; edit "$r.json" '.squash_merge_commit_title = "COMMIT_OR_PR_TITLE"'
+expect fail "squash commits not titled by the PR title"
 good; echo '[]' >"$a/${r}_rulesets.json"
 expect fail "no ruleset"
 good; edit "${r}_rulesets_7.json" '.enforcement = "evaluate"'
@@ -65,6 +67,16 @@ good; edit "${r}_rulesets_7.json" '.rules |= map(if .type == "required_status_ch
 expect fail "a required check missing"
 good; edit "${r}_rulesets_7.json" '.rules |= map(if .type == "required_status_checks" then .parameters.required_status_checks += [{context: "Other"}] else . end)'
 expect fail "an extra required check"
+good; edit "${r}_rulesets_7.json" '.rules |= map(if .type == "pull_request" then .parameters.allowed_merge_methods = ["merge", "squash"] else . end)'
+expect fail "merge commits allowed on main"
+good; edit "${r}_rulesets_7.json" '.conditions.ref_name.exclude = ["refs/heads/main"]'
+expect fail "main excluded"
+good; edit "${r}_rulesets_7.json" '.target = "tag"'
+expect fail "a tag ruleset"
+good; edit "${r}_rulesets_7.json" '.rules |= map(if .type == "required_status_checks" then .parameters.required_status_checks[0].integration_id = 1 else . end)'
+expect fail "a check any app may report"
+good; edit "${r}_rulesets_7.json" '.rules |= map(if .type == "required_status_checks" then .parameters.required_status_checks |= reverse else . end)'
+expect pass "required checks in another order"
 good; edit "${r}_rules_branches_main.json" 'map(select(.type != "pull_request"))'
 expect fail "main doesn't get every rule"
 

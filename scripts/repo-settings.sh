@@ -4,13 +4,16 @@
 #
 #   scripts/repo-settings.sh apply        protect main with .github/rulesets/main.json (create or
 #                                         update the "main" ruleset), turn on auto-merge, squash
-#                                         merges and deleting merged branches; then `check`
+#                                         merges titled by the PR title, and deleting merged
+#                                         branches; then `check`
 #   scripts/repo-settings.sh check        read-only: fails unless GitHub matches this repo's files
 #   scripts/repo-settings.sh verify-push  try a direct push of an empty commit to main; passes only
 #                                         if GitHub refuses it
 #
-# What the ruleset does on main: every change comes through a PR, the required checks must pass,
-# no force-pushes, no deleting the branch, and no approving review needed. Admins may bypass it,
+# What the ruleset does on main: every change comes through a PR, squash-merged (so the PR title,
+# which must be a conventional commit, is the commit on main), the required checks must pass, no
+# force-pushes, no deleting the branch, and no approving review needed. Merge commits stay allowed
+# repo-wide, for PRs into other branches. Admins may bypass it,
 # but only when merging a PR (an emergency fix whose checks can't pass); a direct push is refused
 # for everyone.
 set -euo pipefail
@@ -25,9 +28,11 @@ ruleset_id() {
 }
 
 apply() {
-  # Auto-merge (Dependabot's minor and patch updates use it), squash merges, delete merged branches.
+  # Auto-merge (Dependabot's minor and patch updates use it), squash merges named after the PR
+  # title, delete merged branches.
   gh api -X PATCH "repos/$repo" -F allow_auto_merge=true -F allow_squash_merge=true \
-    -F delete_branch_on_merge=true --silent
+    -F delete_branch_on_merge=true -f squash_merge_commit_title=PR_TITLE \
+    -f squash_merge_commit_message=COMMIT_MESSAGES --silent
   local id
   id=$(ruleset_id)
   if [ -n "$id" ]; then
@@ -42,9 +47,9 @@ apply() {
 
 check() {
   local fail=0 id live want
-  settings=$(gh api "repos/$repo" --jq '[.allow_auto_merge, .allow_squash_merge, .delete_branch_on_merge] | map(tostring) | join(" ")')
-  if [ "$settings" != "true true true" ]; then
-    echo "repo-settings: auto-merge, squash merges and deleting merged branches must all be on (got: $settings)" >&2
+  settings=$(gh api "repos/$repo" --jq '[.allow_auto_merge, .allow_squash_merge, .delete_branch_on_merge, .squash_merge_commit_title] | map(tostring) | join(" ")')
+  if [ "$settings" != "true true true PR_TITLE" ]; then
+    echo "repo-settings: auto-merge, squash merges, deleting merged branches and squash titles from the PR title must all be on (got: $settings)" >&2
     fail=1
   fi
   id=$(ruleset_id)
@@ -53,18 +58,24 @@ check() {
     exit 1
   fi
   live=$(gh api "repos/$repo/rulesets/$id")
-  # Every field and rule in the file must be there, with the same values. GitHub may add fields of
-  # its own with default values; those don't count. Arrays are compared as sets.
+  # GitHub's copy must have exactly the file's fields and rules, with the same values. Fields GitHub
+  # adds on its own (ids, links, new parameters with defaults) are ignored; every field the file
+  # names is compared exactly, with arrays compared in any order.
   want=$(jq -c '{target, enforcement, conditions, bypass_actors, rules}' "$ruleset_file")
   if ! jq -e --argjson want "$want" '
       def norm: walk(if type == "array" then sort else . end);
-      ({target, enforcement, conditions, bypass_actors} | norm) as $l
-      | ($want | {target, enforcement, conditions, bypass_actors} | norm) as $w
-      | ($l | contains($w)) and ($w.bypass_actors | length) == ($l.bypass_actors | length)
-        and ([$want.rules[] as $r | any(.rules[]; (. | norm) | contains($r | norm))] | all)
+      # $live restricted to the keys $want has, at every level of objects.
+      def like($w):
+        if ($w | type) == "object" and type == "object"
+        then with_entries(select(.key as $k | $w | has($k))) | with_entries(.key as $k | .value |= like($w[$k]))
+        elif ($w | type) == "array" and type == "array" and ($w | length) > 0 and ($w[0] | type) == "object"
+        then map(like($w[0]))
+        else . end;
+      (.rules | map({(.type): .}) | add) as $lr
+      | ({target, enforcement, conditions, bypass_actors} | like($want) | norm)
+          == ($want | {target, enforcement, conditions, bypass_actors} | norm)
         and ((.rules | map(.type) | sort) == ($want.rules | map(.type) | sort))
-        and ([.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] | sort)
-          == ([$want.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] | sort)
+        and ([$want.rules[] as $r | ($lr[$r.type] | like($r) | norm) == ($r | norm)] | all)
     ' <<<"$live" >/dev/null; then
     echo "repo-settings: ruleset \"$name\" ($id) differs from $ruleset_file; run: scripts/repo-settings.sh apply" >&2
     fail=1
@@ -83,7 +94,10 @@ verify_push() {
   git fetch --quiet origin main
   local sha out
   # An empty commit on top of main: if GitHub ever accepted it, main would only gain a no-op commit.
-  sha=$(git commit-tree "origin/main^{tree}" -p origin/main -m "test: direct push to main (must be refused)")
+  # Made by a neutral noreply identity, so even an accepted push would publish no one's address.
+  sha=$(GIT_AUTHOR_NAME=repo-settings GIT_AUTHOR_EMAIL=noreply@github.com \
+    GIT_COMMITTER_NAME=repo-settings GIT_COMMITTER_EMAIL=noreply@github.com \
+    git commit-tree "origin/main^{tree}" -p origin/main -m "test: direct push to main (must be refused)")
   if out=$(git push origin "$sha:refs/heads/main" 2>&1); then
     echo "$out" >&2
     echo "repo-settings: GitHub ACCEPTED a direct push to main ($sha): main is not protected" >&2
