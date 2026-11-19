@@ -283,7 +283,10 @@ export function sectionBody(changelog, name) {
  */
 export function insertRelease(changelog, version, date, notes) {
   parseVersion(version);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`not a date (want YYYY-MM-DD): ${date}`);
+  const day = new Date(`${date}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== date) {
+    throw new Error(`not a date (want YYYY-MM-DD): ${date}`);
+  }
   const body = notes.trim();
   if (!body) throw new Error("the release notes are empty");
   if (/^## /m.test(body)) throw new Error('the notes may not contain "## " headings; use "### New" etc.');

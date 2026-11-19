@@ -218,6 +218,8 @@ Intro.
     expect(() => insertRelease(CHANGELOG, "0.1.0", "2026-12-01", "- x")).toThrow(/already has/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "  \n")).toThrow(/empty/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "12/01", "- x")).toThrow(/date/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-13-45", "- x")).toThrow(/date/);
+    expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-02-30", "- x")).toThrow(/date/);
     expect(() => insertRelease(CHANGELOG, "0.2", "2026-12-01", "- x")).toThrow(/version/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "## [9.9.9]\n- x")).toThrow(/headings/);
     expect(() => insertRelease("# Changelog\n", "0.2.0", "2026-12-01", "- x")).toThrow(/Unreleased/);

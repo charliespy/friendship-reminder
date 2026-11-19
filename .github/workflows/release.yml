@@ -6,8 +6,8 @@ name: Release
 #   APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
 #   APPLE_ID, APPLE_PASSWORD (app-specific password), APPLE_TEAM_ID.
 # Without them the app is only ad-hoc signed (see the README for opening it).
-# A PR that changes this file, the release script, CHANGELOG.md or the app version (a release PR), or a
-# manual run, does a dry run: it prints the release plan and notes, builds the app and keeps the .dmg
+# A PR that changes this file, the release script or the app version (a release PR), or a manual
+# run, does a dry run: it prints the release plan and notes, builds the app and keeps the .dmg
 # as a workflow artifact, but publishes nothing.
 #
 # Two jobs: the build runs npm and cargo with a read-only token; only the small publish job, which
@@ -20,7 +20,6 @@ on:
       - ".github/workflows/release.yml"
       - "scripts/release.mjs"
       - "scripts/release-lib.mjs"
-      - "CHANGELOG.md"
       - "src-tauri/tauri.conf.json"
   workflow_dispatch:
 
@@ -76,12 +75,14 @@ jobs:
         if: env.PUBLISH != 'true'
         run: |
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if node scripts/release.mjs notes "$version" > /dev/null 2>&1; then
-            # A release PR (or main after one): v$version is prepared and waits for its tag.
+          if ! git rev-parse -q --verify "refs/tags/v$version" > /dev/null \
+            && node scripts/release.mjs notes "$version" > /dev/null 2>&1; then
+            # A release PR: v$version is prepared and waits for its tag.
             echo "Tagging v$version would publish it with this description:"
             echo
             node scripts/release.mjs notes "$version"
           else
+            # On a PR this reads the base branch's history: what main would release without the PR.
             code=0
             node scripts/release.mjs plan || code=$?
             # 3 = nothing to release yet, which is fine for a dry run.

@@ -47,6 +47,8 @@ on `main` until then.
    npm run release:prepare -- X.Y.Z release-notes.md
    rm release-notes.md
    npm run check
+   git commit -am "chore(release): vX.Y.Z"
+   git push -u origin chore/release-vX.Y.Z
    ```
 
    This puts the notes at the top of `CHANGELOG.md` and sets the version in `package.json`,
@@ -54,7 +56,8 @@ on `main` until then.
    It refuses when a line under `[Unreleased]` is missing from the notes (it would be lost): put
    it in, or add `--drop-unreleased` when the notes already say it in other words.
 
-5. **Open the release PR** titled `chore(release): vX.Y.Z`, with the notes in its description. The
+5. **Open the release PR** titled `chore(release): vX.Y.Z`, with the notes
+   (`npm run release:notes -- X.Y.Z`) in its description. The
    release workflow runs a dry-run build on it and prints the notes it will publish. Merge it once
    the checks pass.
 

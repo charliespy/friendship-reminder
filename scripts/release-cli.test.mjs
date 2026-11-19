@@ -12,7 +12,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FILES = ["package.json", "package-lock.json", "src-tauri/tauri.conf.json", "src-tauri/Cargo.toml", "Cargo.lock"];
 let dir;
 // No global git settings (commit signing, hooks) in the scratch repo.
+// GIT_DIR and friends (set when run from a git hook) would point git at the real repo.
 const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+for (const k of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"]) delete env[k];
 
 function sh(cmd, args) {
   return execFileSync(cmd, args, { cwd: dir, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
