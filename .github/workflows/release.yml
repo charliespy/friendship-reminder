@@ -49,18 +49,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check the tag matches the app version
+      - name: Check the tag is a release tag
         if: env.PUBLISH == 'true'
         run: |
           # Only vX.Y.Z tags are releases (no pre-releases).
           if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::$GITHUB_REF_NAME is not a vX.Y.Z release tag"
-            exit 1
-          fi
-          tag="${GITHUB_REF_NAME#v}"
-          app=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "$tag" != "$app" ]; then
-            echo "::error::tag v$tag doesn't match the version in src-tauri/tauri.conf.json ($app)"
             exit 1
           fi
 
@@ -69,6 +63,7 @@ jobs:
         if: env.PUBLISH == 'true'
         run: |
           mkdir -p release-notes
+          # --check-files: every version file must say the tag's version.
           node scripts/release.mjs notes "$GITHUB_REF_NAME" --check-files --out release-notes/release-notes.md
           cat release-notes/release-notes.md
 
@@ -80,6 +75,8 @@ jobs:
           name: release-notes
           path: release-notes/release-notes.md
           if-no-files-found: error
+          # "Re-run failed jobs" uploads it again.
+          overwrite: true
           retention-days: 7
 
       # On a release PR: checks the version (above the last release, the same in every file) and

@@ -103,7 +103,7 @@ export function effectiveBump(version, bump) {
   return bump === "major" && parseVersion(version)[0] === 0 ? "minor" : bump;
 }
 
-/** Applies a bump (after effectiveBump). */
+/** Applies a bump; a major bump on 0.x becomes a minor one (effectiveBump). */
 export function applyBump(version, bump) {
   const [major, minor, patch] = parseVersion(version);
   bump = effectiveBump(version, bump);
@@ -171,11 +171,40 @@ export function sectionFor(commit) {
   return null;
 }
 
+/**
+ * Drops each commit that a later revert undid, and the revert itself. GitHub's revert button
+ * makes `Revert "<subject>"` (a squash merge adds " (#n)"); `revert: <subject>` works too.
+ * Takes and returns { subject } objects, oldest first.
+ */
+export function dropReverted(commits) {
+  const strip = (s) => s.trim().replace(/\s*\(#\d+\)$/, "");
+  const reverted = (s) => {
+    const m = /^Revert "(.+)"$/.exec(strip(s)) ?? /^revert(?:\([^)]*\))?: (.+)$/.exec(strip(s));
+    return m ? strip(m[1]) : null;
+  };
+  const kept = [];
+  for (const c of commits) {
+    const target = reverted(c.subject);
+    if (target === null) {
+      kept.push(c);
+      continue;
+    }
+    // The newest earlier commit with that subject goes; a revert of nothing we have stays.
+    let i = kept.length - 1;
+    while (i >= 0 && strip(kept[i].subject) !== target) i--;
+    if (i >= 0) kept.splice(i, 1);
+    else kept.push(c);
+  }
+  return kept;
+}
+
 /** "add a snooze button" -> "Add a snooze button." */
 export function sentence(text) {
   const t = text.trim();
   if (!t) return t;
-  const s = t[0].toUpperCase() + t.slice(1);
+  // A first word with a capital inside it ("macOS", "iCloud") keeps its case.
+  const first = t.split(/\s/)[0];
+  const s = /[A-Z]/.test(first.slice(1)) ? t : t[0].toUpperCase() + t.slice(1);
   return /[.!?)]$/.test(s) ? s : `${s}.`;
 }
 

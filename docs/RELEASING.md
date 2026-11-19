@@ -66,7 +66,10 @@ on `main` until then.
    gh workflow run release.yml --ref chore/release-vX.Y.Z
    ```
 
-   Merge the PR once the checks and the dry run pass.
+   Merge the PR once the checks and the dry run pass. Merge nothing else into `main` while it is
+   open: a change merged before it would ship in this release without being in its notes or its
+   version. If something did merge, run `plan` again on the release branch (after merging `main`
+   into it) and update the version and notes.
 
 6. **Tag the release PR's merge commit** on `main`, by its hash (another PR may have merged after
    it), and push the tag:
@@ -104,7 +107,8 @@ on `main` until then.
 ## How the script reads the history
 
 `plan` reads one commit per merged PR: the squash-merge commits on `main` (`feat: … (#12)`) since
-the last `vX.Y.Z` tag. PRs are squash-merged, so this is every change; a PR merged with a merge
+the last `vX.Y.Z` tag. A commit undone by GitHub's revert button (`Revert "feat: … (#12)"`) is
+left out together with its revert. PRs are squash-merged, so this is every change; a PR merged with a merge
 commit would show up only as "Merge pull request …", which isn't a conventional commit and is left
 out. Before the first release there is no tag, so the notes come from `[Unreleased]` alone.
 

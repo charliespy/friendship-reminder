@@ -35,6 +35,7 @@ import {
   checkNewVersion,
   compareVersions,
   draftNotes,
+  dropReverted,
   insertRelease,
   latestReleaseTag,
   lf,
@@ -179,7 +180,8 @@ function plan(argv, { nothingIsFine = false } = {}) {
   const lastTag = lastReleaseTag();
   const version = currentVersion();
   const all = commitsSince(lastTag);
-  const conventional = all.filter((c) => c.parsed);
+  const kept = dropReverted(all);
+  const conventional = kept.filter((c) => c.parsed);
   let next;
   try {
     next = nextRelease({
@@ -200,7 +202,7 @@ function plan(argv, { nothingIsFine = false } = {}) {
   out.push(`Next version:  ${next.version ?? "-"}`);
   out.push(`Why:           ${next.reason}`);
   out.push("");
-  out.push(`Commits on main since ${lastTag ?? "the start"}: ${all.length} (${all.length - conventional.length} not conventional, left out)`);
+  out.push(`Commits on main since ${lastTag ?? "the start"}: ${all.length} (left out: ${all.length - kept.length} reverted, ${kept.length - conventional.length} not conventional)`);
   if (lastTag) {
     for (const c of conventional) out.push(`  ${c.sha.slice(0, 7)} ${c.subject}`);
   } else {

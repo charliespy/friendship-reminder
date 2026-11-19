@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyBump,
+  dropReverted,
   cargoLockVersion,
   cargoTomlVersion,
   checkNewVersion,
@@ -117,6 +118,19 @@ describe("nextRelease", () => {
   });
 });
 
+describe("dropReverted", () => {
+  const s = (...subjects) => subjects.map((subject) => ({ subject }));
+  it("drops a reverted commit and its revert", () => {
+    expect(dropReverted(s("feat: add export (#12)", 'Revert "feat: add export (#12)" (#13)', "fix: crash (#14)"))).toEqual(
+      s("fix: crash (#14)"),
+    );
+    expect(dropReverted(s("feat: add export (#12)", "revert: feat: add export (#13)"))).toEqual([]);
+  });
+  it("keeps a revert of something released earlier", () => {
+    expect(dropReverted(s('Revert "feat: old (#3)" (#13)'))).toEqual(s('Revert "feat: old (#3)" (#13)'));
+  });
+});
+
 describe("draftNotes", () => {
   it("groups user-facing commits and leaves the rest out", () => {
     const notes = draftNotes({
@@ -164,6 +178,7 @@ describe("draftNotes", () => {
   });
   it("writes sentences", () => {
     expect(sentence("add x")).toBe("Add x.");
+    expect(sentence("macOS notifications fire twice")).toBe("macOS notifications fire twice.");
     expect(sentence("Done!")).toBe("Done!");
   });
 });
