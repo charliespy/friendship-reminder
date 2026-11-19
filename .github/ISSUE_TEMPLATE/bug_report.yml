@@ -1,0 +1,31 @@
+name: Bug report
+description: Something in Friends doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Please leave out real names and personal details (this repo is public); made-up people are fine.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add a person with "Monthly"…
+        2. …
+  - type: input
+    id: version
+    attributes:
+      label: Friends version
+      placeholder: "0.1.0"
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "15.1"
