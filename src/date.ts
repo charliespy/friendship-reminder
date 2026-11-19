@@ -17,10 +17,14 @@ export function daysBetween(from: IsoDate, to: IsoDate): number {
   return Math.round((parseIso(to).getTime() - parseIso(from).getTime()) / 86_400_000);
 }
 
+function isThisYear(date: Date, today: IsoDate): boolean {
+  return date.getFullYear() === parseIso(today).getFullYear();
+}
+
 /** "Sat, Aug 22", with the year only when it isn't this year's. */
 export function formatDay(iso: IsoDate, today: IsoDate): string {
   const date = parseIso(iso);
-  const sameYear = date.getFullYear() === parseIso(today).getFullYear();
+  const sameYear = isThisYear(date, today);
   return date.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
@@ -50,8 +54,8 @@ export function relativeDay(iso: IsoDate, today: IsoDate): string {
 }
 
 /**
- * "Aug 20 – 27", "Aug 30 – Sep 2" or "Dec 28, 2026 – Jan 3, 2027". A range in another year than
- * today's ends with its year, like `formatDay`: "Dec 1 – 5, 2027", "Nov 30, 2027".
+ * "Aug 20 – 27", "Aug 30 – Sep 2" or "Dec 28, 2026 – Jan 3, 2027". Like `formatDay`, a range in
+ * another year than today's says which: "Dec 1 – 5, 2027", "Nov 30, 2027".
  */
 export function formatRange(start: IsoDate, end: IsoDate, today: IsoDate): string {
   const a = parseIso(start);
@@ -61,8 +65,9 @@ export function formatRange(start: IsoDate, end: IsoDate, today: IsoDate): strin
   if (a.getFullYear() !== b.getFullYear()) {
     return `${a.toLocaleDateString("en-US", mdy)} – ${b.toLocaleDateString("en-US", mdy)}`;
   }
-  const year = a.getFullYear() === parseIso(today).getFullYear() ? "" : `, ${a.getFullYear()}`;
-  if (start === end) return `${a.toLocaleDateString("en-US", md)}${year}`;
+  const thisYear = isThisYear(a, today);
+  if (start === end) return a.toLocaleDateString("en-US", thisYear ? md : mdy);
+  const year = thisYear ? "" : `, ${a.getFullYear()}`;
   if (a.getMonth() === b.getMonth()) return `${a.toLocaleDateString("en-US", md)} – ${b.getDate()}${year}`;
   return `${a.toLocaleDateString("en-US", md)} – ${b.toLocaleDateString("en-US", md)}${year}`;
 }

@@ -48,6 +48,8 @@ describe("dates", () => {
     expect(formatRange("2027-12-01", "2027-12-05", today)).toBe("Dec 1 – 5, 2027");
     expect(formatRange("2027-11-30", "2027-11-30", today)).toBe("Nov 30, 2027");
     expect(formatRange("2027-08-30", "2027-09-02", today)).toBe("Aug 30 – Sep 2, 2027");
+    expect(formatRange("2025-08-30", "2025-09-02", today)).toBe("Aug 30 – Sep 2, 2025");
+    expect(formatRange("2024-12-28", "2025-01-03", today)).toBe("Dec 28, 2024 – Jan 3, 2025");
     expect(formatRange("2026-12-01", "2026-12-05", today)).toBe("Dec 1 – 5");
   });
 });
