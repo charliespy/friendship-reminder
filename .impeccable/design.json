@@ -24,6 +24,7 @@
       "amber-tint": { "role": "tertiary", "displayName": "Amber Tint", "canonical": "rgb(150 96 12 / 11%)", "dark": "rgb(227 178 92 / 14%)" },
       "plum": { "role": "tertiary", "displayName": "Plum", "canonical": "#7c4a86", "dark": "#c99ad3", "tonalRamp": ["oklch(15% 0.033 321)", "oklch(26% 0.080 321)", "oklch(38% 0.095 321)", "oklch(49% 0.109 321)", "oklch(61% 0.094 321)", "oklch(72% 0.079 321)", "oklch(84% 0.065 321)", "oklch(95% 0.025 321)"] },
       "danger": { "role": "tertiary", "displayName": "Delete Red", "canonical": "#b02a24", "dark": "#ff6b61", "tonalRamp": ["oklch(15% 0.052 28)", "oklch(26% 0.128 28)", "oklch(38% 0.151 28)", "oklch(49% 0.175 28)", "oklch(61% 0.172 28)", "oklch(72% 0.148 28)", "oklch(84% 0.125 28)", "oklch(95% 0.051 28)"] },
+      "danger-fill": { "role": "tertiary", "displayName": "Delete Red Fill", "canonical": "#b02a24", "dark": "#c8322b" },
       "danger-down": { "role": "tertiary", "displayName": "Delete Red Down", "canonical": "#93231e", "dark": "#ad2a24", "tonalRamp": ["oklch(15% 0.051 28)", "oklch(26% 0.123 28)", "oklch(38% 0.145 28)", "oklch(49% 0.162 28)", "oklch(61% 0.141 28)", "oklch(72% 0.119 28)", "oklch(84% 0.097 28)", "oklch(95% 0.038 28)"] },
       "focus": { "role": "primary", "displayName": "Focus Ring", "canonical": "rgb(51 70 196 / 42%)", "dark": "rgb(127 143 255 / 55%)" },
       "selection": { "role": "primary", "displayName": "Text Selection", "canonical": "rgb(51 70 196 / 20%)", "dark": "rgb(127 143 255 / 30%)" },
