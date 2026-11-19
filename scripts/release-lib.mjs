@@ -93,10 +93,15 @@ export function bumpFor(commits) {
   return bump;
 }
 
-/** Applies a bump; on 0.x a major bump becomes a minor one. */
+/** The bump that really applies to `version`: on 0.x a major bump becomes a minor one. */
+export function effectiveBump(version, bump) {
+  return bump === "major" && parseVersion(version)[0] === 0 ? "minor" : bump;
+}
+
+/** Applies a bump (after effectiveBump). */
 export function applyBump(version, bump) {
   const [major, minor, patch] = parseVersion(version);
-  if (bump === "major" && major === 0) bump = "minor";
+  bump = effectiveBump(version, bump);
   if (bump === "major") return `${major + 1}.0.0`;
   if (bump === "minor") return `${major}.${minor + 1}.0`;
   if (bump === "patch") return `${major}.${minor}.${patch + 1}`;
@@ -138,12 +143,11 @@ export function nextRelease({ lastTag, currentVersion, commits, forcePatch = fal
       reason: `nothing to release since ${lastTag}: no feat, fix, perf, revert or breaking change (use --patch to release anyway)`,
     };
   }
-  const version = applyBump(base, bump);
-  const zeroMajor = bump === "major" && parseVersion(base)[0] === 0;
+  const applied = effectiveBump(base, bump);
   return {
-    version,
-    bump: zeroMajor ? "minor" : bump,
-    reason: zeroMajor ? `${why}; on 0.x a breaking change bumps the minor` : why,
+    version: applyBump(base, applied),
+    bump: applied,
+    reason: applied === bump ? why : `${why}; on 0.x a breaking change bumps the ${applied}`,
   };
 }
 
@@ -222,10 +226,16 @@ export function parseSections(body) {
       groups[current][last] += `\n${line}`;
       continue;
     }
-    groups[current].push(prefix ? line.replace(/^- /, `- ${prefix}`) : line);
+    groups[current].push(prefix ? withPrefix(line, prefix) : line);
     last = groups[current].length - 1;
   }
   return groups;
+}
+
+/** "- An old button." -> "- Removed: An old button."; a line that isn't a bullet becomes one. */
+function withPrefix(line, prefix) {
+  const m = /^([-*+]) (.*)$/.exec(line);
+  return m ? `${m[1]} ${prefix}${m[2]}` : `- ${prefix}${line.trim()}`;
 }
 
 export function renderSections(groups) {
@@ -234,14 +244,18 @@ export function renderSections(groups) {
     .join("\n\n");
 }
 
-/** Finds `## [<name>]` in a changelog: { start, bodyStart, end } line indexes, or null. */
+/** A Keep a Changelog link line at the end of the file, like "[0.1.0]: https://...". */
+const LINK_REF_RE = /^\[[^\]]+\]:\s/;
+
+/** Finds `## [<name>]` in a changelog: { start, bodyStart, end } line indexes, or null. A section
+ * ends at the next "## " heading or link line. */
 function findSection(lines, name) {
   const head = `## [${name}]`;
   const start = lines.findIndex((l) => l === head || l.startsWith(`${head} `));
   if (start < 0) return null;
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (lines[i].startsWith("## ")) {
+    if (lines[i].startsWith("## ") || LINK_REF_RE.test(lines[i])) {
       end = i;
       break;
     }
@@ -272,17 +286,40 @@ export function insertRelease(changelog, version, date, notes) {
   if (findSection(lines, version)) throw new Error(`CHANGELOG.md already has a [${version}] section`);
   const u = findSection(lines, "Unreleased");
   if (!u) throw new Error("CHANGELOG.md has no ## [Unreleased] section");
-  const out = [
-    ...lines.slice(0, u.start),
-    "## [Unreleased]",
-    "",
-    `## [${version}] - ${date}`,
-    "",
-    ...body.split("\n"),
-    "",
-    ...lines.slice(u.end),
-  ];
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\n*$/, "\n");
+  // Only the lines around the new section are tidied; the rest of the file stays byte for byte.
+  const before = lines.slice(0, u.start).join("\n").replace(/\n*$/, "");
+  const after = lines.slice(u.end).join("\n").replace(/^\n*/, "").replace(/\n*$/, "");
+  const inserted = `## [Unreleased]\n\n## [${version}] - ${date}\n\n${body}\n`;
+  return `${before ? `${before}\n\n` : ""}${inserted}${after ? `\n${after}\n` : ""}`;
+}
+
+/**
+ * Checks the version given to "prepare": a first release (no tag) may keep the version in the
+ * files or raise it; a later one must be above the last release. Throws otherwise.
+ */
+export function checkNewVersion({ version, currentVersion, lastTag }) {
+  parseVersion(version);
+  if (!lastTag) {
+    if (compareVersions(version, currentVersion) < 0) {
+      throw new Error(`${version} is below the version in the files (${currentVersion})`);
+    }
+    return;
+  }
+  if (compareVersions(version, lastTag.slice(1)) <= 0) {
+    throw new Error(`${version} is not above the last release (${lastTag})`);
+  }
+}
+
+/**
+ * The lines under [Unreleased] whose words don't appear in the notes: "prepare" empties
+ * [Unreleased], so these would be lost from CHANGELOG.md.
+ */
+export function unreleasedLinesMissing(unreleased, notes) {
+  const squash = (t) => t.replace(/^[-*+]\s+/, "").replace(/\s+/g, " ").trim().toLowerCase();
+  const have = squash(notes.split("\n").map((l) => l.trim()).join(" "));
+  return unreleased
+    .split("\n")
+    .filter((l) => l.trim() && !/^#{1,6}\s/.test(l) && !have.includes(squash(l)));
 }
 
 /** Sets the top-level "version" of a JSON file's text (package.json, tauri.conf.json, package-lock.json). */

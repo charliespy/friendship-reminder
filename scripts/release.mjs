@@ -6,32 +6,36 @@
 //       of the release notes (also written to <file> with --out). Exits 3 when there is nothing to
 //       release (no feat, fix, perf, revert or breaking change since the last tag; --patch
 //       releases a patch anyway, e.g. for dependency updates only).
-//   node scripts/release.mjs prepare <version> <notes file> [--date YYYY-MM-DD]
+//   node scripts/release.mjs prepare <version> <notes file> [--date YYYY-MM-DD] [--drop-unreleased]
 //       Writes the notes into CHANGELOG.md as "## [<version>] - <date>" (under an emptied
 //       [Unreleased]) and sets <version> in package.json, package-lock.json,
-//       src-tauri/tauri.conf.json, src-tauri/Cargo.toml and Cargo.lock.
+//       src-tauri/tauri.conf.json, src-tauri/Cargo.toml and Cargo.lock. Refuses a version that
+//       isn't above the last release, and, without --drop-unreleased, refuses when a line under
+//       [Unreleased] isn't in the notes (it would be lost).
 //   node scripts/release.mjs notes <version> [--out <file>]
 //       Prints the CHANGELOG.md section for <version> (the release description). Exits 1 when it
-//       is missing or empty. The release workflow uses this.
+//       is missing or empty. The release workflow publishes exactly this text.
 //   node scripts/release.mjs verify <vX.Y.Z>
 //       Checks the published GitHub Release: not a draft, exactly one .dmg for that version, and
 //       a description equal to the CHANGELOG.md section at that tag. Needs `gh`.
 //
-// Run from anywhere inside the repo. The rules themselves are in scripts/release-lib.mjs.
+// Run from anywhere inside the repo; file arguments are relative to the folder you ran it from.
+// The rules themselves are in scripts/release-lib.mjs.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
+  checkNewVersion,
   draftNotes,
   insertRelease,
   latestReleaseTag,
   nextRelease,
   parseCommit,
-  parseVersion,
   sectionBody,
   setCargoLockVersion,
   setCargoTomlVersion,
   setJsonVersion,
+  unreleasedLinesMissing,
 } from "./release-lib.mjs";
 
 /** The Rust package of the app itself (src-tauri); the other crates keep their own versions. */
@@ -44,6 +48,8 @@ function git(args, opts = {}) {
 const root = git(["rev-parse", "--show-toplevel"]).trim();
 const file = (p) => join(root, p);
 const read = (p) => readFileSync(file(p), "utf8");
+/** A path the user typed: relative to where they ran the command (npm run moves to the repo root). */
+const userPath = (p) => resolve(process.env.INIT_CWD ?? process.cwd(), p);
 
 function fail(message, code = 1) {
   process.stderr.write(`release: ${message}\n`);
@@ -86,11 +92,18 @@ function commitsSince(since) {
     });
 }
 
+function lastReleaseTag() {
+  return latestReleaseTag(git(["tag", "--list", "v*", "--merged", "HEAD"]).split("\n").filter(Boolean));
+}
+
+function checkFlags(flags, allowed) {
+  for (const f of Object.keys(flags)) if (!allowed.includes(f)) fail(`unknown option ${f}`);
+}
+
 function plan(argv) {
   const { flags } = parseArgs(argv, ["--out"]);
-  for (const f of Object.keys(flags)) if (!["--out", "--patch"].includes(f)) fail(`unknown option ${f}`);
-  const tags = git(["tag", "--list", "v*", "--merged", "HEAD"]).split("\n").filter(Boolean);
-  const lastTag = latestReleaseTag(tags);
+  checkFlags(flags, ["--out", "--patch"]);
+  const lastTag = lastReleaseTag();
   const version = currentVersion();
   const all = commitsSince(lastTag);
   const conventional = all.filter((c) => c.parsed);
@@ -125,23 +138,27 @@ function plan(argv) {
 
   const notes = draftNotes({ unreleased, commits: lastTag ? conventional.map((c) => c.parsed) : [] });
   process.stdout.write(`\nDraft notes for v${next.version} (rewrite into plain words before "prepare"):\n\n${notes}\n`);
-  if (flags["--out"]) writeFileSync(flags["--out"], `${notes}\n`);
+  if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${notes}\n`);
 }
 
 function prepare(argv) {
   const { pos, flags } = parseArgs(argv, ["--date"]);
-  if (pos.length !== 2) fail("usage: release.mjs prepare <version> <notes file> [--date YYYY-MM-DD]");
+  checkFlags(flags, ["--date", "--drop-unreleased"]);
+  if (pos.length !== 2) fail("usage: release.mjs prepare <version> <notes file> [--date YYYY-MM-DD] [--drop-unreleased]");
   const [version, notesFile] = pos;
-  try {
-    parseVersion(version);
-  } catch (e) {
-    fail(e.message);
-  }
   const date = flags["--date"] ?? localDate();
-  const notes = readFileSync(notesFile, "utf8");
   // Work everything out first, then write: a bad input changes no file.
   const writes = [];
   try {
+    checkNewVersion({ version, currentVersion: currentVersion(), lastTag: lastReleaseTag() });
+    const notes = readFileSync(userPath(notesFile), "utf8");
+    const missing = unreleasedLinesMissing(sectionBody(read("CHANGELOG.md"), "Unreleased") ?? "", notes);
+    if (missing.length && !flags["--drop-unreleased"]) {
+      throw new Error(
+        `these lines under [Unreleased] aren't in the notes, and would be lost:\n  ${missing.join("\n  ")}\n` +
+          "Put them in the notes, or pass --drop-unreleased if the notes already cover them in other words.",
+      );
+    }
     writes.push(["CHANGELOG.md", insertRelease(read("CHANGELOG.md"), version, date, notes)]);
     writes.push(["package.json", setJsonVersion(read("package.json"), version)]);
     writes.push(["package-lock.json", setJsonVersion(read("package-lock.json"), version, { lockfile: true })]);
@@ -161,7 +178,7 @@ function notes(argv) {
   const version = pos[0].replace(/^v/, "");
   const body = sectionBody(read("CHANGELOG.md"), version);
   if (!body) fail(`CHANGELOG.md has no notes for [${version}]: run "release.mjs prepare" in the release PR`);
-  if (flags["--out"]) writeFileSync(flags["--out"], `${body}\n`);
+  if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${body}\n`);
   else process.stdout.write(`${body}\n`);
 }
 
@@ -190,13 +207,15 @@ function verify(argv) {
     if (!d.name.includes(`_${version}_`)) problems.push(`${d.name} is not named for ${version}`);
     if (!(d.size > 1_000_000)) problems.push(`${d.name} is only ${d.size} bytes`);
   }
-  let expected = null;
+  let changelog = null;
   try {
-    expected = sectionBody(git(["show", `${tag}:CHANGELOG.md`]), version);
+    changelog = git(["show", `${tag}:CHANGELOG.md`]);
   } catch {
     problems.push(`can't read CHANGELOG.md at ${tag} (fetch the tags first: git fetch --tags)`);
   }
-  if (expected !== null && !expected) problems.push(`CHANGELOG.md at ${tag} has no [${version}] section`);
+  const expected = changelog === null ? null : sectionBody(changelog, version);
+  if (changelog !== null && expected === null) problems.push(`CHANGELOG.md at ${tag} has no [${version}] section`);
+  if (expected === "") problems.push(`the [${version}] section of CHANGELOG.md at ${tag} is empty`);
   if (expected && release.body.trim() !== expected) {
     problems.push("the release description differs from the CHANGELOG.md section");
   }

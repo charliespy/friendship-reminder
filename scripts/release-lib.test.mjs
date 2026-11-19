@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyBump,
+  checkNewVersion,
   bumpFor,
   draftNotes,
   insertRelease,
@@ -18,6 +19,7 @@ import {
   setCargoTomlVersion,
   setJsonVersion,
   UNSIGNED_NOTE,
+  unreleasedLinesMissing,
 } from "./release-lib.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -65,6 +67,14 @@ describe("the version rule", () => {
     expect(applyBump("1.2.3", "minor")).toBe("1.3.0");
     expect(applyBump("1.2.3", "patch")).toBe("1.2.4");
     expect(applyBump("0.4.2", "major")).toBe("0.5.0");
+  });
+  it("only lets a release go up", () => {
+    expect(() => checkNewVersion({ version: "0.1.0", currentVersion: "0.1.0", lastTag: null })).not.toThrow();
+    expect(() => checkNewVersion({ version: "0.2.0", currentVersion: "0.1.0", lastTag: null })).not.toThrow();
+    expect(() => checkNewVersion({ version: "0.0.9", currentVersion: "0.1.0", lastTag: null })).toThrow(/below/);
+    expect(() => checkNewVersion({ version: "0.1.0", currentVersion: "0.1.0", lastTag: "v0.1.0" })).toThrow(/not above/);
+    expect(() => checkNewVersion({ version: "0.1.1", currentVersion: "0.1.0", lastTag: "v0.1.0" })).not.toThrow();
+    expect(() => checkNewVersion({ version: "1.0", currentVersion: "0.1.0", lastTag: null })).toThrow(/version/);
   });
   it("finds the newest vX.Y.Z tag and ignores other tags", () => {
     expect(latestReleaseTag(["v0.9.0", "v0.10.0", "v0.2.1", "builder/NR-1/m1", "v1.0.0-rc.1", "x"])).toBe("v0.10.0");
@@ -134,6 +144,10 @@ describe("draftNotes", () => {
     const groups = parseSections(notes);
     expect(groups.New).toEqual(["- A new look.", "- Tests,\n  run on every PR."]);
     expect(groups.Changed).toEqual(["- Removed: An old button."]);
+    expect(parseSections("### Removed\n* A star bullet.\nNot a bullet.").Changed).toEqual([
+      "* Removed: A star bullet.",
+      "- Removed: Not a bullet.",
+    ]);
     expect(groups["Good to know"]).toEqual([`- ${UNSIGNED_NOTE}`]);
     expect(parseSections(draftNotes({ unreleased: notes }))["Good to know"]).toHaveLength(1);
   });
@@ -198,6 +212,24 @@ Intro.
     expect(() => insertRelease(CHANGELOG, "0.2", "2026-12-01", "- x")).toThrow(/version/);
     expect(() => insertRelease(CHANGELOG, "0.2.0", "2026-12-01", "## [9.9.9]\n- x")).toThrow(/headings/);
     expect(() => insertRelease("# Changelog\n", "0.2.0", "2026-12-01", "- x")).toThrow(/Unreleased/);
+  });
+  it("leaves the rest of the file byte for byte, and stops sections at link lines", () => {
+    const file =
+      "# Changelog\n\n## [Unreleased]\n\n- x\n\n## [0.1.0] - 2026-11-19\n\n- a\n\n\n\n```\n\n\n```\n\n" +
+      "[Unreleased]: https://example.com/compare\n[0.1.0]: https://example.com/v0.1.0\n";
+    const out = insertRelease(file, "0.2.0", "2026-12-01", "- x");
+    expect(out).toBe(
+      "# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-12-01\n\n- x\n\n## [0.1.0] - 2026-11-19\n\n- a\n\n\n\n```\n\n\n```\n\n" +
+        "[Unreleased]: https://example.com/compare\n[0.1.0]: https://example.com/v0.1.0\n",
+    );
+    expect(sectionBody(file, "0.1.0")).toBe("- a\n\n\n\n```\n\n\n```");
+  });
+  it("finds [Unreleased] lines the notes would lose", () => {
+    const unreleased = "### Added\n- A new look.\n- Tests,\n  run on every PR.\n\n### Removed\n- An old button.";
+    expect(unreleasedLinesMissing(unreleased, "### New\n\n- A new look.\n- Tests, run\n  on every PR.")).toEqual([
+      "- An old button.",
+    ]);
+    expect(unreleasedLinesMissing("", "- x")).toEqual([]);
   });
   it("reads this repo's CHANGELOG.md", () => {
     expect(sectionBody(repoFile("CHANGELOG.md"), "Unreleased")).not.toBeNull();
