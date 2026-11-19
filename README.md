@@ -9,7 +9,15 @@ by without you reaching out, it moves the reminder to the next good day.
 
 Everything stays on your Mac: no account, no sync, no tracking.
 
-<!-- screenshots: docs/screenshots/ -->
+<p>
+  <img src="docs/screenshots/dropdown-light.png" width="300" alt="The Friends menu bar dropdown: three people to reach out to now, each with a Done button, and three coming up">
+  <img src="docs/screenshots/dropdown-dark.png" width="300" alt="The same dropdown in dark mode">
+</p>
+<p>
+  <img src="docs/screenshots/preferences-people.png" width="600" alt="Preferences, People: everyone you keep up with, how often, and when their next reminder comes">
+</p>
+
+The people in these screenshots are made up.
 
 ## Install
 
