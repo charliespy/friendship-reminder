@@ -5,7 +5,7 @@ members = ["crates/friends-core", "crates/friends-devserver", "src-tauri"]
 [workspace.package]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/charliespy/networking-reminder"
+repository = "https://github.com/charliespy/friendship-reminder"
 
 [workspace.dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
