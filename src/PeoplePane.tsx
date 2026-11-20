@@ -105,7 +105,10 @@ function PersonRow({
   selected,
   onSelect,
   onEdit,
+  onDoneStart,
+  onDoneEnd,
   selectRef,
+  doneRef,
   editRef,
 }: {
   person: Person;
@@ -113,7 +116,12 @@ function PersonRow({
   selected: boolean;
   onSelect: (on: boolean) => void;
   onEdit: () => void;
+  /** Called when Done is pressed, before the command runs. */
+  onDoneStart: () => void;
+  /** Called when the Done command has finished, with whether it worked. */
+  onDoneEnd: (ok: boolean) => void;
   selectRef: (el: HTMLInputElement | null) => void;
+  doneRef: (el: HTMLButtonElement | null) => void;
   editRef: (el: HTMLButtonElement | null) => void;
 }) {
   const { run, busy, error } = useAction();
@@ -143,9 +151,13 @@ function PersonRow({
         {error && <p className="error" role="alert">{error}</p>}
       </div>
       <button
+        ref={doneRef}
         className="btn btn-done btn-sm"
         disabled={busy}
-        onClick={() => run(() => api.markDone(person.id))}
+        onClick={async () => {
+          onDoneStart();
+          onDoneEnd(await run(() => api.markDone(person.id)));
+        }}
         aria-label={`Mark ${person.name} as done`}
       >
         Done
@@ -172,21 +184,44 @@ export function PeoplePane({ view }: { view: View }) {
   // Edit), so keyboard and screen reader users don't land back at the top of the window. After a
   // delete, it goes to the checkbox of the person who takes the first deleted person's place (or
   // the one before, if the deleted people were at the end), or to Add person when nobody is left.
+  // After a Done, the list re-sorts and moves the person's row, which drops focus: it goes back to
+  // their Done button in its new place.
   const section = useRef<HTMLElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const editButtons = useRef(new Map<number, HTMLButtonElement>());
   const checkboxes = useRef(new Map<number, HTMLInputElement>());
-  const returnFocus = useRef<"add" | number | { deleted: number[]; next: number | null } | null>(null);
+  const doneButtons = useRef(new Map<number, HTMLButtonElement>());
+  const returnFocus = useRef<
+    | "add"
+    | number
+    | { deleted: number[]; next: number | null }
+    | { done: number; before: View; finished: boolean }
+    | null
+  >(null);
+  // Re-renders the pane when a Done command finishes (its busy state lives in the row).
+  const [, setDoneFinished] = useState(0);
   useEffect(() => {
     const target = returnFocus.current;
     if (target === null) return;
-    // The new view can arrive after the delete command returns: wait until it no longer shows the
-    // deleted people.
-    if (typeof target === "object" && target.deleted.some((id) => present.has(id))) return;
+    // The new view can arrive after the command returns: wait until it no longer shows the deleted
+    // people. After a Done, the new view can come before or after the command returns (the macOS
+    // app sends it first): wait for both, so the Done button is enabled again, and for a newer view
+    // than the one Done was pressed in that shows the person as done today, is gone, or is a new day
+    // (then the target is used up either way, so it can't take focus later).
+    if (typeof target === "object" && "deleted" in target && target.deleted.some((id) => present.has(id))) return;
+    if (typeof target === "object" && "done" in target) {
+      const person = view.people.find((p) => p.id === target.done);
+      const newDay = view.today !== target.before.today;
+      if (!target.finished || view === target.before || (person && person.lastConnected !== view.today && !newDay)) {
+        return;
+      }
+    }
     returnFocus.current = null;
-    // Only if focus was lost with the form; never take it from somewhere the user moved it.
+    // Only if focus was lost; never take it from somewhere the user moved it.
     if (document.activeElement && document.activeElement !== document.body) return;
-    if (typeof target === "object") {
+    if (typeof target === "object" && "done" in target) {
+      doneButtons.current.get(target.done)?.focus();
+    } else if (typeof target === "object") {
       const next = target.next === null ? undefined : checkboxes.current.get(target.next);
       // Add person is hidden while its form is open; then the form's first field takes focus.
       (next ?? addButton.current ?? section.current?.querySelector<HTMLElement>("form input"))?.focus();
@@ -312,9 +347,25 @@ export function PeoplePane({ view }: { view: View }) {
               selected={chosen.includes(p.id)}
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}
+              // `view` here is the one Done was pressed in.
+              onDoneStart={() => (returnFocus.current = { done: p.id, before: view, finished: false })}
+              onDoneEnd={(ok) => {
+                const target = returnFocus.current;
+                if (typeof target !== "object" || target === null || !("done" in target) || target.done !== p.id) return;
+                if (ok) {
+                  target.finished = true;
+                  setDoneFinished((n) => n + 1);
+                } else {
+                  returnFocus.current = null;
+                }
+              }}
               selectRef={(el) => {
                 if (el) checkboxes.current.set(p.id, el);
                 else checkboxes.current.delete(p.id);
+              }}
+              doneRef={(el) => {
+                if (el) doneButtons.current.set(p.id, el);
+                else doneButtons.current.delete(p.id);
               }}
               editRef={(el) => {
                 if (el) editButtons.current.set(p.id, el);

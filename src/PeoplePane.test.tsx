@@ -150,6 +150,89 @@ describe("PeoplePane", () => {
     expect(markDone).toHaveBeenCalledWith(2);
   });
 
+  it("after Done moves a person's row, focuses their Done button in its new place", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    // Done today: the list re-sorts and Maya moves to the end, which drops focus.
+    const done = { ...MAYA, lastConnected: TODAY, due: false, nextTarget: "2026-12-19", notificationDate: "2026-12-14" };
+    rerender(<PeoplePane view={view([THEO, LENA, done])} />);
+    expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
+  });
+
+  it("after Done, focuses the Done button when the new view arrives before the command returns", async () => {
+    // The macOS app sends the new view first, while the command is still running.
+    let finish!: (v: View) => void;
+    markDone.mockReturnValue(new Promise<View>((resolve) => (finish = resolve)));
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    const after = view([THEO, LENA, { ...MAYA, lastConnected: TODAY, due: false }]);
+    rerender(<PeoplePane view={after} />);
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    expect(document.activeElement).toBe(document.body);
+    await act(async () => finish(after));
+    expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
+  });
+
+  it("after a failed Done, doesn't take focus on a later view", async () => {
+    markDone.mockRejectedValue({ kind: "storage", message: "Couldn't save the data file." });
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    act(() => button("Mark Maya Chen as done").blur());
+    rerender(<PeoplePane view={view([THEO, { ...MAYA, lastConnected: TODAY }])} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("after Done, a view from a new day uses up the focus target", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    act(() => button("Mark Maya Chen as done").blur());
+    // Done was pressed just before midnight: Maya was in touch yesterday by the new view's today.
+    rerender(<PeoplePane view={{ ...view([THEO, { ...MAYA, lastConnected: TODAY }]), today: "2026-11-19" }} />);
+    expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
+    act(() => button("Mark Maya Chen as done").blur());
+    rerender(<PeoplePane view={{ ...view([THEO, { ...MAYA, lastConnected: "2026-11-19" }]), today: "2026-11-19" }} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("after Done, waits for the new view before focusing the Done button", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    // Focus is lost, then the old view comes again (a refresh that crossed the Done): wait.
+    act(() => button("Mark Maya Chen as done").blur());
+    rerender(<PeoplePane view={view([MAYA, THEO])} />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<PeoplePane view={view([THEO, { ...MAYA, lastConnected: TODAY }])} />);
+    expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
+  });
+
+  it("after Done on someone already in touch today, waits for a newer view", async () => {
+    const today = { ...MAYA, lastConnected: TODAY };
+    const shown = view([today, THEO]);
+    const { rerender } = render(<PeoplePane view={shown} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    act(() => button("Mark Maya Chen as done").blur());
+    // The same view again: not the new one yet.
+    rerender(<PeoplePane view={shown} />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<PeoplePane view={view([THEO, today])} />);
+    expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
+  });
+
+  it("leaves focus alone after Done if the user moved it", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
+    await click(button("Mark Maya Chen as done"));
+    const edit = button("Edit Theo Marsh");
+    edit.focus();
+    rerender(<PeoplePane view={view([THEO, { ...MAYA, lastConnected: TODAY }])} />);
+    expect(document.activeElement).toBe(edit);
+  });
+
   it("shows a Done error in that person's row", async () => {
     markDone.mockRejectedValue({ kind: "storage", message: "Couldn't save the data file." });
     render(<PeoplePane view={view([MAYA, THEO])} />);
