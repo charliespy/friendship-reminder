@@ -23,11 +23,12 @@ export function BlockedPane({ view }: { view: View }) {
   // first field when no ranges are left, so keyboard users don't land back at the top of the window.
   const firstField = useRef<HTMLInputElement>(null);
   const removeButtons = useRef(new Map<number, HTMLButtonElement>());
-  const returnFocus = useRef<{ removed: number; next: number | null } | null>(null);
+  const returnFocus = useRef<{ removed: number; next: number | null; finished: boolean } | null>(null);
   useEffect(() => {
     const target = returnFocus.current;
-    // The new view can arrive after the command returns: wait until it no longer shows the range.
-    if (target === null || view.blocked.some((b) => b.id === target.removed)) return;
+    // The new view can come before or after the command returns (the macOS app sends it first):
+    // wait for both, so the Remove buttons are enabled again, and for a view without the range.
+    if (target === null || !target.finished || view.blocked.some((b) => b.id === target.removed)) return;
     returnFocus.current = null;
     // Only if focus was lost with the row; never take it from somewhere the user moved it.
     if (document.activeElement && document.activeElement !== document.body) return;
@@ -39,9 +40,13 @@ export function BlockedPane({ view }: { view: View }) {
     // Who takes its place: the next range, else the one before.
     const index = view.blocked.findIndex((b) => b.id === id);
     const next = view.blocked[index + 1] ?? view.blocked[index - 1];
-    if (await remove.run(() => api.deleteBlocked(id))) {
-      returnFocus.current = { removed: id, next: next?.id ?? null };
-    }
+    const target = { removed: id, next: next?.id ?? null, finished: false };
+    returnFocus.current = target;
+    const ok = await remove.run(() => api.deleteBlocked(id));
+    if (returnFocus.current !== target) return;
+    // Finished: the busy state clearing re-renders the pane, which runs the effect above.
+    if (ok) target.finished = true;
+    else returnFocus.current = null;
   };
 
   const submit = async (e: FormEvent) => {

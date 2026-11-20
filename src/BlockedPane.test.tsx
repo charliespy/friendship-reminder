@@ -94,6 +94,33 @@ describe("BlockedPane", () => {
     expect(document.activeElement).toBe(input("What"));
   });
 
+  it("after Remove, focuses the next Remove button when the new view arrives before the command returns", async () => {
+    // The macOS app sends the new view first, while the command is still running.
+    let finish!: (v: View) => void;
+    deleteBlocked.mockReturnValue(new Promise<View>((resolve) => (finish = resolve)));
+    const remove = (name: string) => screen.getByRole("button", { name: new RegExp(`^Remove ${name} `) });
+    const { rerender } = render(<BlockedPane view={view("2026-11-18", [BUSY, TRIP])} />);
+    remove("Trip").focus();
+    await act(async () => {
+      fireEvent.click(remove("Trip"));
+    });
+    rerender(<BlockedPane view={view("2026-11-18", [BUSY])} />);
+    // The Remove buttons are still disabled while the command runs.
+    expect(document.activeElement).toBe(document.body);
+    await act(async () => finish(view("2026-11-18", [BUSY])));
+    expect(document.activeElement).toBe(remove("blocked dates"));
+  });
+
+  it("after a failed Remove, doesn't take focus on a later view", async () => {
+    deleteBlocked.mockRejectedValue({ kind: "storage", message: "Couldn't save the data file." });
+    const { rerender } = render(<BlockedPane view={view("2026-11-18", [BUSY, TRIP])} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Remove Trip / }));
+    });
+    rerender(<BlockedPane view={view("2026-11-18", [BUSY])} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("leaves focus alone after Remove if the user moved it", async () => {
     const { rerender } = render(<BlockedPane view={view("2026-11-18", [BUSY, TRIP])} />);
     await act(async () => {
