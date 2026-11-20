@@ -105,7 +105,8 @@ function PersonRow({
   selected,
   onSelect,
   onEdit,
-  onDone,
+  onDoneStart,
+  onDoneEnd,
   selectRef,
   doneRef,
   editRef,
@@ -115,8 +116,10 @@ function PersonRow({
   selected: boolean;
   onSelect: (on: boolean) => void;
   onEdit: () => void;
-  /** Called once the person is marked done. */
-  onDone: () => void;
+  /** Called when Done is pressed, before the command runs. */
+  onDoneStart: () => void;
+  /** Called when the Done command has finished, with whether it worked. */
+  onDoneEnd: (ok: boolean) => void;
   selectRef: (el: HTMLInputElement | null) => void;
   doneRef: (el: HTMLButtonElement | null) => void;
   editRef: (el: HTMLButtonElement | null) => void;
@@ -152,7 +155,8 @@ function PersonRow({
         className="btn btn-done btn-sm"
         disabled={busy}
         onClick={async () => {
-          if (await run(() => api.markDone(person.id))) onDone();
+          onDoneStart();
+          onDoneEnd(await run(() => api.markDone(person.id)));
         }}
         aria-label={`Mark ${person.name} as done`}
       >
@@ -188,18 +192,29 @@ export function PeoplePane({ view }: { view: View }) {
   const checkboxes = useRef(new Map<number, HTMLInputElement>());
   const doneButtons = useRef(new Map<number, HTMLButtonElement>());
   const returnFocus = useRef<
-    "add" | number | { deleted: number[]; next: number | null } | { done: number; before: View } | null
+    | "add"
+    | number
+    | { deleted: number[]; next: number | null }
+    | { done: number; before: View; finished: boolean }
+    | null
   >(null);
+  // Re-renders the pane when a Done command finishes (its busy state lives in the row).
+  const [, setDoneFinished] = useState(0);
   useEffect(() => {
     const target = returnFocus.current;
     if (target === null) return;
     // The new view can arrive after the command returns: wait until it no longer shows the deleted
-    // people, or, after a Done, until a newer view than the one Done was pressed in shows the person
-    // as done today (or gone).
+    // people. After a Done, the new view can come before or after the command returns (the macOS
+    // app sends it first): wait for both, so the Done button is enabled again, and for a newer view
+    // than the one Done was pressed in that shows the person as done today, is gone, or is a new day
+    // (then the target is used up either way, so it can't take focus later).
     if (typeof target === "object" && "deleted" in target && target.deleted.some((id) => present.has(id))) return;
     if (typeof target === "object" && "done" in target) {
       const person = view.people.find((p) => p.id === target.done);
-      if (view === target.before || (person && person.lastConnected !== view.today)) return;
+      const newDay = view.today !== target.before.today;
+      if (!target.finished || view === target.before || (person && person.lastConnected !== view.today && !newDay)) {
+        return;
+      }
     }
     returnFocus.current = null;
     // Only if focus was lost; never take it from somewhere the user moved it.
@@ -333,7 +348,17 @@ export function PeoplePane({ view }: { view: View }) {
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}
               // `view` here is the one Done was pressed in.
-              onDone={() => (returnFocus.current = { done: p.id, before: view })}
+              onDoneStart={() => (returnFocus.current = { done: p.id, before: view, finished: false })}
+              onDoneEnd={(ok) => {
+                const target = returnFocus.current;
+                if (typeof target !== "object" || target === null || !("done" in target) || target.done !== p.id) return;
+                if (ok) {
+                  target.finished = true;
+                  setDoneFinished((n) => n + 1);
+                } else {
+                  returnFocus.current = null;
+                }
+              }}
               selectRef={(el) => {
                 if (el) checkboxes.current.set(p.id, el);
                 else checkboxes.current.delete(p.id);
