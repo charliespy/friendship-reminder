@@ -42,18 +42,54 @@ fn adding_someone_long_out_of_touch_catches_them_up_to_today() {
 #[test]
 fn bad_input_is_refused_with_a_message() {
     let mut data = Data::default();
-    assert!(data.add_person("   ", 30, today(), today()).is_err());
-    assert!(data.add_person("Ada", 31, today(), today()).is_err());
-    assert!(data
-        .add_person("Ada", 30, date(2026, 8, 20), today())
-        .is_err());
-    assert!(data
-        .add_person(&"a".repeat(101), 30, today(), today())
-        .is_err());
-    assert!(data
-        .add_blocked(date(2026, 8, 25), date(2026, 8, 24), "Trip", today())
-        .is_err());
+    let mut person = |name: &str, frequency: u32, last: NaiveDate| {
+        data.add_person(name, frequency, last, today())
+            .unwrap_err()
+            .0
+    };
+    assert_eq!(person("   ", 30, today()), "Give them a name.");
+    assert_eq!(
+        person(&"a".repeat(101), 30, today()),
+        "Keep the name under 100 characters."
+    );
+    assert_eq!(person("Ada", 31, today()), "Pick how often to be in touch.");
+    assert_eq!(
+        person("Ada", 30, date(2026, 8, 20)),
+        "The last time you were in touch can't be in the future."
+    );
+    assert_eq!(
+        person("Ada", 30, date(1899, 12, 31)),
+        "Pick a date between 1900 and today."
+    );
+
+    let mut blocked = |start: NaiveDate, end: NaiveDate, label: &str| {
+        data.add_blocked(start, end, label, today()).unwrap_err().0
+    };
+    assert_eq!(
+        blocked(date(2026, 8, 25), date(2026, 8, 24), "Trip"),
+        "The range has to end on or after the day it starts."
+    );
+    assert_eq!(
+        blocked(date(1899, 12, 31), date(1900, 1, 2), "Trip"),
+        "Pick dates from 1900 up to ten years from now."
+    );
+    assert_eq!(
+        blocked(date(2026, 8, 25), date(2026, 8, 26), &"a".repeat(101)),
+        "Keep the label under 100 characters."
+    );
+
     assert!(data.people.is_empty() && data.blocked.is_empty());
+}
+
+#[test]
+fn names_and_labels_of_exactly_100_characters_are_accepted() {
+    let mut data = Data::default();
+    let long = "a".repeat(100);
+    let id = data.add_person(&long, 30, today(), today()).unwrap();
+    assert_eq!(data.person(id).unwrap().name, long);
+    data.add_blocked(date(2026, 8, 25), date(2026, 8, 26), &long, today())
+        .unwrap();
+    assert_eq!(data.blocked[0].label, long);
 }
 
 #[test]
