@@ -172,6 +172,20 @@ describe("PeoplePane", () => {
     expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
   });
 
+  it("after Done on someone already in touch today, waits for a newer view", async () => {
+    const today = { ...MAYA, lastConnected: TODAY };
+    const shown = view([today, THEO]);
+    const { rerender } = render(<PeoplePane view={shown} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    act(() => button("Mark Maya Chen as done").blur());
+    // The same view again: not the new one yet.
+    rerender(<PeoplePane view={shown} />);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<PeoplePane view={view([THEO, today])} />);
+    expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
+  });
+
   it("leaves focus alone after Done if the user moved it", async () => {
     const { rerender } = render(<PeoplePane view={view([MAYA, THEO])} />);
     await click(button("Mark Maya Chen as done"));

@@ -188,17 +188,18 @@ export function PeoplePane({ view }: { view: View }) {
   const checkboxes = useRef(new Map<number, HTMLInputElement>());
   const doneButtons = useRef(new Map<number, HTMLButtonElement>());
   const returnFocus = useRef<
-    "add" | number | { deleted: number[]; next: number | null } | { done: number } | null
+    "add" | number | { deleted: number[]; next: number | null } | { done: number; before: View } | null
   >(null);
   useEffect(() => {
     const target = returnFocus.current;
     if (target === null) return;
     // The new view can arrive after the command returns: wait until it no longer shows the deleted
-    // people, or shows the person as done today (or gone).
+    // people, or, after a Done, until a newer view than the one Done was pressed in shows the person
+    // as done today (or gone).
     if (typeof target === "object" && "deleted" in target && target.deleted.some((id) => present.has(id))) return;
     if (typeof target === "object" && "done" in target) {
       const person = view.people.find((p) => p.id === target.done);
-      if (person && person.lastConnected !== view.today) return;
+      if (view === target.before || (person && person.lastConnected !== view.today)) return;
     }
     returnFocus.current = null;
     // Only if focus was lost; never take it from somewhere the user moved it.
@@ -331,7 +332,8 @@ export function PeoplePane({ view }: { view: View }) {
               selected={chosen.includes(p.id)}
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}
-              onDone={() => (returnFocus.current = { done: p.id })}
+              // `view` here is the one Done was pressed in.
+              onDone={() => (returnFocus.current = { done: p.id, before: view })}
               selectRef={(el) => {
                 if (el) checkboxes.current.set(p.id, el);
                 else checkboxes.current.delete(p.id);
