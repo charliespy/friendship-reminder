@@ -115,7 +115,14 @@ describe("DropdownContent focus after Done", () => {
   const ADA = person({ id: 1, name: "Ada" });
   const BO = person({ id: 2, name: "Bo" });
   const CY = person({ id: 3, name: "Cy" });
-  const notDue = (p: Person) => ({ ...p, due: false, lastConnected: "2026-11-18", notificationDate: "2026-12-14" });
+  /** The person after a Done today: next aim Sat, Dec 19, reminded the Monday before. */
+  const notDue = (p: Person) => ({
+    ...p,
+    due: false,
+    lastConnected: "2026-11-18",
+    nextTarget: "2026-12-19",
+    notificationDate: "2026-12-14",
+  });
 
   /** Focuses a person's Done button and presses it, as a keyboard user would. */
   async function pressDone(name: string) {
@@ -136,6 +143,20 @@ describe("DropdownContent focus after Done", () => {
     const { rerender } = render(<DropdownContent view={view([ADA, BO, CY])} />);
     await pressDone("Cy");
     rerender(<DropdownContent view={view([ADA, BO, notDue(CY)])} />);
+    expect(document.activeElement).toBe(button("Mark Bo as done"));
+  });
+
+  it("moves focus when the new view arrives before Done has finished", async () => {
+    // The app sends the new view to every window before the command returns.
+    let finish!: (v: View) => void;
+    markDone.mockReturnValue(new Promise((r) => (finish = r)));
+    const { rerender } = render(<DropdownContent view={view([ADA, BO])} />);
+    await pressDone("Ada");
+    expect((button("Mark Ada as done") as HTMLButtonElement).disabled).toBe(true);
+    const after = view([BO, notDue(ADA)]);
+    rerender(<DropdownContent view={after} />);
+    expect(document.activeElement).toBe(button("Mark Bo as done"));
+    await act(async () => finish(after));
     expect(document.activeElement).toBe(button("Mark Bo as done"));
   });
 
@@ -169,8 +190,8 @@ describe("DropdownContent focus after Done", () => {
     const { rerender } = render(<DropdownContent view={view([ADA, BO])} />);
     await pressDone("Ada");
     expect(screen.getByRole("alert").textContent).toBe("That person is gone.");
-    // Ada leaves the list some other way later (deleted in Preferences): that isn't the failed Done's move.
-    act(() => button("Mark Ada as done").blur());
+    // Ada leaves the list some other way later (deleted in Preferences), and focus goes with her row.
+    // That isn't the failed Done's move, so focus isn't sent to Bo.
     rerender(<DropdownContent view={view([BO])} />);
     expect(document.activeElement).toBe(document.body);
   });

@@ -33,7 +33,15 @@ function person(p: Partial<Person>): Person {
 
 const MAYA = person({ id: 1, name: "Maya Chen" });
 const THEO = person({ id: 2, name: "Theo Marsh" });
-const LENA = person({ id: 3, name: "Lena Fischer", due: false, notificationDate: "2027-03-01", nextTarget: "2027-03-06" });
+const LENA = person({
+  id: 3,
+  name: "Lena Fischer",
+  frequencyDays: 365,
+  lastConnected: "2026-03-02",
+  nextTarget: "2027-03-06",
+  notificationDate: "2027-03-01",
+  due: false,
+});
 
 function view(people: Person[], unreadableFile: string | null = null): View {
   return {
@@ -104,13 +112,12 @@ describe("Preferences", () => {
 
   it("shows how many people are due on the People tab", async () => {
     await open(view([MAYA, THEO, LENA]));
-    expect(tab(/^People/).querySelector(".tag")?.textContent).toBe("2");
+    expect(tab(/^People/).textContent).toBe("People2");
   });
 
   it("shows no count when nobody is due", async () => {
     await open(view([LENA]));
     expect(tab(/^People/).textContent).toBe("People");
-    expect(tab(/^People/).querySelector(".tag")).toBeNull();
   });
 
   it("keeps a half-filled form when switching tabs and back", async () => {
