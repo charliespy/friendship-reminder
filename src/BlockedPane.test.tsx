@@ -67,6 +67,43 @@ describe("BlockedPane", () => {
     expect(deleteBlocked).toHaveBeenCalledWith(7);
   });
 
+  it("after Remove, focuses the Remove button of the range in its place, then the one before, then the form", async () => {
+    const LATER: Blocked = { id: 9, start: "2027-01-10", end: "2027-01-12", label: "Visit" };
+    const remove = (name: string) => screen.getByRole("button", { name: new RegExp(`^Remove ${name} `) });
+    const pressRemove = async (name: string) => {
+      remove(name).focus();
+      await act(async () => {
+        fireEvent.click(remove(name));
+      });
+    };
+    const { rerender } = render(<BlockedPane view={view("2026-11-18", [BUSY, TRIP, LATER])} />);
+    await pressRemove("Trip");
+    // The new view hasn't arrived yet: wait for it.
+    expect(document.activeElement).not.toBe(remove("Visit"));
+    rerender(<BlockedPane view={view("2026-11-18", [BUSY, LATER])} />);
+    expect(document.activeElement).toBe(remove("Visit"));
+
+    // The last range: focus goes to the one before it.
+    await pressRemove("Visit");
+    rerender(<BlockedPane view={view("2026-11-18", [BUSY])} />);
+    expect(document.activeElement).toBe(remove("blocked dates"));
+
+    // No ranges left: focus goes to the form's first field.
+    await pressRemove("blocked dates");
+    rerender(<BlockedPane view={view("2026-11-18")} />);
+    expect(document.activeElement).toBe(input("What"));
+  });
+
+  it("leaves focus alone after Remove if the user moved it", async () => {
+    const { rerender } = render(<BlockedPane view={view("2026-11-18", [BUSY, TRIP])} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Remove Trip / }));
+    });
+    input("From").focus();
+    rerender(<BlockedPane view={view("2026-11-18", [BUSY])} />);
+    expect(document.activeElement).toBe(input("From"));
+  });
+
   it("shows a remove error", async () => {
     deleteBlocked.mockRejectedValue({ kind: "storage", message: "Couldn't save the data file." });
     render(<BlockedPane view={view("2026-11-18", [TRIP])} />);

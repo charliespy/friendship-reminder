@@ -18,6 +18,32 @@ export function BlockedPane({ view }: { view: View }) {
   }, [view.today]);
   const remove = useAction();
 
+  // Remove takes away its row, and the focused button with it. Focus then goes to the Remove button
+  // of the range that took its place (or the one before it, if it was the last), or to the form's
+  // first field when no ranges are left, so keyboard users don't land back at the top of the window.
+  const firstField = useRef<HTMLInputElement>(null);
+  const removeButtons = useRef(new Map<number, HTMLButtonElement>());
+  const returnFocus = useRef<{ removed: number; next: number | null } | null>(null);
+  useEffect(() => {
+    const target = returnFocus.current;
+    // The new view can arrive after the command returns: wait until it no longer shows the range.
+    if (target === null || view.blocked.some((b) => b.id === target.removed)) return;
+    returnFocus.current = null;
+    // Only if focus was lost with the row; never take it from somewhere the user moved it.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const next = target.next === null ? undefined : removeButtons.current.get(target.next);
+    (next ?? firstField.current)?.focus();
+  });
+
+  const removeRange = async (id: number) => {
+    // Who takes its place: the next range, else the one before.
+    const index = view.blocked.findIndex((b) => b.id === id);
+    const next = view.blocked[index + 1] ?? view.blocked[index - 1];
+    if (await remove.run(() => api.deleteBlocked(id))) {
+      returnFocus.current = { removed: id, next: next?.id ?? null };
+    }
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (await add.run(() => api.addBlocked({ start, end, label: label.trim() }))) {
@@ -43,6 +69,7 @@ export function BlockedPane({ view }: { view: View }) {
           <label className="field grow">
             <span>What</span>
             <input
+              ref={firstField}
               className="input"
               value={label}
               maxLength={100}
@@ -114,9 +141,13 @@ export function BlockedPane({ view }: { view: View }) {
                   </div>
                 </div>
                 <button
+                  ref={(el) => {
+                    if (el) removeButtons.current.set(b.id, el);
+                    else removeButtons.current.delete(b.id);
+                  }}
                   className="btn btn-quiet btn-sm"
                   disabled={remove.busy}
-                  onClick={() => remove.run(() => api.deleteBlocked(b.id))}
+                  onClick={() => removeRange(b.id)}
                   aria-label={`Remove ${b.label || "blocked dates"} ${range}`}
                 >
                   Remove

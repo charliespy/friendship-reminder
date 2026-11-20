@@ -61,3 +61,24 @@ test("ranges in another year show their year", async ({ page, request }) => {
   await expect(nextYear).toContainText("Nov 30, 2027");
   await expect(nextYear.getByRole("button", { name: "Remove One day next year Nov 30, 2027" })).toBeVisible();
 });
+
+test("Remove sends focus to the next range's Remove, then to the form", async ({ page, request }) => {
+  await seed(request, {
+    blocked: [
+      { start: "2026-12-01", end: "2026-12-05", label: "Trip" },
+      { start: "2027-01-10", end: "2027-01-12", label: "Visit" },
+    ],
+  });
+  await openPreferences(page, "Blocked dates");
+  const rows = page.getByTestId("blocked-row");
+  await expect(rows).toHaveCount(2);
+  await page.getByRole("button", { name: /^Remove Trip / }).focus();
+  await page.keyboard.press("Enter");
+  await expect(rows).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^Remove Visit / })).toBeFocused();
+
+  // The last range: focus goes to the form's first field.
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("No blocked dates")).toBeVisible();
+  await expect(page.getByRole("form", { name: "Add blocked dates" }).getByLabel("What")).toBeFocused();
+});

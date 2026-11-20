@@ -165,3 +165,15 @@ test("deleting people sends focus to the person in their place, or to Add person
   await expect(page.getByText("Nobody yet")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add person" })).toBeFocused();
 });
+
+test("Done keeps focus on that person's Done button after the list re-sorts", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE });
+  await openPreferences(page);
+  const rows = page.getByTestId("person-row");
+  await expect(rows.first()).toContainText("Jonah Okafor");
+  await page.getByRole("button", { name: "Mark Jonah Okafor as done" }).focus();
+  await page.keyboard.press("Enter");
+  // Done today: Jonah's row moves down the list.
+  await expect(rows.first()).not.toContainText("Jonah Okafor");
+  await expect(page.getByRole("button", { name: "Mark Jonah Okafor as done" })).toBeFocused();
+});
