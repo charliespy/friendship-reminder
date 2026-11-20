@@ -1,7 +1,7 @@
 //! The data changes the UI makes, and catching up on missed reminders.
 
 use chrono::NaiveDate;
-use friends_core::model::Data;
+use friends_core::model::{Data, MAX_NAME_CHARS};
 use friends_core::schedule::DayToggle;
 
 fn date(y: i32, m: u32, d: u32) -> NaiveDate {
@@ -39,21 +39,92 @@ fn adding_someone_long_out_of_touch_catches_them_up_to_today() {
     assert!(p.overdue);
 }
 
+/// The message `add_person` refuses this input with.
+fn person_refusal(data: &mut Data, name: &str, frequency: u32, last: NaiveDate) -> String {
+    data.add_person(name, frequency, last, today())
+        .unwrap_err()
+        .0
+}
+
+/// The message `add_blocked` refuses this range with.
+fn blocked_refusal(data: &mut Data, start: NaiveDate, end: NaiveDate, label: &str) -> String {
+    data.add_blocked(start, end, label, today()).unwrap_err().0
+}
+
 #[test]
 fn bad_input_is_refused_with_a_message() {
     let mut data = Data::default();
-    assert!(data.add_person("   ", 30, today(), today()).is_err());
-    assert!(data.add_person("Ada", 31, today(), today()).is_err());
-    assert!(data
-        .add_person("Ada", 30, date(2026, 8, 20), today())
-        .is_err());
-    assert!(data
-        .add_person(&"a".repeat(101), 30, today(), today())
-        .is_err());
-    assert!(data
-        .add_blocked(date(2026, 8, 25), date(2026, 8, 24), "Trip", today())
-        .is_err());
+    let d = &mut data;
+    let too_long = "a".repeat(MAX_NAME_CHARS + 1);
+    for blank in ["", "   ", "\t\n"] {
+        assert_eq!(person_refusal(d, blank, 30, today()), "Give them a name.");
+    }
+    assert_eq!(
+        person_refusal(d, &too_long, 30, today()),
+        format!("Keep the name under {MAX_NAME_CHARS} characters.")
+    );
+    assert_eq!(
+        person_refusal(d, "Ada", 31, today()),
+        "Pick how often to be in touch."
+    );
+    assert_eq!(
+        person_refusal(d, "Ada", 30, date(2026, 8, 20)),
+        "The last time you were in touch can't be in the future."
+    );
+    assert_eq!(
+        person_refusal(d, "Ada", 30, date(1899, 12, 31)),
+        "Pick a date between 1900 and today."
+    );
+
+    assert_eq!(
+        blocked_refusal(d, date(2026, 8, 25), date(2026, 8, 24), "Trip"),
+        "The range has to end on or after the day it starts."
+    );
+    assert_eq!(
+        blocked_refusal(d, date(1899, 12, 31), date(1900, 1, 2), "Trip"),
+        "Pick dates from 1900 up to ten years from now."
+    );
+    assert_eq!(
+        blocked_refusal(d, date(2026, 8, 25), date(2200, 12, 31), "Typo"),
+        "Pick dates from 1900 up to ten years from now."
+    );
+    assert_eq!(
+        blocked_refusal(d, date(2026, 8, 25), date(2026, 8, 26), &too_long),
+        format!("Keep the label under {MAX_NAME_CHARS} characters.")
+    );
+
     assert!(data.people.is_empty() && data.blocked.is_empty());
+}
+
+#[test]
+fn an_edit_is_refused_with_the_same_messages() {
+    let mut data = Data::default();
+    let id = data.add_person("Ada", 30, today(), today()).unwrap();
+    let mut edit = |name: &str, frequency: u32, last: NaiveDate| {
+        data.update_person(id, name, frequency, last, today())
+            .unwrap_err()
+            .0
+    };
+    assert_eq!(edit(" ", 30, today()), "Give them a name.");
+    assert_eq!(edit("Ada", 31, today()), "Pick how often to be in touch.");
+    assert_eq!(
+        edit("Ada", 30, date(2026, 8, 20)),
+        "The last time you were in touch can't be in the future."
+    );
+    assert_eq!(data.person(id).unwrap().name, "Ada");
+}
+
+#[test]
+fn the_edges_of_the_limits_are_accepted() {
+    let mut data = Data::default();
+    let longest = "a".repeat(MAX_NAME_CHARS);
+    let id = data.add_person(&longest, 30, today(), today()).unwrap();
+    assert_eq!(data.person(id).unwrap().name, longest);
+    data.add_person("Ada", 30, date(1900, 1, 1), today())
+        .unwrap();
+    data.add_blocked(date(1900, 1, 1), date(1900, 1, 2), &longest, today())
+        .unwrap();
+    assert_eq!(data.blocked[0].label, longest);
 }
 
 #[test]
