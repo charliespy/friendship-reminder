@@ -267,6 +267,16 @@ describe("PeoplePane", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Select Theo Marsh"));
   });
 
+  it("leaves focus alone after Deselect all when the button didn't have it", async () => {
+    render(<PeoplePane view={view([MAYA, THEO])} />);
+    fireEvent.click(screen.getByLabelText("Select Theo Marsh"));
+    // A mouse click in WebKit doesn't focus the button.
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    await click(button("Deselect all"));
+    expect(screen.queryByRole("region", { name: "Selected people" })).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("deletes the selected people after a confirmation", async () => {
     render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
     fireEvent.click(screen.getByLabelText("Select Maya Chen"));

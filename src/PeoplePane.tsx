@@ -1,5 +1,5 @@
 /** Preferences › People: add, edit, mark done and delete the people Friends reminds you about. */
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
 import { aimDay, formatDay, relativeDay } from "./date";
@@ -243,10 +243,14 @@ export function PeoplePane({ view }: { view: View }) {
     del.setError(null);
   };
 
-  const deselectAll = () => {
-    // The selection bar, and the Deselect all button in it, are about to go.
+  const deselectAll = (event: MouseEvent<HTMLButtonElement>) => {
+    // The selection bar, and the Deselect all button in it, are about to go. Only when the button
+    // had focus (a mouse click in WebKit doesn't focus it), and never in place of a Done that is
+    // still waiting to send focus back.
     const first = view.people.find((p) => chosen.includes(p.id));
-    if (first) returnFocus.current = { deselected: first.id };
+    if (first && document.activeElement === event.currentTarget && returnFocus.current === null) {
+      returnFocus.current = { deselected: first.id };
+    }
     setSelected(new Set());
     del.setError(null);
   };
