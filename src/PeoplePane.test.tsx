@@ -255,6 +255,28 @@ describe("PeoplePane", () => {
     expect(deletePeople).not.toHaveBeenCalled();
   });
 
+  it("sends focus to the first selected person's checkbox after Deselect all", async () => {
+    render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    fireEvent.click(screen.getByLabelText("Select Lena Fischer"));
+    fireEvent.click(screen.getByLabelText("Select Theo Marsh"));
+    const deselect = button("Deselect all");
+    act(() => deselect.focus());
+    await click(deselect);
+    expect(screen.queryByRole("region", { name: "Selected people" })).toBeNull();
+    // Theo comes before Lena in the list.
+    expect(document.activeElement).toBe(screen.getByLabelText("Select Theo Marsh"));
+  });
+
+  it("leaves focus alone after Deselect all when the button didn't have it", async () => {
+    render(<PeoplePane view={view([MAYA, THEO])} />);
+    fireEvent.click(screen.getByLabelText("Select Theo Marsh"));
+    // A mouse click in WebKit doesn't focus the button.
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    await click(button("Deselect all"));
+    expect(screen.queryByRole("region", { name: "Selected people" })).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("deletes the selected people after a confirmation", async () => {
     render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
     fireEvent.click(screen.getByLabelText("Select Maya Chen"));

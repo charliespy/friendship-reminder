@@ -1,5 +1,5 @@
 /** Preferences › People: add, edit, mark done and delete the people Friends reminds you about. */
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
 import { aimDay, formatDay, relativeDay } from "./date";
@@ -185,7 +185,8 @@ export function PeoplePane({ view }: { view: View }) {
   // delete, it goes to the checkbox of the person who takes the first deleted person's place (or
   // the one before, if the deleted people were at the end), or to Add person when nobody is left.
   // After a Done, the list re-sorts and moves the person's row, which drops focus: it goes back to
-  // their Done button in its new place.
+  // their Done button in its new place. After Deselect all, the selection bar goes away with the
+  // focused button: focus goes to the checkbox of the first person who was selected.
   const section = useRef<HTMLElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const editButtons = useRef(new Map<number, HTMLButtonElement>());
@@ -196,6 +197,7 @@ export function PeoplePane({ view }: { view: View }) {
     | number
     | { deleted: number[]; next: number | null }
     | { done: number; before: View; finished: boolean }
+    | { deselected: number }
     | null
   >(null);
   // Re-renders the pane when a Done command finishes (its busy state lives in the row).
@@ -221,6 +223,8 @@ export function PeoplePane({ view }: { view: View }) {
     if (document.activeElement && document.activeElement !== document.body) return;
     if (typeof target === "object" && "done" in target) {
       doneButtons.current.get(target.done)?.focus();
+    } else if (typeof target === "object" && "deselected" in target) {
+      checkboxes.current.get(target.deselected)?.focus();
     } else if (typeof target === "object") {
       const next = target.next === null ? undefined : checkboxes.current.get(target.next);
       // Add person is hidden while its form is open; then the form's first field takes focus.
@@ -236,6 +240,18 @@ export function PeoplePane({ view }: { view: View }) {
     else next.delete(id);
     setSelected(next);
     setConfirming(false);
+    del.setError(null);
+  };
+
+  const deselectAll = (event: MouseEvent<HTMLButtonElement>) => {
+    // The selection bar, and the Deselect all button in it, are about to go. Only when the button
+    // had focus (a mouse click in WebKit doesn't focus it), and never in place of a Done that is
+    // still waiting to send focus back.
+    const first = view.people.find((p) => chosen.includes(p.id));
+    if (first && document.activeElement === event.currentTarget && returnFocus.current === null) {
+      returnFocus.current = { deselected: first.id };
+    }
+    setSelected(new Set());
     del.setError(null);
   };
 
@@ -318,7 +334,7 @@ export function PeoplePane({ view }: { view: View }) {
             </>
           ) : (
             <>
-              <button className="btn btn-quiet btn-sm" onClick={() => (setSelected(new Set()), del.setError(null))}>
+              <button className="btn btn-quiet btn-sm" onClick={deselectAll}>
                 Deselect all
               </button>
               <button className="btn btn-outline btn-sm" onClick={() => setConfirming(true)}>
