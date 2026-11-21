@@ -70,9 +70,9 @@ commit. They all have to pass before anything reaches `main`; CONTRIBUTING.md ex
 - Mark someone **Done** from the menu bar when you've been in touch; their next day is
   scheduled from today.
 - If the day passes without **Done**, Friends keeps them in the list. It counts the day as
-  missed only once the allowed days that follow it straight on are over too (the rest of that
-  weekend, under weekends only; the rest of that week, under weekdays only), and then aims for
-  the next run of allowed days, past any blocked dates.
+  missed only once the rest of that weekend (under weekends only) or that week (under weekdays
+  only) is over too; with every day allowed, just that day. Then it aims for the next run of
+  allowed days, past any blocked dates.
 
 ## Contributing
 

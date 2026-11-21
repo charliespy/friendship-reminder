@@ -45,9 +45,9 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 
 - Data is one JSON file in the app's data folder; a damaged file is moved aside and reported.
 - Dates are calendar days (no times). "Due" starts on the reminder day. "Missed" means the
-  aimed-for day, and the allowed days that follow it straight on (the rest of that weekend, under
-  weekends only; the rest of that week, under weekdays only), went by without Done; a missed person
-  stays due while the app aims for the next run of allowed days.
+  aimed-for day went by without Done, along with the rest of that weekend (under weekends only) or
+  that week (under weekdays only); with every day allowed, just that day. A missed person stays due
+  while the app aims for the next run of allowed days, past any blocked dates.
 - macOS 13 or newer. WebKit only (Safari's engine), so CSS must work in Safari 16.
 - Tests address the UI by accessible names, labels and a few `data-testid`s
   (`due-person`, `upcoming-person`, `person-row`, `blocked-row`); copy changes must keep them.
