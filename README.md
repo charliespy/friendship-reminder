@@ -4,8 +4,8 @@ A small macOS menu bar app that reminds you to stay in touch with people.
 
 Add the people you want to see, say how often (every month, three months, six months or
 year), and Friends picks a day to aim for and reminds you before it. It skips the dates you've
-blocked (trips, busy weeks), can aim only for weekends or only for weekdays, and if a day goes
-by without you reaching out, it moves the reminder to the next good day.
+blocked (trips, busy weeks), can aim only for weekends or only for weekdays, and if the days
+go by without you reaching out, it keeps them on your list and aims for the next good days.
 
 Everything stays on your Mac: no account, no sync, no tracking.
 
@@ -68,8 +68,10 @@ commit. They all have to pass before anything reaches `main`; CONTRIBUTING.md ex
   there's time to plan. A weekday is reminded on the day itself.
 - Mark someone **Done** from the menu bar when you've been in touch; their next day is
   scheduled from today.
-- If the day passes without **Done**, Friends keeps them in the list and aims for the next
-  allowed day.
+- If the day passes without **Done**, Friends keeps them in the list until you mark them done.
+  Once the run of allowed days that day starts is over (the weekend, under weekends only; the
+  rest of the week, under weekdays only), it aims for the start of the next run: the next
+  weekend, the next Monday, or, with every day allowed, the next day.
 
 ## Contributing
 

@@ -22,7 +22,7 @@ block a trip, or change which days count.
 
 Friends reminds you to reach out to people at the rhythm you pick (every month, three months, six
 months, or year). It picks a day to aim for, avoids blocked dates, can keep to weekends or
-weekdays, and if a day goes by without contact, aims for the next good one. Success: the people
+weekdays, and if the days go by without contact, aims for the next good ones. Success: the people
 you care about hear from you about as often as you meant, and the app takes almost no attention.
 
 ## Positioning
@@ -43,8 +43,9 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 ## Capabilities and Constraints
 
 - Data is one JSON file in the app's data folder; a damaged file is moved aside and reported.
-- Dates are calendar days (no times). "Due" runs from the reminder day through the day aimed for;
-  "missed" means the aimed-for day went by without Done.
+- Dates are calendar days (no times). "Due" runs from the reminder day until Done; "missed" means
+  the run of allowed days that the aimed-for day starts (the weekend, under weekends only) went by
+  without Done, so a missed person stays due while the app aims for the next run.
 - macOS 13 or newer. WebKit only (Safari's engine), so CSS must work in Safari 16.
 - Tests address the UI by accessible names, labels and a few `data-testid`s
   (`due-person`, `upcoming-person`, `person-row`, `blocked-row`); copy changes must keep them.
