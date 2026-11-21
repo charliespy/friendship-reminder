@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use chrono::NaiveDate;
-use friends_core::api::{App, ErrorKind};
+use friends_core::api::{App, ErrorKind, View};
 use friends_core::store::Store;
 use serde_json::json;
 
@@ -121,12 +121,23 @@ fn every_command_works_end_to_end() {
     let id = app.data().people[0].id;
     let view = app.call("mark_done", json!({"id": id}), today()).unwrap();
     assert!(!view.people.iter().any(|p| p.due));
-    app.call(
-        "update_person",
-        json!({"id": id, "name": "Ada L", "frequencyDays": 90, "lastConnected": "2026-08-19"}),
-        today(),
-    )
-    .unwrap();
+    let ada_target = |view: &View| {
+        view.people
+            .iter()
+            .find(|p| p.person.id == id)
+            .unwrap()
+            .person
+            .next_target
+    };
+    let view = app
+        .call(
+            "update_person",
+            json!({"id": id, "name": "Ada L", "frequencyDays": 90, "lastConnected": "2026-08-19"}),
+            today(),
+        )
+        .unwrap();
+    // Aug 19 + 90 = Tue Nov 17 -> Sat Nov 21.
+    assert_eq!(ada_target(&view), date(2026, 11, 21));
     let view = app
         .call(
             "add_blocked",
@@ -139,11 +150,17 @@ fn every_command_works_end_to_end() {
     assert!(view.people.iter().all(|p| {
         p.person.next_target < date(2026, 11, 1) || p.person.next_target > date(2026, 11, 30)
     }));
+    assert_eq!(ada_target(&view), date(2026, 12, 5)); // the first weekend after the trip
     let blocked_id = view.blocked[0].id;
-    app.call("delete_blocked", json!({"id": blocked_id}), today())
+    let view = app
+        .call("delete_blocked", json!({"id": blocked_id}), today())
         .unwrap();
-    app.call("set_day_toggle", json!({"dayToggle": "allDays"}), today())
+    assert!(view.blocked.is_empty());
+    assert_eq!(ada_target(&view), date(2026, 11, 21));
+    let view = app
+        .call("set_day_toggle", json!({"dayToggle": "allDays"}), today())
         .unwrap();
+    assert_eq!(ada_target(&view), date(2026, 11, 17));
     let view = app
         .call("set_notifications", json!({"on": false}), today())
         .unwrap();
