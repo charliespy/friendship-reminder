@@ -9,6 +9,18 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-21
+
+### Fixed
+
+- After you delete people, click Deselect all, or click Done or Remove in Preferences, the keyboard
+  stays where you were instead of jumping back to the top of the window.
+
+### Changed
+
+- Friends is now signed with an Apple Developer ID and checked by Apple, so macOS opens it
+  without the "unidentified developer" warning.
+
 ## [0.1.0] - 2026-11-19
 
 ### New
