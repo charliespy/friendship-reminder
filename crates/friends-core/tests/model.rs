@@ -217,7 +217,7 @@ fn someone_already_missed_stays_missed_after_a_recompute() {
 }
 
 #[test]
-fn someone_missed_stops_being_missed_when_a_new_plan_puts_their_target_ahead() {
+fn a_recompute_clears_missed_when_the_new_target_is_still_ahead() {
     let mut data = Data::default();
     // Jul 10 + 30 = Sun Aug 9, gone by on Wed Aug 19: pushed to Sat Aug 22, missed.
     let id = data
@@ -371,8 +371,8 @@ fn a_long_backlog_under_weekends_only_lands_on_this_weekend() {
 #[test]
 fn a_long_backlog_under_weekdays_only_lands_on_the_next_monday() {
     let mut data = Data::default();
-    data.set_day_toggle(DayToggle::WeekdaysOnly, today());
     let saturday = date(2026, 8, 22);
+    data.set_day_toggle(DayToggle::WeekdaysOnly, saturday);
     let id = data
         .add_person("Ada", 30, date(2020, 1, 1), saturday)
         .unwrap();
@@ -383,6 +383,10 @@ fn a_long_backlog_under_weekdays_only_lands_on_the_next_monday() {
     assert!(p.is_due(saturday));
     // A later check the same day changes nothing.
     assert!(!data.catch_up(saturday));
+    // Shown over the weekend, but notified on Monday, once.
+    assert!(data.take_notifications(saturday).is_empty());
+    assert_eq!(data.take_notifications(date(2026, 8, 24)).len(), 1);
+    assert!(data.take_notifications(date(2026, 8, 24)).is_empty());
 }
 
 #[test]

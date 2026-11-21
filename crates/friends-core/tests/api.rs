@@ -118,17 +118,18 @@ fn every_command_works_end_to_end() {
         today(),
     )
     .unwrap();
-    let id = app.data().people[0].id;
+    let (id, bo) = (app.data().people[0].id, app.data().people[1].id);
     let view = app.call("mark_done", json!({"id": id}), today()).unwrap();
     assert!(!view.people.iter().any(|p| p.due));
-    let ada_target = |view: &View| {
+    let target = |view: &View, id: u64| {
         view.people
             .iter()
             .find(|p| p.person.id == id)
-            .unwrap()
+            .expect("the person is in the view")
             .person
             .next_target
     };
+    let ada_target = |view: &View| target(view, id);
     let view = app
         .call(
             "update_person",
@@ -161,6 +162,8 @@ fn every_command_works_end_to_end() {
         .call("set_day_toggle", json!({"dayToggle": "allDays"}), today())
         .unwrap();
     assert_eq!(ada_target(&view), date(2026, 11, 17));
+    // Aug 1 + 90 = Fri Oct 30: Bo moves too, off the Saturday after it.
+    assert_eq!(target(&view, bo), date(2026, 10, 30));
     let view = app
         .call("set_notifications", json!({"on": false}), today())
         .unwrap();
