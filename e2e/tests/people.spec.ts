@@ -166,6 +166,25 @@ test("deleting people sends focus to the person in their place, or to Add person
   await expect(page.getByRole("button", { name: "Add person" })).toBeFocused();
 });
 
+test("Deselect all sends focus to the first selected person's checkbox", async ({ page, request }) => {
+  await seed(request, {
+    people: [
+      { name: "Maya Chen", frequencyDays: 30, lastConnected: "2026-10-10" },
+      { name: "Jonah Okafor", frequencyDays: 90, lastConnected: "2026-08-01" },
+    ],
+  });
+  await openPreferences(page);
+  const maya = page.getByLabel("Select Maya Chen");
+  await maya.focus();
+  await page.keyboard.press("Space");
+  const bar = page.getByRole("region", { name: "Selected people" });
+  await bar.getByRole("button", { name: "Deselect all" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(bar).toHaveCount(0);
+  await expect(maya).not.toBeChecked();
+  await expect(maya).toBeFocused();
+});
+
 test("Done keeps focus on that person's Done button after the list re-sorts", async ({ page, request }) => {
   await seed(request, { people: SAMPLE });
   await openPreferences(page);
