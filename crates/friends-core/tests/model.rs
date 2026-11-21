@@ -217,6 +217,25 @@ fn someone_already_missed_stays_missed_after_a_recompute() {
 }
 
 #[test]
+fn a_recompute_clears_missed_when_the_new_target_is_still_ahead() {
+    let mut data = Data::default();
+    // Jul 10 + 30 = Sun Aug 9, gone by on Wed Aug 19: pushed to Sat Aug 22, missed.
+    let id = data
+        .add_person("Ada", 30, date(2026, 7, 10), today())
+        .unwrap();
+    let p = data.person(id).unwrap();
+    assert_eq!(p.next_target, date(2026, 8, 22));
+    assert!(p.overdue);
+    // A trip over the old target: the new plan aims for Sat Aug 22, which is still ahead.
+    data.add_blocked(date(2026, 8, 1), date(2026, 8, 20), "Trip", today())
+        .unwrap();
+    let p = data.person(id).unwrap();
+    assert_eq!(p.next_target, date(2026, 8, 22));
+    assert_eq!(p.notification_date, date(2026, 8, 17));
+    assert!(!p.overdue);
+}
+
+#[test]
 fn changing_the_day_setting_reschedules_everyone() {
     let mut data = Data::default();
     let id = data
@@ -347,6 +366,27 @@ fn a_long_backlog_under_weekends_only_lands_on_this_weekend() {
         .add_person("Ada", 365, date(1900, 1, 6), today())
         .unwrap();
     assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 22));
+}
+
+#[test]
+fn a_long_backlog_under_weekdays_only_lands_on_the_next_monday() {
+    let mut data = Data::default();
+    let saturday = date(2026, 8, 22);
+    data.set_day_toggle(DayToggle::WeekdaysOnly, saturday);
+    let id = data
+        .add_person("Ada", 30, date(2020, 1, 1), saturday)
+        .unwrap();
+    let p = data.person(id).unwrap();
+    assert_eq!(p.next_target, date(2026, 8, 24));
+    assert_eq!(p.notification_date, date(2026, 8, 24));
+    assert!(p.overdue);
+    assert!(p.is_due(saturday));
+    // A later check the same day changes nothing.
+    assert!(!data.catch_up(saturday));
+    // Shown over the weekend, but notified on Monday, once.
+    assert!(data.take_notifications(saturday).is_empty());
+    assert_eq!(data.take_notifications(date(2026, 8, 24)).len(), 1);
+    assert!(data.take_notifications(date(2026, 8, 24)).is_empty());
 }
 
 #[test]
