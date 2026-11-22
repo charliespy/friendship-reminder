@@ -1,6 +1,6 @@
 [package]
 name = "friends"
-version = "0.1.1"
+version = "0.1.2"
 description = "A macOS menu bar app that reminds you to stay in touch with people"
 edition.workspace = true
 license.workspace = true

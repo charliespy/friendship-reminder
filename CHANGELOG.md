@@ -9,6 +9,13 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-21
+
+### Changed
+
+- The download itself is now also checked by Apple, so macOS opens the disk image without a
+  warning too.
+
 ## [0.1.1] - 2026-11-21
 
 ### Fixed
