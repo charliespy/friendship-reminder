@@ -213,7 +213,12 @@ function plan(argv, { nothingIsFine = false } = {}) {
   process.stdout.write(`${out.join("\n")}\n`);
   if (!next.version) process.exit(nothingIsFine ? 0 : 3);
 
-  const notes = draftNotes({ unreleased, commits: lastTag ? conventional.map((c) => c.parsed) : [] });
+  // Releases are signed and notarized since v0.1.2, so the draft no longer adds the unsigned note.
+  const notes = draftNotes({
+    unreleased,
+    commits: lastTag ? conventional.map((c) => c.parsed) : [],
+    unsigned: false,
+  });
   process.stdout.write(`\nDraft notes for v${next.version} (rewrite into plain words before "prepare"):\n\n${notes}\n`);
   if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${notes}\n`);
 }

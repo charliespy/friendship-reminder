@@ -35,8 +35,6 @@ on `main` until then.
      each with one plain sentence per change (leave out a heading with nothing under it);
    - no PR numbers, commit hashes, branch names, or changes users can't notice (tests, CI, docs,
      refactoring);
-   - keep the "Good to know" line on opening the app the first time while releases aren't signed
-     with an Apple Developer ID (the draft always adds it; delete it once releases are signed);
    - write links inline (`[text](url)`): `prepare` refuses `[name]: url` link lines;
    - no personal information (the release page is public):
      `scripts/privacy-scan.sh --stdin < release-notes.md`.

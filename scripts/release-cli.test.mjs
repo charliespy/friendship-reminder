@@ -72,7 +72,8 @@ describe("release.mjs", { timeout: 60_000 }, () => {
     expect(prep.code).toBe(0);
     const notes = release("notes", "v0.1.0");
     expect(notes.code).toBe(0);
-    expect(notes.out).toMatch(/^### New\n\n- A new look\.\n\n### Good to know\n/);
+    expect(notes.out).toMatch(/^### New\n\n- A new look\.\n/);
+    expect(notes.out).not.toContain("Open Anyway");
   });
   it("dry-run: the plan, then the prepared description, then the plan again after the tag", () => {
     let r = release("dry-run");
