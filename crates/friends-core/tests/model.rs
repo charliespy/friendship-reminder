@@ -461,7 +461,7 @@ fn renaming_works_when_the_stored_date_is_after_today() {
 }
 
 /// One person and one blocked range, with `edit` applied: is the result a file Friends would load?
-fn loads_with(edit: impl Fn(&mut Data)) -> bool {
+fn loads_with(edit: impl FnOnce(&mut Data)) -> bool {
     let mut data = Data::default();
     data.add_person("Ada", 30, date(2026, 7, 23), today())
         .unwrap();
@@ -472,40 +472,71 @@ fn loads_with(edit: impl Fn(&mut Data)) -> bool {
     data.is_sane()
 }
 
-// Targets, reminder days and range ends are worked out, and may be pushed far past a long range.
+// Targets and reminder days are worked out, and get pushed past blocked ranges, which may end ten
+// years out. So they, and range ends, may run to 2300.
 #[test]
-fn a_loaded_file_may_hold_worked_out_dates_up_to_2300() {
+fn a_loaded_file_may_hold_targets_reminder_days_and_range_ends_up_to_2300() {
     for (day, loads) in [(date(2300, 12, 31), true), (date(2301, 1, 1), false)] {
-        assert_eq!(loads_with(|d| d.people[0].next_target = day), loads);
-        assert_eq!(loads_with(|d| d.people[0].notification_date = day), loads);
-        assert_eq!(loads_with(|d| d.blocked[0].end = day), loads);
+        assert_eq!(
+            loads_with(|d| d.people[0].next_target = day),
+            loads,
+            "next target {day}"
+        );
+        assert_eq!(
+            loads_with(|d| d.people[0].notification_date = day),
+            loads,
+            "reminder day {day}"
+        );
+        assert_eq!(
+            loads_with(|d| d.blocked[0].end = day),
+            loads,
+            "range end {day}"
+        );
     }
 }
 
 // Last contact dates and range starts are entered by hand, and the app refuses them past 2200.
 #[test]
-fn a_loaded_file_may_hold_entered_dates_only_up_to_2200() {
+fn a_loaded_file_may_hold_last_contact_dates_and_range_starts_only_up_to_2200() {
     for (day, loads) in [(date(2200, 12, 31), true), (date(2201, 1, 1), false)] {
-        assert_eq!(loads_with(|d| d.people[0].last_connected = day), loads);
         assert_eq!(
-            loads_with(|d| {
-                d.blocked[0].start = day;
-                d.blocked[0].end = date(2250, 1, 1);
-            }),
-            loads
+            loads_with(|d| d.people[0].last_connected = day),
+            loads,
+            "last contact {day}"
         );
+        let range_from = |d: &mut Data| {
+            d.blocked[0].start = day;
+            d.blocked[0].end = date(2250, 1, 1);
+        };
+        assert_eq!(loads_with(range_from), loads, "range start {day}");
     }
-    // The same day is fine as a worked-out date.
+    // The same day is fine as a target.
     assert!(loads_with(|d| d.people[0].next_target = date(2201, 1, 1)));
 }
 
 #[test]
-fn a_loaded_file_may_hold_no_date_before_1900() {
+fn a_loaded_file_may_hold_no_person_or_range_date_before_1900() {
     for (day, loads) in [(date(1900, 1, 1), true), (date(1899, 12, 31), false)] {
-        assert_eq!(loads_with(|d| d.people[0].last_connected = day), loads);
-        assert_eq!(loads_with(|d| d.people[0].next_target = day), loads);
-        assert_eq!(loads_with(|d| d.people[0].notification_date = day), loads);
-        assert_eq!(loads_with(|d| d.blocked[0].start = day), loads);
-        assert_eq!(loads_with(|d| d.blocked[0].end = day), loads);
+        assert_eq!(
+            loads_with(|d| d.people[0].last_connected = day),
+            loads,
+            "last contact {day}"
+        );
+        assert_eq!(
+            loads_with(|d| d.people[0].next_target = day),
+            loads,
+            "next target {day}"
+        );
+        assert_eq!(
+            loads_with(|d| d.people[0].notification_date = day),
+            loads,
+            "reminder day {day}"
+        );
+        // A range ends on or after its start, so the start is the one to try.
+        let range_from = |d: &mut Data| {
+            d.blocked[0].start = day;
+            d.blocked[0].end = date(1900, 1, 5);
+        };
+        assert_eq!(loads_with(range_from), loads, "range start {day}");
     }
 }
