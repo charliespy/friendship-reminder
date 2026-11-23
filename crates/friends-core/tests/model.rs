@@ -459,3 +459,53 @@ fn renaming_works_when_the_stored_date_is_after_today() {
         .update_person(id, "Ada L.", 30, date(2026, 8, 21), today())
         .is_err());
 }
+
+/// One person and one blocked range, with `edit` applied: is the result a file Friends would load?
+fn loads_with(edit: impl Fn(&mut Data)) -> bool {
+    let mut data = Data::default();
+    data.add_person("Ada", 30, date(2026, 7, 23), today())
+        .unwrap();
+    data.add_blocked(date(2026, 9, 1), date(2026, 9, 5), "Trip", today())
+        .unwrap();
+    assert!(data.is_sane());
+    edit(&mut data);
+    data.is_sane()
+}
+
+// Targets, reminder days and range ends are worked out, and may be pushed far past a long range.
+#[test]
+fn a_loaded_file_may_hold_worked_out_dates_up_to_2300() {
+    for (day, loads) in [(date(2300, 12, 31), true), (date(2301, 1, 1), false)] {
+        assert_eq!(loads_with(|d| d.people[0].next_target = day), loads);
+        assert_eq!(loads_with(|d| d.people[0].notification_date = day), loads);
+        assert_eq!(loads_with(|d| d.blocked[0].end = day), loads);
+    }
+}
+
+// Last contact dates and range starts are entered by hand, and the app refuses them past 2200.
+#[test]
+fn a_loaded_file_may_hold_entered_dates_only_up_to_2200() {
+    for (day, loads) in [(date(2200, 12, 31), true), (date(2201, 1, 1), false)] {
+        assert_eq!(loads_with(|d| d.people[0].last_connected = day), loads);
+        assert_eq!(
+            loads_with(|d| {
+                d.blocked[0].start = day;
+                d.blocked[0].end = date(2250, 1, 1);
+            }),
+            loads
+        );
+    }
+    // The same day is fine as a worked-out date.
+    assert!(loads_with(|d| d.people[0].next_target = date(2201, 1, 1)));
+}
+
+#[test]
+fn a_loaded_file_may_hold_no_date_before_1900() {
+    for (day, loads) in [(date(1900, 1, 1), true), (date(1899, 12, 31), false)] {
+        assert_eq!(loads_with(|d| d.people[0].last_connected = day), loads);
+        assert_eq!(loads_with(|d| d.people[0].next_target = day), loads);
+        assert_eq!(loads_with(|d| d.people[0].notification_date = day), loads);
+        assert_eq!(loads_with(|d| d.blocked[0].start = day), loads);
+        assert_eq!(loads_with(|d| d.blocked[0].end = day), loads);
+    }
+}
