@@ -1,6 +1,7 @@
-/** Preferences › Settings: which days count, notifications, and launch at login. */
+/** Preferences › Settings: which days count, notifications, launch at login, and the account. */
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DayToggle, type View } from "./api";
+import { AccountSection } from "./AccountSection";
 import { useAction } from "./useView";
 
 const TOGGLES: { value: DayToggle; title: string; text: string }[] = [
@@ -136,6 +137,8 @@ export function SettingsPane({ view }: { view: View }) {
         {notify.error && <p className="error" role="alert">{notify.error}</p>}
         {loginError && <p className="error" role="alert">{loginError}</p>}
       </div>
+
+      <AccountSection />
     </section>
   );
 }

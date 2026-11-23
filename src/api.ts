@@ -54,8 +54,17 @@ export function errorMessage(e: unknown): string {
   return "Something went wrong.";
 }
 
+/** The Friends account, as the Account section shows it. */
+export type Account =
+  | { status: "unavailable"; reason: string }
+  | { status: "signedOut" }
+  | { status: "signedIn"; email: string | null; warning: string | null };
+
 /** Sent to every window after any change, with the new view. */
 export const VIEW_CHANGED = "view-changed";
+
+/** Sent to every window when the account changes, with the new account. */
+export const ACCOUNT_CHANGED = "account-changed";
 
 function call(cmd: string, args: Record<string, unknown> = {}): Promise<View> {
   return invoke<View>("call", { cmd, args });
@@ -79,4 +88,10 @@ export const api = {
   hideDropdown: () => invoke<void>("hide_dropdown"),
   quit: () => invoke<void>("quit"),
   onViewChanged: (f: (v: View) => void): Promise<UnlistenFn> => listen<View>(VIEW_CHANGED, (e) => f(e.payload)),
+  getAccount: () => invoke<Account>("get_account"),
+  /** Shows Apple's sign-in sheet. Closing it isn't an error: the account just stays signed out. */
+  signInWithApple: () => invoke<Account>("sign_in_with_apple"),
+  signOut: () => invoke<Account>("sign_out"),
+  onAccountChanged: (f: (a: Account) => void): Promise<UnlistenFn> =>
+    listen<Account>(ACCOUNT_CHANGED, (e) => f(e.payload)),
 };

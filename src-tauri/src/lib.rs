@@ -1,6 +1,10 @@
 //! The Tauri shell: the menu bar icon, the dropdown and Preferences windows, notifications and launch at
 //! login. The rules and the data live in friends-core; this file only connects them to macOS.
 
+mod account;
+#[cfg(target_os = "macos")]
+mod apple;
+
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -377,7 +381,10 @@ pub fn run() {
             set_launch_at_login,
             open_preferences,
             hide_dropdown,
-            quit
+            quit,
+            account::get_account,
+            account::sign_in_with_apple,
+            account::sign_out
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -398,6 +405,9 @@ pub fn run() {
                 }
             };
             app.manage(State(Mutex::new(core)));
+            app.manage(account::Account::new());
+            let restoring = handle.clone();
+            std::thread::spawn(move || account::restore(&restoring));
 
             // A menu bar app: no Dock icon, no app menu. Switched after the data opens, so the alert
             // above still comes to the front as a normal app's would.

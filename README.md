@@ -8,7 +8,8 @@ blocked (trips, busy weeks), can aim only for weekends or only for weekdays, and
 aim for goes by without you reaching out, it keeps them on your list and aims for the next good
 days.
 
-Everything stays on your Mac: no account, no sync, no tracking.
+Everything stays on your Mac, with no tracking. You can sign in with Apple to set up a Friends
+account, ready for a Friends app on iPhone; nothing syncs yet.
 
 <p>
   <img src="docs/screenshots/dropdown-light.png" width="300" alt="The Friends menu bar dropdown: three people to reach out to now, each with a Done button, and three coming up">
@@ -43,6 +44,31 @@ npm install
 npm run tauri dev        # run the app
 npm run tauri build      # build Friends.app and a .dmg into target/release/bundle/
 ```
+
+### Sign in with Apple
+
+A build only offers Sign in with Apple when it has both of these; otherwise the Account section in
+Settings says sign-in isn't available, and everything else works the same.
+
+- **The account server's settings**, at build time: `FRIENDS_SUPABASE_URL` and
+  `FRIENDS_SUPABASE_PUBLISHABLE_KEY` (a Supabase project with the Apple provider on and the app's
+  bundle ID as a client ID). Set them in the environment or in `.env.local` at the repo root,
+  which git ignores:
+
+  ```sh
+  FRIENDS_SUPABASE_URL=https://<project>.supabase.co
+  FRIENDS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+  ```
+
+- **A signature that allows it**: a Developer ID signature plus a Developer ID provisioning
+  profile for `io.github.charliespy.friends` with Sign in with Apple. `npm run tauri dev` and
+  ad-hoc builds can't sign in.
+
+  ```sh
+  scripts/prepare-signin.sh path/to/profile.provisionprofile
+  APPLE_SIGNING_IDENTITY="Developer ID Application: <name> (<team>)" \
+    npm run tauri build -- --config src-tauri/tauri.signin.conf.json
+  ```
 
 ## Test
 

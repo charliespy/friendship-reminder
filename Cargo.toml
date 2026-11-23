@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/friends-core", "crates/friends-devserver", "src-tauri"]
+members = ["crates/friends-account", "crates/friends-core", "crates/friends-devserver", "src-tauri"]
 
 [workspace.package]
 edition = "2021"

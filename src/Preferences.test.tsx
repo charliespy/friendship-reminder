@@ -12,6 +12,8 @@ vi.mock("./api", async (orig) => ({
     getView: () => getView(),
     onViewChanged: (f: (v: View) => void) => onViewChanged(f),
     getLaunchAtLogin: () => getLaunchAtLogin(),
+    getAccount: () => Promise.resolve({ status: "signedOut" }),
+    onAccountChanged: () => Promise.resolve(() => {}),
   },
 }));
 

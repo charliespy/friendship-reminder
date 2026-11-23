@@ -11,3 +11,9 @@ playwright-report/
 .impeccable/hook.cache.json
 # Release notes drafted by `npm run release:plan -- --out release-notes.md`.
 release-notes.md
+
+# Local build settings, such as the account server (see README).
+.env.local
+# The provisioning profile and entitlements scripts/prepare-signin.sh writes for a signed build.
+src-tauri/embedded.provisionprofile
+src-tauri/signin.entitlements

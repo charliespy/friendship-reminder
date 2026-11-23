@@ -7,6 +7,9 @@ name: Release
 #   APPLE_API_ISSUER, APPLE_API_KEY (an App Store Connect API key's issuer ID and key ID) and
 #   APPLE_API_KEY_PRIVATE_KEY_BASE64 (that key's .p8 file, base64).
 # Without them the app is only ad-hoc signed (see the README for opening it).
+# Sign in with Apple also needs, on a signed build, the secret APPLE_PROVISIONING_PROFILE (the
+# Developer ID provisioning profile, base64) and the repository variables FRIENDS_SUPABASE_URL and
+# FRIENDS_SUPABASE_PUBLISHABLE_KEY. Without them the app builds as before, with the account unavailable.
 # A PR that changes this file, the release script or the app version (a release PR), or a manual
 # run, does a dry run: it prints the release plan and notes, builds the app and keeps the .dmg
 # as a workflow artifact, but publishes nothing.
@@ -116,6 +119,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_API_KEY_PRIVATE_KEY_BASE64 }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
         run: |
           missing=()
           for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_PRIVATE_KEY_BASE64; do
@@ -130,6 +134,15 @@ jobs:
             echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
             echo "sign=true" >> "$GITHUB_OUTPUT"
             echo "Signing and notarizing."
+            # Sign in with Apple only works in a signed build that carries its provisioning profile.
+            if [ -n "${APPLE_PROVISIONING_PROFILE:-}" ]; then
+              profile="$RUNNER_TEMP/friends.provisionprofile"
+              printf '%s' "$APPLE_PROVISIONING_PROFILE" | base64 --decode > "$profile"
+              scripts/prepare-signin.sh "$profile"
+              echo "signin_config=--config src-tauri/tauri.signin.conf.json" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::No APPLE_PROVISIONING_PROFILE: Sign in with Apple is off in this build."
+            fi
           elif [ ${#missing[@]} -eq 6 ]; then
             echo "sign=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No Apple secrets: building an ad-hoc signed app."
@@ -146,7 +159,11 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
+          FRIENDS_SUPABASE_URL: ${{ vars.FRIENDS_SUPABASE_URL }}
+          FRIENDS_SUPABASE_PUBLISHABLE_KEY: ${{ vars.FRIENDS_SUPABASE_PUBLISHABLE_KEY }}
+          SIGNIN_CONFIG: ${{ steps.signing.outputs.signin_config }}
+        # SIGNIN_CONFIG is empty or two words, so it is left unquoted on purpose.
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg $SIGNIN_CONFIG
 
       # "-" signs ad hoc. An app with no signature at all is reported as "damaged" on Apple silicon,
       # with no way to open it from System Settings.
