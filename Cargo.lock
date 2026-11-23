@@ -1163,7 +1163,10 @@ dependencies = [
 name = "friends-account"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
+ "form_urlencoded",
  "getrandom 0.3.4",
+ "percent-encoding",
  "serde",
  "serde_json",
  "sha2 0.10.9",

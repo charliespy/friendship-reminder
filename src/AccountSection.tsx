@@ -92,7 +92,7 @@ export function AccountSection() {
         )}
       </div>
       {account?.status === "unavailable" && <p className="hint">{account.reason}</p>}
-      {account?.status === "signedIn" && account.warning && <p className="hint">{account.warning}</p>}
+      {account?.status !== "unavailable" && account?.warning && <p className="hint">{account.warning}</p>}
       {loadError && <p className="error" role="alert">{loadError}</p>}
       {action.error && <p className="error" role="alert">{action.error}</p>}
     </div>

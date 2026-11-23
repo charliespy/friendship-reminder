@@ -41,7 +41,7 @@ afterEach(cleanup);
 
 describe("AccountSection", () => {
   it("signs in with Apple and shows who is signed in", async () => {
-    await open({ status: "signedOut" });
+    await open({ status: "signedOut", warning: null });
     signInWithApple.mockResolvedValue({ status: "signedIn", email: "ana@example.com", warning: null });
     await act(async () => fireEvent.click(signInButton()));
     expect(screen.getByText("Signed in with Apple")).toBeTruthy();
@@ -49,12 +49,12 @@ describe("AccountSection", () => {
   });
 
   it("waits for the browser, and Cancel stops waiting", async () => {
-    await open({ status: "signedOut" });
+    await open({ status: "signedOut", warning: null });
     let finish: (a: Account) => void = () => {};
     signInWithApple.mockReturnValue(new Promise((r) => (finish = r)));
     cancelSignIn.mockImplementation(async () => {
-      finish({ status: "signedOut" });
-      return { status: "signedOut" };
+      finish({ status: "signedOut", warning: null });
+      return { status: "signedOut", warning: null };
     });
     await act(async () => fireEvent.click(signInButton()));
     expect(screen.getByText(/Finish signing in with Apple in your browser/)).toBeTruthy();
@@ -66,7 +66,7 @@ describe("AccountSection", () => {
   it("signs out", async () => {
     await open({ status: "signedIn", email: null, warning: null });
     expect(screen.queryByTestId("account-email")).toBeNull();
-    signOut.mockResolvedValue({ status: "signedOut" });
+    signOut.mockResolvedValue({ status: "signedOut", warning: null });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign out" })));
     expect(signInButton()).toBeTruthy();
   });
@@ -78,7 +78,7 @@ describe("AccountSection", () => {
   });
 
   it("shows a failed sign-in and keeps the button", async () => {
-    await open({ status: "signedOut" });
+    await open({ status: "signedOut", warning: null });
     signInWithApple.mockRejectedValue("Couldn't reach the Friends account. Check your internet connection.");
     await act(async () => fireEvent.click(signInButton()));
     expect(screen.getByRole("alert").textContent).toMatch(/Couldn't reach/);
@@ -89,7 +89,7 @@ describe("AccountSection", () => {
     let answer: (a: Account) => void = () => {};
     getAccount.mockReturnValue(new Promise((r) => (answer = r)));
     render(<AccountSection />);
-    act(() => pushAccount({ status: "signedOut" }));
+    act(() => pushAccount({ status: "signedOut", warning: null }));
     await act(async () => answer({ status: "signedIn", email: "ana@example.com", warning: null }));
     expect(signInButton()).toBeTruthy();
   });
@@ -101,7 +101,7 @@ describe("AccountSection", () => {
 
   it("follows changes made elsewhere, like the check at launch", async () => {
     await open({ status: "signedIn", email: "ana@example.com", warning: null });
-    act(() => pushAccount({ status: "signedOut" }));
+    act(() => pushAccount({ status: "signedOut", warning: null }));
     expect(signInButton()).toBeTruthy();
   });
 });

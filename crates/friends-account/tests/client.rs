@@ -188,6 +188,60 @@ fn a_refused_refresh_is_rejected_with_supabases_message() {
 }
 
 #[test]
+fn only_a_dead_session_is_a_rejection() {
+    // A wrong or rotated app key is refused, but says nothing about the session.
+    let fake = Fake::new(401, json!({ "message": "Invalid API key" }));
+    let err = Client::new(config(), &fake).refresh("r", 0).unwrap_err();
+    assert_eq!(err, AuthError::Refused("Invalid API key".into()));
+    assert!(!err.session_is_dead());
+    let fake = Fake::new(
+        400,
+        json!({ "error_code": "session_expired", "msg": "Session expired" }),
+    );
+    assert!(Client::new(config(), &fake)
+        .refresh("r", 0)
+        .unwrap_err()
+        .session_is_dead());
+}
+
+#[test]
+fn ending_a_session_refreshes_an_expired_access_token_first() {
+    let expired = Session {
+        access_token: "old-access".into(),
+        refresh_token: "refresh-0".into(),
+        expires_at: 100,
+        user_id: "u".into(),
+        email: None,
+    };
+    // The fake answers the refresh with a fresh session, then the logout (which ignores the body).
+    let fake = Fake::new(200, token_answer());
+    Client::new(config(), &fake)
+        .end_session(&expired, 1_000)
+        .unwrap();
+    let sent = fake.sent.borrow();
+    assert!(sent[0].0.ends_with("grant_type=refresh_token"));
+    assert!(sent[1].0.ends_with("/logout?scope=local"));
+    assert!(sent[1]
+        .1
+        .contains(&("Authorization".into(), "Bearer access-1".into())));
+
+    // A live one is ended with its own token.
+    let fake = Fake::new(204, json!({}));
+    Client::new(config(), &fake)
+        .end_session(&expired, 0)
+        .unwrap();
+    assert!(fake.sent.borrow()[0]
+        .1
+        .contains(&("Authorization".into(), "Bearer old-access".into())));
+
+    // An already dead one has nothing left to end.
+    let fake = Fake::new(400, json!({ "error_code": "refresh_token_not_found" }));
+    Client::new(config(), &fake)
+        .end_session(&expired, 1_000)
+        .unwrap();
+}
+
+#[test]
 fn offline_and_server_errors_are_not_rejections() {
     let offline = Fake::offline();
     assert!(matches!(
@@ -260,8 +314,8 @@ fn the_challenge_is_the_rfc_7636_example() {
 #[test]
 fn the_account_view_is_tagged_for_the_ui() {
     assert_eq!(
-        serde_json::to_value(AccountView::SignedOut).unwrap(),
-        json!({ "status": "signedOut" })
+        serde_json::to_value(AccountView::SignedOut { warning: None }).unwrap(),
+        json!({ "status": "signedOut", "warning": null })
     );
     assert_eq!(
         serde_json::to_value(AccountView::Unavailable {

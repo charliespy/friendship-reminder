@@ -57,7 +57,7 @@ export function errorMessage(e: unknown): string {
 /** The Friends account, as the Account section shows it. */
 export type Account =
   | { status: "unavailable"; reason: string }
-  | { status: "signedOut" }
+  | { status: "signedOut"; warning: string | null }
   | { status: "signedIn"; email: string | null; warning: string | null };
 
 /** Sent to every window after any change, with the new view. */

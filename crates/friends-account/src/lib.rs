@@ -1,12 +1,17 @@
 //! Signing in to a Friends account, kept in Supabase Auth so a later iPhone app can share the data.
 //!
-//! The app signs in with Apple in the browser: [`Client::authorize_url`] is the page to open, the browser
-//! comes back to the app with a one-time code, and [`Client::exchange_code`] trades it for a session. The session's refresh token is what the app keeps (in the Keychain) to
-//! stay signed in across launches. All the HTTP goes through [`Transport`], so the rules here are tested
-//! without a network.
+//! The app signs in with Apple in the browser: [`Client::authorize_url`] is the page to open, the
+//! browser comes back to the app with a one-time code ([`parse_callback`]), and
+//! [`Client::exchange_code`] trades it for a session. [`AccountState`] holds the session and decides
+//! what each outcome does to it; the app keeps the session in the Keychain to stay signed in across
+//! launches. All the HTTP goes through [`Transport`] and the Keychain through a `save` function, so
+//! every rule here is tested without a network or a Mac.
 
 use std::time::Duration;
 
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -18,6 +23,24 @@ const EXPIRY_MARGIN: i64 = 60;
 /// The longest the app waits for Supabase to answer.
 const TIMEOUT: Duration = Duration::from_secs(20);
 
+/// What a query value escapes: everything but RFC 3986's unreserved characters.
+const QUERY_VALUE: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
+
+/// The path of the app's sign-in address, where the browser comes back.
+pub const CALLBACK_PATH: &str = "/auth/callback";
+
+/// Shown when the Keychain wouldn't save a new or refreshed session.
+pub const NOT_SAVED: &str =
+    "Couldn't save your sign-in in the Keychain, so you may need to sign in again after Friends restarts.";
+
+/// Shown when the Keychain wouldn't say whether a session was saved.
+pub const NOT_READ: &str =
+    "Couldn't read your sign-in from the Keychain. Restart Friends, or sign in again.";
+
 /// Where the account lives: the Supabase project's URL and its publishable key. The key is meant to be
 /// built into apps; the database's own rules decide what each signed-in user may read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,9 +49,13 @@ pub struct Config {
     pub publishable_key: String,
 }
 
+/// The setting names, in the environment and in `.env.local`.
+pub const URL_SETTING: &str = "FRIENDS_SUPABASE_URL";
+pub const KEY_SETTING: &str = "FRIENDS_SUPABASE_PUBLISHABLE_KEY";
+
 impl Config {
     /// A config from build settings, or `None` when either is missing or empty (a build made without
-    /// them, like the tests and most development builds, has no account).
+    /// them, like the tests, has no account).
     pub fn new(url: Option<&str>, publishable_key: Option<&str>) -> Option<Config> {
         let url = url?.trim().trim_end_matches('/');
         let publishable_key = publishable_key?.trim();
@@ -40,6 +67,35 @@ impl Config {
             publishable_key: publishable_key.to_string(),
         })
     }
+
+    /// A config from the text of a `.env` file (see [`env_file_value`]).
+    pub fn from_env_file(text: &str) -> Option<Config> {
+        Config::new(
+            env_file_value(text, URL_SETTING).as_deref(),
+            env_file_value(text, KEY_SETTING).as_deref(),
+        )
+    }
+}
+
+/// The value of `key` in a `.env` file: `KEY=value`, optionally after `export`, optionally quoted, with
+/// `#` comments on their own line or after an unquoted value.
+pub fn env_file_value(text: &str, key: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let line = line.trim();
+        let line = line.strip_prefix("export ").unwrap_or(line);
+        let (k, v) = line.split_once('=')?;
+        if k.trim() != key {
+            return None;
+        }
+        let v = v.trim();
+        let quoted = ['"', '\''].into_iter().find_map(|q| {
+            v.strip_prefix(q)
+                .and_then(|rest| rest.split_once(q))
+                .map(|(inner, _)| inner)
+        });
+        let value = quoted.unwrap_or_else(|| v.split(" #").next().unwrap_or(v).trim());
+        Some(value.to_string())
+    })
 }
 
 /// A signed-in session. Saved as JSON in the Keychain between launches.
@@ -66,15 +122,17 @@ impl Session {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum AccountView {
-    /// This build can't sign in (no Supabase settings, or not signed for Sign in with Apple).
-    Unavailable {
-        reason: String,
+    /// This build can't sign in: it was built without the account server's settings.
+    Unavailable { reason: String },
+    #[serde(rename_all = "camelCase")]
+    SignedOut {
+        /// Something the user should know, like the Keychain refusing to read a saved sign-in.
+        warning: Option<String>,
     },
-    SignedOut,
     #[serde(rename_all = "camelCase")]
     SignedIn {
         email: Option<String>,
-        /// Something the user should know about the sign-in, like the Keychain refusing to save it.
+        /// Something the user should know, like the Keychain refusing to save the sign-in.
         warning: Option<String>,
     },
 }
@@ -82,19 +140,29 @@ pub enum AccountView {
 /// Why talking to the account failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthError {
-    /// Supabase said no: the token or session is invalid or expired. A saved session that gets this
-    /// is no good any more, so the app signs out.
+    /// Supabase said the session, token or sign-in code is no good (expired, revoked, already used).
+    /// A saved session that gets this is dead, so the app signs out.
     Rejected(String),
+    /// Supabase refused the request for another reason (a wrong app key, a bad request). That says
+    /// nothing about the session, so a saved one is kept.
+    Refused(String),
     /// Supabase couldn't be reached (offline, or it timed out). A saved session is kept, to try again.
     Unreachable(String),
     /// Supabase answered with a server error. A saved session is kept, to try again.
     Server(String),
 }
 
+impl AuthError {
+    /// Whether the session this came from is gone for good.
+    pub fn session_is_dead(&self) -> bool {
+        matches!(self, AuthError::Rejected(_))
+    }
+}
+
 impl std::fmt::Display for AuthError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AuthError::Rejected(m) => write!(f, "Sign-in was refused: {m}"),
+            AuthError::Rejected(m) | AuthError::Refused(m) => write!(f, "Sign-in was refused: {m}"),
             AuthError::Unreachable(_) => {
                 f.write_str("Couldn't reach the Friends account. Check your internet connection.")
             }
@@ -106,6 +174,20 @@ impl std::fmt::Display for AuthError {
 }
 
 impl std::error::Error for AuthError {}
+
+/// Supabase's error codes that mean the session, refresh token or sign-in code itself is no good.
+const DEAD_SESSION_CODES: [&str; 10] = [
+    "refresh_token_not_found",
+    "refresh_token_already_used",
+    "session_not_found",
+    "session_expired",
+    "user_not_found",
+    "user_banned",
+    "invalid_grant",
+    "flow_state_not_found",
+    "flow_state_expired",
+    "bad_code_verifier",
+];
 
 /// An HTTP answer: its status code and body.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,8 +248,8 @@ impl<T: Transport> Client<T> {
         format!(
             "{}/auth/v1/authorize?provider={}&redirect_to={}&code_challenge={}&code_challenge_method=s256",
             self.config.url,
-            encode(provider),
-            encode(redirect_to),
+            utf8_percent_encode(provider, QUERY_VALUE),
+            utf8_percent_encode(redirect_to, QUERY_VALUE),
             pkce.challenge,
         )
     }
@@ -203,6 +285,22 @@ impl<T: Transport> Client<T> {
         }
     }
 
+    /// Ends a session the app is letting go of. Its access token may have run out while the app ran
+    /// (a menu bar app runs for days), and Supabase won't end a session with an expired one, so that is
+    /// refreshed first.
+    pub fn end_session(&self, session: &Session, now: i64) -> Result<(), AuthError> {
+        if session.needs_refresh(now) {
+            match self.refresh(&session.refresh_token, now) {
+                Ok(fresh) => self.sign_out(&fresh.access_token),
+                // Already dead: nothing left to end.
+                Err(e) if e.session_is_dead() => Ok(()),
+                Err(e) => Err(e),
+            }
+        } else {
+            self.sign_out(&session.access_token)
+        }
+    }
+
     fn token(&self, grant_type: &str, body: &Value, now: i64) -> Result<Session, AuthError> {
         let url = format!("{}/auth/v1/token?grant_type={grant_type}", self.config.url);
         let res = self.send(&url, &[], &body.to_string())?;
@@ -226,16 +324,20 @@ impl<T: Transport> Client<T> {
 }
 
 fn error_for(res: &Response) -> AuthError {
-    let message = serde_json::from_str::<Value>(&res.body)
-        .ok()
-        .and_then(|v| {
-            ["msg", "error_description", "message", "error"]
-                .iter()
+    let body = serde_json::from_str::<Value>(&res.body).ok();
+    let text = |keys: &[&str]| {
+        body.as_ref().and_then(|v| {
+            keys.iter()
                 .find_map(|k| v.get(*k).and_then(Value::as_str).map(str::to_string))
         })
+    };
+    let message = text(&["msg", "error_description", "message", "error"])
         .unwrap_or_else(|| format!("HTTP {}", res.status));
+    let code = text(&["error_code", "error"]).unwrap_or_default();
     match res.status {
-        400..=499 if res.status != 408 && res.status != 429 => AuthError::Rejected(message),
+        408 | 429 | 500..=599 => AuthError::Server(message),
+        400..=499 if DEAD_SESSION_CODES.contains(&code.as_str()) => AuthError::Rejected(message),
+        400..=499 => AuthError::Refused(message),
         _ => AuthError::Server(message),
     }
 }
@@ -261,6 +363,117 @@ fn parse_session(body: &str, now: i64) -> Option<Session> {
     })
 }
 
+/// Who is signed in, and the rules for changing it. Every change bumps `generation`, so work that
+/// started from an older state (a refresh at launch that finishes after the user signed in or out) can
+/// tell, and its result is dropped. Each change is saved with the given `save` function (the Keychain)
+/// together with the change in memory, so the two never disagree.
+#[derive(Debug, Default)]
+pub struct AccountState {
+    generation: u64,
+    session: Option<Session>,
+    warning: Option<String>,
+}
+
+impl AccountState {
+    pub fn view(&self) -> AccountView {
+        let warning = self.warning.clone();
+        match &self.session {
+            Some(s) => AccountView::SignedIn {
+                email: s.email.clone(),
+                warning,
+            },
+            None => AccountView::SignedOut { warning },
+        }
+    }
+
+    pub fn session(&self) -> Option<&Session> {
+        self.session.as_ref()
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// At launch, what the Keychain held. Shows a saved session as signed in right away, and returns
+    /// the generation to pass to [`AccountState::finish_restore`] once its refresh is back; `None` when
+    /// there is nothing to refresh.
+    pub fn start_restore(&mut self, saved: Result<Option<Session>, String>) -> Option<u64> {
+        match saved {
+            Err(_) => {
+                self.warning = Some(NOT_READ.to_string());
+                self.generation += 1;
+                None
+            }
+            Ok(None) => None,
+            Ok(Some(_)) if self.session.is_some() => None,
+            Ok(Some(session)) => {
+                self.session = Some(session);
+                self.generation += 1;
+                Some(self.generation)
+            }
+        }
+    }
+
+    /// The refresh started by [`AccountState::start_restore`] came back. A fresh session replaces the
+    /// saved one; a dead one signs out; anything else (offline, a server error) keeps the saved one to
+    /// try again at the next launch. Dropped if the account changed meanwhile.
+    pub fn finish_restore(
+        &mut self,
+        generation: u64,
+        refreshed: Result<Session, AuthError>,
+        save: impl FnOnce(Option<&Session>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        if generation != self.generation {
+            return Ok(());
+        }
+        match refreshed {
+            Ok(fresh) => self.keep(Some(fresh), save),
+            Err(e) if e.session_is_dead() => self.sign_out(save).map(|_| ()),
+            Err(_) => Ok(()),
+        }
+    }
+
+    /// A sign-in finished. `still_wanted` is checked in the same step as the change, so a sign-in
+    /// cancelled at the last moment never sticks; returns `false` when it was dropped. If the Keychain
+    /// won't save it, the session is kept for now with a warning.
+    pub fn signed_in(
+        &mut self,
+        session: Session,
+        still_wanted: bool,
+        save: impl FnOnce(Option<&Session>) -> Result<(), String>,
+    ) -> (bool, Result<(), String>) {
+        if !still_wanted {
+            return (false, Ok(()));
+        }
+        (true, self.keep(Some(session), save))
+    }
+
+    /// Signs out, but only once the Keychain has let go of the session: one left behind would sign the
+    /// user back in at the next launch. On an error nothing changes. Returns the session that was
+    /// signed in, to end on the server.
+    pub fn sign_out(
+        &mut self,
+        save: impl FnOnce(Option<&Session>) -> Result<(), String>,
+    ) -> Result<Option<Session>, String> {
+        save(None)?;
+        self.warning = None;
+        self.generation += 1;
+        Ok(self.session.take())
+    }
+
+    fn keep(
+        &mut self,
+        session: Option<Session>,
+        save: impl FnOnce(Option<&Session>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let saved = save(session.as_ref());
+        self.warning = saved.as_ref().err().map(|_| NOT_SAVED.to_string());
+        self.session = session;
+        self.generation += 1;
+        saved
+    }
+}
+
 /// The secret pair that ties a browser sign-in to this app (PKCE): Supabase gets the challenge when the
 /// sign-in starts, and the code it hands back only works together with the verifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -274,11 +487,11 @@ impl Pkce {
     pub fn new() -> Result<Pkce, String> {
         let mut bytes = [0u8; 32];
         getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
-        Ok(Pkce::from_verifier(base64url(&bytes)))
+        Ok(Pkce::from_verifier(URL_SAFE_NO_PAD.encode(bytes)))
     }
 
     pub fn from_verifier(verifier: String) -> Pkce {
-        let challenge = base64url(&Sha256::digest(verifier.as_bytes()));
+        let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
         Pkce {
             verifier,
             challenge,
@@ -304,10 +517,9 @@ pub fn parse_callback(target: &str) -> Callback {
         return Callback::Other;
     }
     let param = |name: &str| {
-        query.split('&').find_map(|pair| {
-            let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
-            (k == name).then(|| decode(v))
-        })
+        form_urlencoded::parse(query.as_bytes())
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.into_owned())
     };
     if let Some(code) = param("code").filter(|c| !c.is_empty()) {
         return Callback::Code(code);
@@ -316,57 +528,4 @@ pub fn parse_callback(target: &str) -> Callback {
         .or_else(|| param("error"))
         .unwrap_or_else(|| "no sign-in code came back".to_string());
     Callback::Failed(reason)
-}
-
-/// The path of the app's sign-in address.
-pub const CALLBACK_PATH: &str = "/auth/callback";
-
-fn base64url(bytes: &[u8]) -> String {
-    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut out = String::new();
-    for chunk in bytes.chunks(3) {
-        let n = chunk
-            .iter()
-            .enumerate()
-            .fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
-        for i in 0..=chunk.len() {
-            out.push(ABC[(n >> (18 - 6 * i) & 63) as usize] as char);
-        }
-    }
-    out
-}
-
-/// Percent-encodes a query value.
-fn encode(text: &str) -> String {
-    text.bytes()
-        .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                (b as char).to_string()
-            }
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
-}
-
-/// Decodes a percent-encoded query value (`+` is a space). Bad escapes are kept as they are.
-fn decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    let hex = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
-    while i < bytes.len() {
-        match bytes[i] {
-            b'+' => out.push(b' '),
-            b'%' if i + 2 < bytes.len() => match (hex(bytes[i + 1]), hex(bytes[i + 2])) {
-                (Some(hi), Some(lo)) => {
-                    out.push(hi << 4 | lo);
-                    i += 2;
-                }
-                _ => out.push(b'%'),
-            },
-            b => out.push(b),
-        }
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }

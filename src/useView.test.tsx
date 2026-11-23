@@ -14,7 +14,7 @@ vi.mock("./api", async (orig) => ({
     setLaunchAtLogin: (on: boolean) => setLaunchAtLogin(on),
     setDayToggle: vi.fn(),
     setNotifications: vi.fn(),
-    getAccount: () => Promise.resolve({ status: "signedOut" }),
+    getAccount: () => Promise.resolve({ status: "signedOut", warning: null }),
     onAccountChanged: () => Promise.resolve(() => {}),
   },
 }));

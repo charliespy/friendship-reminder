@@ -1,5 +1,6 @@
 //! The Friends account: Sign in with Apple, traded for a Supabase session that is kept in the Keychain.
-//! The sign-in rules live in friends-account; this file connects them to macOS and the windows.
+//! The rules live in friends-account; this file only opens the browser, listens for it to come back,
+//! and connects the Keychain and the windows.
 //!
 //! Signing in happens in the browser: the app opens Supabase's Sign in with Apple page, and when it's
 //! done the browser comes back to a one-off address on this Mac (`http://127.0.0.1:<port>/auth/callback`)
@@ -7,17 +8,19 @@
 //! signed with a Developer ID can't use it.)
 //!
 //! Signing in is optional. A build without the Supabase settings (`FRIENDS_SUPABASE_URL` and
-//! `FRIENDS_SUPABASE_PUBLISHABLE_KEY` at build time) shows the Account section as unavailable, and
-//! touches neither the network nor the Keychain.
+//! `FRIENDS_SUPABASE_PUBLISHABLE_KEY` at build time, or in `.env.local` for debug builds) shows the
+//! Account section as unavailable, and touches neither the network nor the Keychain.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use friends_account::{
-    parse_callback, AccountView, AuthError, Callback, Client, Config, HttpTransport, Pkce, Session,
+    parse_callback, AccountState, AccountView, Callback, Client, Config, HttpTransport, Pkce,
+    Session,
 };
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -28,44 +31,47 @@ const ACCOUNT_CHANGED: &str = "account-changed";
 const KEYCHAIN_SERVICE: &str = "io.github.charliespy.friends";
 const KEYCHAIN_ACCOUNT: &str = "account-session";
 
-/// Shown when a refreshed session couldn't be saved: Supabase replaced the saved refresh token, so the
-/// next launch will have to sign in again.
-const NOT_SAVED: &str =
-    "Couldn't save your sign-in in the Keychain, so you may need to sign in again after Friends restarts.";
+/// How long a sign-in waits for the browser to come back.
+const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// The signed-in state. `generation` goes up on every change, so work that started from an older state
-/// (a refresh at launch that finishes after the user signed out) can tell and drop its result.
-struct Signed {
-    generation: u64,
-    session: Option<Session>,
-    /// Set when the Keychain no longer holds the current session.
-    warning: Option<String>,
+/// How long the app waits for a browser connection to say what it wants.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// What ends a sign-in's wait for the browser.
+enum Wake {
+    Browser(Callback),
+    /// Cancel was clicked, or a newer sign-in started.
+    Cancelled,
 }
+
+/// The sign-in waiting for the browser: its number, and how to wake it.
+type Waiting = Option<(u64, Sender<Wake>)>;
 
 pub struct Account {
     /// Why this build can't sign in, or the project to sign in to.
     config: Result<Config, String>,
-    state: Mutex<Signed>,
-    /// Goes up with every sign-in started or cancelled, so a sign-in still waiting for the browser
-    /// knows it was replaced and stops.
-    attempt: AtomicU64,
+    state: Mutex<AccountState>,
+    waiting: Mutex<Waiting>,
+    /// Numbers each sign-in.
+    attempts: AtomicU64,
 }
 
 impl Account {
     pub fn new() -> Account {
         Account {
             config: available(),
-            state: Mutex::new(Signed {
-                generation: 0,
-                session: None,
-                warning: None,
-            }),
-            attempt: AtomicU64::new(0),
+            state: Mutex::new(AccountState::default()),
+            waiting: Mutex::new(None),
+            attempts: AtomicU64::new(0),
         }
     }
 
-    fn state(&self) -> MutexGuard<'_, Signed> {
+    fn state(&self) -> MutexGuard<'_, AccountState> {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn waiting(&self) -> MutexGuard<'_, Waiting> {
+        self.waiting.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn view(&self) -> AccountView {
@@ -73,16 +79,7 @@ impl Account {
             Err(reason) => AccountView::Unavailable {
                 reason: reason.clone(),
             },
-            Ok(_) => {
-                let state = self.state();
-                match &state.session {
-                    Some(s) => AccountView::SignedIn {
-                        email: s.email.clone(),
-                        warning: state.warning.clone(),
-                    },
-                    None => AccountView::SignedOut,
-                }
-            }
+            Ok(_) => self.state().view(),
         }
     }
 
@@ -91,32 +88,34 @@ impl Account {
         Ok(Client::new(config, HttpTransport::default()))
     }
 
-    /// Replaces the session, in memory and in the Keychain, unless it changed since `generation`
-    /// (pass `None` to replace it whatever happened meanwhile). Returns the Keychain's error, if any,
-    /// or `Ok(false)` when the change was dropped as stale.
-    fn replace(&self, generation: Option<u64>, session: Option<Session>) -> Result<bool, String> {
-        let mut state = self.state();
-        if generation.is_some_and(|g| g != state.generation) {
-            return Ok(false);
+    /// Stops the sign-in waiting for the browser, if any, and makes `next` the one waiting from now on.
+    fn wait_with(&self, next: Waiting) {
+        if let Some((_, old)) = std::mem::replace(&mut *self.waiting(), next) {
+            let _ = old.send(Wake::Cancelled);
         }
-        // Saved while the lock is held, so the Keychain and memory change together.
-        let saved = save(session.as_ref());
-        state.generation += 1;
-        state.warning = match (&saved, &session) {
-            (Err(_), Some(_)) => Some(NOT_SAVED.to_string()),
-            _ => None,
-        };
-        state.session = session;
-        saved.map(|()| true)
+    }
+
+    /// Forgets sign-in `id` as the waiting one, if it still is.
+    fn done_waiting(&self, id: u64) {
+        let mut waiting = self.waiting();
+        if waiting.as_ref().is_some_and(|(w, _)| *w == id) {
+            *waiting = None;
+        }
     }
 }
 
+/// The account server's settings: built in, or (debug builds only) from `.env.local` at the repo root.
 fn available() -> Result<Config, String> {
-    Config::new(
+    let built_in = Config::new(
         option_env!("FRIENDS_SUPABASE_URL"),
         option_env!("FRIENDS_SUPABASE_PUBLISHABLE_KEY"),
-    )
-    .ok_or_else(|| "This copy of Friends was built without an account server.".to_string())
+    );
+    #[cfg(debug_assertions)]
+    let built_in = built_in.or_else(|| {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../.env.local");
+        Config::from_env_file(&std::fs::read_to_string(path).ok()?)
+    });
+    built_in.ok_or_else(|| "This copy of Friends was built without an account server.".to_string())
 }
 
 fn now() -> i64 {
@@ -126,6 +125,10 @@ fn now() -> i64 {
 fn publish(app: &AppHandle) {
     let _ = app.emit(ACCOUNT_CHANGED, app.state::<Account>().view());
 }
+
+/// errSecItemNotFound: the Keychain holds no such item.
+#[cfg(target_os = "macos")]
+const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 /// Saves the session in the Keychain, or removes it for `None`.
 fn save(session: Option<&Session>) -> Result<(), String> {
@@ -139,8 +142,7 @@ fn save(session: Option<&Session>) -> Result<(), String> {
                     .map_err(|e| e.to_string())
             }
             None => match delete_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
-                // errSecItemNotFound: nothing was saved.
-                Err(e) if e.code() != -25300 => Err(e.to_string()),
+                Err(e) if e.code() != ERR_SEC_ITEM_NOT_FOUND => Err(e.to_string()),
                 _ => Ok(()),
             },
         }
@@ -152,52 +154,46 @@ fn save(session: Option<&Session>) -> Result<(), String> {
     }
 }
 
-fn load() -> Option<Session> {
+/// The saved session: `Ok(None)` when none was saved (or it can't be read back as one), `Err` when
+/// the Keychain wouldn't say.
+fn load() -> Result<Option<Session>, String> {
     #[cfg(target_os = "macos")]
     {
-        let bytes =
-            security_framework::passwords::get_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-                .ok()?;
-        serde_json::from_slice(&bytes).ok()
+        match security_framework::passwords::get_generic_password(
+            KEYCHAIN_SERVICE,
+            KEYCHAIN_ACCOUNT,
+        ) {
+            Ok(bytes) => Ok(serde_json::from_slice(&bytes).ok()),
+            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
+            Err(e) => Err(e.to_string()),
+        }
     }
     #[cfg(not(target_os = "macos"))]
-    None
+    Ok(None)
 }
 
-/// At launch: picks up a saved session and refreshes it, which also checks it's still good. Offline,
-/// the saved session is kept (it shows as signed in) and refreshed at the next launch; a session
-/// Supabase refuses (revoked, or signed out elsewhere) is dropped. A sign-in or sign-out made while the
-/// refresh is on its way wins over it.
+/// At launch: picks up a saved session and refreshes it, which also checks it's still good
+/// (`AccountState` decides what each outcome means).
 pub fn restore(app: &AppHandle) {
     let account = app.state::<Account>();
     let Ok(client) = account.client() else {
         return;
     };
-    let Some(saved) = load() else {
+    let saved = load();
+    if let Err(e) = &saved {
+        eprintln!("friends: couldn't read the saved sign-in: {e}");
+    }
+    let to_refresh = saved.as_ref().ok().cloned().flatten();
+    let generation = account.state().start_restore(saved);
+    publish(app);
+    let (Some(generation), Some(saved)) = (generation, to_refresh) else {
         return;
     };
-    let generation = {
-        let mut state = account.state();
-        if state.session.is_some() {
-            return; // Signed in already, in the moment since launch.
-        }
-        state.session = Some(saved.clone());
-        state.generation += 1;
-        state.generation
-    };
-    publish(app);
-    let outcome = match client.refresh(&saved.refresh_token, now()) {
-        Ok(fresh) => account.replace(Some(generation), Some(fresh)),
-        Err(AuthError::Rejected(e)) => {
-            eprintln!("friends: the saved session was refused, signing out: {e}");
-            account.replace(Some(generation), None)
-        }
-        Err(e) => {
-            eprintln!("friends: couldn't refresh the session: {e:?}");
-            Ok(false)
-        }
-    };
-    if let Err(e) = outcome {
+    let refreshed = client.refresh(&saved.refresh_token, now());
+    if let Err(e) = &refreshed {
+        eprintln!("friends: couldn't refresh the saved sign-in: {e:?}");
+    }
+    if let Err(e) = account.state().finish_restore(generation, refreshed, save) {
         eprintln!("friends: couldn't update the Keychain: {e}");
     }
     publish(app);
@@ -221,53 +217,119 @@ pub async fn sign_in_with_apple(app: AppHandle) -> Result<AccountView, String> {
 /// Stops a sign-in that is waiting for the browser.
 #[tauri::command]
 pub fn cancel_sign_in(account: tauri::State<'_, Account>) -> AccountView {
-    account.attempt.fetch_add(1, Ordering::SeqCst);
+    account.wait_with(None);
     account.view()
 }
-
-/// How long a sign-in waits for the browser to come back.
-const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);
 
 fn sign_in(app: &AppHandle) -> Result<AccountView, String> {
     let account = app.state::<Account>();
     let client = account.client()?;
-    let attempt = account.attempt.fetch_add(1, Ordering::SeqCst) + 1;
-    let current = || account.attempt.load(Ordering::SeqCst) == attempt;
+    let id = account.attempts.fetch_add(1, Ordering::SeqCst) + 1;
+    let (tx, rx) = mpsc::channel();
+    account.wait_with(Some((id, tx.clone())));
 
-    // A one-off address on this Mac only, on a port the system picks.
-    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
-    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-    let redirect = format!("http://127.0.0.1:{port}{}", friends_account::CALLBACK_PATH);
-    let pkce = Pkce::new()?;
-    open_in_browser(&client.authorize_url("apple", &redirect, &pkce))?;
-
-    let Some(code) = wait_for_code(&listener, &current)? else {
+    let code = match wait_for_browser(&client, tx, &rx) {
+        Ok(Some(code)) => code,
         // Cancelled, or replaced by a newer sign-in: nothing to report.
-        return Ok(account.view());
+        Ok(None) => return Ok(account.view()),
+        Err(e) => {
+            account.done_waiting(id);
+            return Err(e);
+        }
     };
-    let session = client
-        .exchange_code(&code, &pkce.verifier, now())
-        .map_err(|e| e.to_string())?;
-    if !current() {
-        // Cancelled while the code was being traded: don't keep the session.
+    let (code, verifier) = code;
+    let session = match client.exchange_code(&code, &verifier, now()) {
+        Ok(s) => s,
+        Err(e) => {
+            account.done_waiting(id);
+            return Err(e.to_string());
+        }
+    };
+    // Still the sign-in the user wants (not cancelled or replaced while the code was traded)? Checked
+    // and applied in one step, together with the Keychain.
+    let (kept, saved) = {
+        let mut state = account.state();
+        let mut waiting = account.waiting();
+        let still_wanted = waiting.as_ref().is_some_and(|(w, _)| *w == id);
+        if still_wanted {
+            *waiting = None;
+        }
+        state.signed_in(session.clone(), still_wanted, save)
+    };
+    if !kept {
         end_on_server(client, session);
         return Ok(account.view());
     }
-    if let Err(e) = save(Some(&session)) {
-        // Without the Keychain the app can't keep this session, so end it rather than leave it live.
-        end_on_server(client, session);
-        return Err(format!("Couldn't save the sign-in in the Keychain: {e}"));
-    }
-    {
-        let mut state = account.state();
-        state.generation += 1;
-        state.session = Some(session);
-        state.warning = None;
+    if let Err(e) = saved {
+        eprintln!("friends: couldn't save the sign-in in the Keychain: {e}");
     }
     publish(app);
     // Back from the browser to Friends.
     let _ = crate::show_preferences(app);
     Ok(account.view())
+}
+
+/// Opens the sign-in page and waits for the browser to come back. The code and the verifier to trade
+/// it with, or `None` when cancelled.
+fn wait_for_browser(
+    client: &Client<HttpTransport>,
+    tx: Sender<Wake>,
+    rx: &mpsc::Receiver<Wake>,
+) -> Result<Option<(String, String)>, String> {
+    // A one-off address on this Mac only, on a port the system picks.
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    let redirect = format!("http://127.0.0.1:{port}{}", friends_account::CALLBACK_PATH);
+    let _listening = Listening::start(listener, port, tx);
+    let pkce = Pkce::new()?;
+    open_in_browser(&client.authorize_url("apple", &redirect, &pkce))?;
+    match rx.recv_timeout(BROWSER_TIMEOUT) {
+        Ok(Wake::Browser(Callback::Code(code))) => Ok(Some((code, pkce.verifier))),
+        Ok(Wake::Browser(Callback::Failed(reason))) => {
+            Err(format!("Sign in with Apple didn't finish: {reason}"))
+        }
+        Ok(Wake::Browser(Callback::Other)) | Ok(Wake::Cancelled) => Ok(None),
+        Err(RecvTimeoutError::Timeout) => Err("Signing in took too long. Try again.".into()),
+        Err(RecvTimeoutError::Disconnected) => Ok(None),
+    }
+}
+
+/// Accepts the browser's connections on the sign-in address until dropped. Each connection is read on
+/// its own thread, so one that never says anything (a browser's preconnect) can't hold up the rest.
+struct Listening {
+    stopped: Arc<AtomicBool>,
+    port: u16,
+}
+
+impl Listening {
+    fn start(listener: TcpListener, port: u16, wake: Sender<Wake>) -> Listening {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let flag = stopped.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                if flag.load(Ordering::SeqCst) {
+                    break;
+                }
+                let Ok(stream) = stream else { continue };
+                let wake = wake.clone();
+                std::thread::spawn(move || {
+                    let callback = answer_browser(stream);
+                    if callback != Callback::Other {
+                        let _ = wake.send(Wake::Browser(callback));
+                    }
+                });
+            }
+        });
+        Listening { stopped, port }
+    }
+}
+
+impl Drop for Listening {
+    fn drop(&mut self) {
+        self.stopped.store(true, Ordering::SeqCst);
+        // The listening thread sleeps in accept(); a connection wakes it to see it should stop.
+        let _ = TcpStream::connect(("127.0.0.1", self.port));
+    }
 }
 
 fn open_in_browser(url: &str) -> Result<(), String> {
@@ -282,40 +344,9 @@ fn open_in_browser(url: &str) -> Result<(), String> {
     }
 }
 
-/// Waits for the browser to come back with a code. `None` when this sign-in was cancelled or replaced.
-fn wait_for_code(
-    listener: &TcpListener,
-    current: &dyn Fn() -> bool,
-) -> Result<Option<String>, String> {
-    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
-    let deadline = Instant::now() + BROWSER_TIMEOUT;
-    while current() {
-        if Instant::now() > deadline {
-            return Err("Signing in took too long. Try again.".into());
-        }
-        let stream = match listener.accept() {
-            Ok((stream, _)) => stream,
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(100));
-                continue;
-            }
-            Err(e) => return Err(e.to_string()),
-        };
-        match answer_browser(stream) {
-            Callback::Code(code) => return Ok(Some(code)),
-            Callback::Failed(reason) => {
-                return Err(format!("Sign in with Apple didn't finish: {reason}"))
-            }
-            Callback::Other => {}
-        }
-    }
-    Ok(None)
-}
-
 /// Reads one request from the browser and answers it with a short page.
 fn answer_browser(mut stream: TcpStream) -> Callback {
-    let _ = stream.set_nonblocking(false);
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let _ = stream.set_read_timeout(Some(REQUEST_TIMEOUT));
     let mut line = String::new();
     let _ = BufReader::new(&stream).read_line(&mut line);
     // "GET /auth/callback?code=... HTTP/1.1"
@@ -345,41 +376,29 @@ fn answer_browser(mut stream: TcpStream) -> Callback {
     callback
 }
 
-/// Ends a session on Supabase's side, in the background. The access token kept in memory may have run
-/// out while the app ran (a menu bar app runs for days), and Supabase would then refuse to end the
-/// session with it, so an expired one is refreshed first. Offline, the session just stays unused.
+/// Ends a session on Supabase's side, in the background. Offline, it just stays unused until it
+/// runs out.
 fn end_on_server(client: Client<HttpTransport>, session: Session) {
     std::thread::spawn(move || {
-        let access = if session.needs_refresh(now()) {
-            match client.refresh(&session.refresh_token, now()) {
-                Ok(fresh) => fresh.access_token,
-                Err(e) => {
-                    eprintln!("friends: couldn't refresh the session to end it: {e:?}");
-                    return;
-                }
-            }
-        } else {
-            session.access_token
-        };
-        if let Err(e) = client.sign_out(&access) {
+        if let Err(e) = client.end_session(&session, now()) {
             eprintln!("friends: couldn't end the session on the server: {e:?}");
         }
     });
 }
 
-/// Signs out on this Mac at once, then ends the session on Supabase's side in the background.
+/// Signs out once the Keychain has let go of the session (one left behind would sign back in at the
+/// next launch), then ends the session on Supabase's side in the background.
 #[tauri::command]
 pub fn sign_out(app: AppHandle) -> Result<AccountView, String> {
     let account = app.state::<Account>();
-    let old = account.state().session.clone();
-    // Signed out in memory even if the Keychain refuses; the session is ended on the server too, so
-    // a copy left in the Keychain is refused and dropped at the next launch.
-    let removed = account.replace(None, None);
+    let old = account
+        .state()
+        .sign_out(save)
+        .map_err(|e| format!("Couldn't remove the sign-in from the Keychain: {e}"))?;
     publish(&app);
     if let (Some(old), Ok(client)) = (old, account.client()) {
         end_on_server(client, old);
     }
-    removed.map_err(|e| format!("Couldn't remove the sign-in from the Keychain: {e}"))?;
     Ok(account.view())
 }
 
@@ -387,32 +406,44 @@ pub fn sign_out(app: AppHandle) -> Result<AccountView, String> {
 mod tests {
     use super::*;
 
-    /// Sends one request to the listener the way a browser would, and returns the answer.
-    fn browse(port: u16, target: &str) -> std::thread::JoinHandle<String> {
-        let target = target.to_string();
-        // Connected before returning, so requests reach the listener in the order they were made.
+    /// Connects to the sign-in address and, on another thread, sends `request` and reads the answer.
+    fn browse(port: u16, request: &str) -> std::thread::JoinHandle<String> {
+        let request = request.to_string();
         let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
         std::thread::spawn(move || {
-            write!(s, "GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+            s.write_all(request.as_bytes()).unwrap();
             let mut answer = String::new();
             let _ = std::io::Read::read_to_string(&mut s, &mut answer);
             answer
         })
     }
 
-    fn listener() -> (TcpListener, u16) {
+    fn get(target: &str) -> String {
+        format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    }
+
+    fn listen() -> (Listening, u16, mpsc::Receiver<Wake>) {
         let l = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = l.local_addr().unwrap().port();
-        (l, port)
+        let (tx, rx) = mpsc::channel();
+        (Listening::start(l, port, tx), port, rx)
+    }
+
+    fn next(rx: &mpsc::Receiver<Wake>) -> Callback {
+        match rx.recv_timeout(Duration::from_secs(3)).unwrap() {
+            Wake::Browser(c) => c,
+            Wake::Cancelled => panic!("cancelled"),
+        }
     }
 
     #[test]
-    fn the_browser_brings_back_the_code_after_other_requests() {
-        let (l, port) = listener();
-        let icon = browse(port, "/favicon.ico");
-        let page = browse(port, "/auth/callback?code=abc");
-        // The icon request is answered and ignored; the callback ends the wait.
-        assert_eq!(wait_for_code(&l, &|| true), Ok(Some("abc".to_string())));
+    fn the_code_comes_back_past_an_idle_connection_and_other_requests() {
+        let (_listening, port, rx) = listen();
+        // A connection that never says anything (a browser preconnect) must not hold anything up.
+        let _idle = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let icon = browse(port, &get("/favicon.ico"));
+        let page = browse(port, &get("/auth/callback?code=abc"));
+        assert_eq!(next(&rx), Callback::Code("abc".into()));
         assert!(icon.join().unwrap().starts_with("HTTP/1.1 404"));
         let page = page.join().unwrap();
         assert!(page.starts_with("HTTP/1.1 200 OK"));
@@ -420,22 +451,25 @@ mod tests {
     }
 
     #[test]
-    fn a_refused_sign_in_is_an_error_and_the_page_says_so() {
-        let (l, port) = listener();
+    fn a_refused_sign_in_comes_back_with_its_reason() {
+        let (_listening, port, rx) = listen();
         let page = browse(
             port,
-            "/auth/callback?error=access_denied&error_description=Nope",
+            &get("/auth/callback?error=access_denied&error_description=Nope"),
         );
-        assert_eq!(
-            wait_for_code(&l, &|| true),
-            Err("Sign in with Apple didn't finish: Nope".to_string())
-        );
+        assert_eq!(next(&rx), Callback::Failed("Nope".into()));
         assert!(page.join().unwrap().contains("didn't work"));
     }
 
     #[test]
-    fn a_cancelled_sign_in_stops_waiting() {
-        let (l, _) = listener();
-        assert_eq!(wait_for_code(&l, &|| false), Ok(None));
+    fn stopping_closes_the_sign_in_address() {
+        let (listening, port, _rx) = listen();
+        drop(listening);
+        // The listening thread has gone, so the port stops answering.
+        let gone = (0..50).any(|_| {
+            std::thread::sleep(Duration::from_millis(20));
+            TcpStream::connect(("127.0.0.1", port)).is_err()
+        });
+        assert!(gone);
     }
 }

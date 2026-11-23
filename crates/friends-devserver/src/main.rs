@@ -150,7 +150,7 @@ impl Dev {
         if self.signed_in {
             json!({ "status": "signedIn", "email": "ana.torres@example.com", "warning": null })
         } else {
-            json!({ "status": "signedOut" })
+            json!({ "status": "signedOut", "warning": null })
         }
     }
 
