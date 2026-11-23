@@ -7,6 +7,8 @@ export function AccountSection() {
   const [account, setAccount] = useState<Account | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const action = useAction();
+  // Waiting for the browser, where the sign-in happens.
+  const [inBrowser, setInBrowser] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -36,6 +38,15 @@ export function AccountSection() {
 
   const run = (f: () => Promise<Account>) => action.run(async () => setAccount(await f()));
 
+  const signIn = async () => {
+    setInBrowser(true);
+    try {
+      await run(api.signInWithApple);
+    } finally {
+      setInBrowser(false);
+    }
+  };
+
   return (
     <div className="setting-group">
       <h3 className="section-label">Account</h3>
@@ -55,6 +66,14 @@ export function AccountSection() {
               Sign out
             </button>
           </div>
+        ) : inBrowser ? (
+          <div className="account-row">
+            <span className="choice-text">Finish signing in with Apple in your browser.</span>
+            {/* Cancelling makes the waiting sign-in stop, which ends the busy state. */}
+            <button className="btn btn-outline" onClick={() => void api.cancelSignIn()}>
+              Cancel
+            </button>
+          </div>
         ) : (
           <div className="account-row">
             <span className="choice-text">
@@ -63,7 +82,7 @@ export function AccountSection() {
             <button
               className="btn btn-apple"
               disabled={action.busy || account?.status !== "signedOut"}
-              onClick={() => run(api.signInWithApple)}
+              onClick={signIn}
             >
               {/* U+F8FF is the Apple logo in Apple's system font. */}
               <span aria-hidden="true" className="apple-logo">{"\uF8FF"}</span>

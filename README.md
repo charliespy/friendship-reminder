@@ -47,28 +47,20 @@ npm run tauri build      # build Friends.app and a .dmg into target/release/bund
 
 ### Sign in with Apple
 
-A build only offers Sign in with Apple when it has both of these; otherwise the Account section in
-Settings says sign-in isn't available, and everything else works the same.
+Signing in happens in the browser: Friends opens Sign in with Apple there, and the browser comes
+back to Friends at `http://127.0.0.1:<port>/auth/callback` when it's done. (Apple's own sign-in
+sheet only works in Mac App Store apps.) A build offers it only when it has the account server's
+settings, `FRIENDS_SUPABASE_URL` and `FRIENDS_SUPABASE_PUBLISHABLE_KEY`, at build time; otherwise
+the Account section in Settings says sign-in isn't available, and everything else works the same.
+Set them in the environment or in `.env.local` at the repo root, which git ignores:
 
-- **The account server's settings**, at build time: `FRIENDS_SUPABASE_URL` and
-  `FRIENDS_SUPABASE_PUBLISHABLE_KEY` (a Supabase project with the Apple provider on and the app's
-  bundle ID as a client ID). Set them in the environment or in `.env.local` at the repo root,
-  which git ignores:
+```sh
+FRIENDS_SUPABASE_URL=https://<project>.supabase.co
+FRIENDS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
 
-  ```sh
-  FRIENDS_SUPABASE_URL=https://<project>.supabase.co
-  FRIENDS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-  ```
-
-- **A signature that allows it**: a Developer ID signature plus a Developer ID provisioning
-  profile for `io.github.charliespy.friends` with Sign in with Apple. `npm run tauri dev` and
-  ad-hoc builds can't sign in.
-
-  ```sh
-  scripts/prepare-signin.sh path/to/profile.provisionprofile
-  APPLE_SIGNING_IDENTITY="Developer ID Application: <name> (<team>)" \
-    npm run tauri build -- --config src-tauri/tauri.signin.conf.json
-  ```
+The Supabase project needs the Apple provider on (with a Services ID and its secret key) and
+`http://127.0.0.1:*/auth/callback` in its allowed redirect URLs.
 
 ## Test
 

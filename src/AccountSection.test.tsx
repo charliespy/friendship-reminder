@@ -5,6 +5,7 @@ import type { Account } from "./api";
 const getAccount = vi.fn<() => Promise<Account>>();
 const signInWithApple = vi.fn<() => Promise<Account>>();
 const signOut = vi.fn<() => Promise<Account>>();
+const cancelSignIn = vi.fn<() => Promise<Account>>();
 let pushAccount: (a: Account) => void = () => {};
 
 vi.mock("./api", async (orig) => ({
@@ -13,6 +14,7 @@ vi.mock("./api", async (orig) => ({
     getAccount: () => getAccount(),
     signInWithApple: () => signInWithApple(),
     signOut: () => signOut(),
+    cancelSignIn: () => cancelSignIn(),
     onAccountChanged: (f: (a: Account) => void) => {
       pushAccount = f;
       return Promise.resolve(() => {});
@@ -44,6 +46,21 @@ describe("AccountSection", () => {
     await act(async () => fireEvent.click(signInButton()));
     expect(screen.getByText("Signed in with Apple")).toBeTruthy();
     expect(screen.getByTestId("account-email").textContent).toBe("ana@example.com");
+  });
+
+  it("waits for the browser, and Cancel stops waiting", async () => {
+    await open({ status: "signedOut" });
+    let finish: (a: Account) => void = () => {};
+    signInWithApple.mockReturnValue(new Promise((r) => (finish = r)));
+    cancelSignIn.mockImplementation(async () => {
+      finish({ status: "signedOut" });
+      return { status: "signedOut" };
+    });
+    await act(async () => fireEvent.click(signInButton()));
+    expect(screen.getByText(/Finish signing in with Apple in your browser/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
+    expect(cancelSignIn).toHaveBeenCalled();
+    expect((signInButton() as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("signs out", async () => {

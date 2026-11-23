@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 
 use friends_account::{
-    AccountView, AuthError, Client, Config, Nonce, Response, Session, Transport,
+    parse_callback, AccountView, AuthError, Callback, Client, Config, Pkce, Response, Session,
+    Transport,
 };
 use serde_json::{json, Value};
 
@@ -75,10 +76,31 @@ fn a_build_without_both_settings_has_no_account() {
 }
 
 #[test]
-fn signing_in_with_apple_sends_the_token_and_raw_nonce() {
+fn the_sign_in_page_carries_the_provider_return_address_and_challenge() {
+    let fake = Fake::new(200, json!({}));
+    let pkce = Pkce::from_verifier("verifier".into());
+    let url = Client::new(config(), &fake).authorize_url(
+        "apple",
+        "http://127.0.0.1:50123/auth/callback",
+        &pkce,
+    );
+    assert_eq!(
+        url,
+        format!(
+            "https://example.supabase.co/auth/v1/authorize?provider=apple\
+             &redirect_to=http%3A%2F%2F127.0.0.1%3A50123%2Fauth%2Fcallback\
+             &code_challenge={}&code_challenge_method=s256",
+            pkce.challenge
+        )
+    );
+    assert!(fake.sent.borrow().is_empty());
+}
+
+#[test]
+fn the_code_is_traded_with_the_verifier() {
     let fake = Fake::new(200, token_answer());
     let session = Client::new(config(), &fake)
-        .sign_in_with_apple("apple-token", "raw-nonce", 1_800_000_000)
+        .exchange_code("code-1", "verifier-1", 1_800_000_000)
         .unwrap();
     assert_eq!(
         session,
@@ -94,13 +116,38 @@ fn signing_in_with_apple_sends_the_token_and_raw_nonce() {
     let (url, headers, body) = &sent[0];
     assert_eq!(
         url,
-        "https://example.supabase.co/auth/v1/token?grant_type=id_token"
+        "https://example.supabase.co/auth/v1/token?grant_type=pkce"
     );
     assert!(headers.contains(&("apikey".into(), "sb_publishable_test".into())));
-    let body: Value = serde_json::from_str(body).unwrap();
     assert_eq!(
-        body,
-        json!({ "provider": "apple", "id_token": "apple-token", "nonce": "raw-nonce" })
+        serde_json::from_str::<Value>(body).unwrap(),
+        json!({ "auth_code": "code-1", "code_verifier": "verifier-1" })
+    );
+}
+
+#[test]
+fn the_browser_comes_back_with_a_code_or_a_reason() {
+    assert_eq!(
+        parse_callback("/auth/callback?code=ab%2Dc+d"),
+        Callback::Code("ab-c d".into())
+    );
+    assert_eq!(
+        parse_callback("/auth/callback?error=access_denied&error_description=User+cancelled%20it"),
+        Callback::Failed("User cancelled it".into())
+    );
+    assert_eq!(
+        parse_callback("/auth/callback?error=server_error"),
+        Callback::Failed("server_error".into())
+    );
+    assert_eq!(
+        parse_callback("/auth/callback"),
+        Callback::Failed("no sign-in code came back".into())
+    );
+    assert_eq!(parse_callback("/favicon.ico"), Callback::Other);
+    // A stray % is kept, not an error.
+    assert_eq!(
+        parse_callback("/auth/callback?code=50%"),
+        Callback::Code("50%".into())
     );
 }
 
@@ -198,16 +245,16 @@ fn a_session_needs_a_refresh_a_minute_before_it_expires() {
 }
 
 #[test]
-fn the_nonce_hash_is_sha256_of_the_raw_value() {
-    // SHA-256("abc"), a standard test vector.
+fn the_challenge_is_the_rfc_7636_example() {
+    // The worked example in RFC 7636, appendix B.
     assert_eq!(
-        Nonce::from_raw("abc".into()).hashed,
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        Pkce::from_verifier("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk".into()).challenge,
+        "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
     );
-    let a = Nonce::new().unwrap();
-    let b = Nonce::new().unwrap();
-    assert_eq!(a.raw.len(), 64);
-    assert_ne!(a.raw, b.raw);
+    let a = Pkce::new().unwrap();
+    let b = Pkce::new().unwrap();
+    assert_eq!(a.verifier.len(), 43);
+    assert_ne!(a.verifier, b.verifier);
 }
 
 #[test]

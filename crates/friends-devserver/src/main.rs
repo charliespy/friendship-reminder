@@ -99,7 +99,7 @@ struct Dev {
     store_path: PathBuf,
     today: Option<NaiveDate>,
     launch_at_login: bool,
-    /// Stands in for Sign in with Apple: the browser has no Apple sheet, so signing in always works.
+    /// Stands in for Sign in with Apple: there's no Apple page in the tests, so signing in always works.
     signed_in: bool,
 }
 
@@ -135,6 +135,7 @@ impl Dev {
                 self.signed_in = true;
                 Ok(self.account())
             }
+            "cancel_sign_in" => Ok(self.account()),
             "sign_out" => {
                 self.signed_in = false;
                 Ok(self.account())

@@ -1,7 +1,7 @@
 //! Signing in to a Friends account, kept in Supabase Auth so a later iPhone app can share the data.
 //!
-//! The app signs in with Apple: macOS hands it an identity token from Apple, and [`Client`] trades that
-//! token for a Supabase session. The session's refresh token is what the app keeps (in the Keychain) to
+//! The app signs in with Apple in the browser: [`Client::authorize_url`] is the page to open, the browser
+//! comes back to the app with a one-time code, and [`Client::exchange_code`] trades it for a session. The session's refresh token is what the app keeps (in the Keychain) to
 //! stay signed in across launches. All the HTTP goes through [`Transport`], so the rules here are tested
 //! without a network.
 
@@ -159,16 +159,29 @@ impl<T: Transport> Client<T> {
         Client { config, transport }
     }
 
-    /// Trades Apple's identity token for a session. `nonce` is the raw nonce whose hash went to Apple,
-    /// so Supabase can check the token was made for this sign-in.
-    pub fn sign_in_with_apple(
+    /// The page that starts a sign-in with `provider` (like `"apple"`) in the browser. When it's done,
+    /// Supabase sends the browser to `redirect_to` with a one-time `code` for [`Client::exchange_code`].
+    /// `redirect_to` must be on the project's list of allowed redirect URLs.
+    pub fn authorize_url(&self, provider: &str, redirect_to: &str, pkce: &Pkce) -> String {
+        format!(
+            "{}/auth/v1/authorize?provider={}&redirect_to={}&code_challenge={}&code_challenge_method=s256",
+            self.config.url,
+            encode(provider),
+            encode(redirect_to),
+            pkce.challenge,
+        )
+    }
+
+    /// Trades the one-time code from the browser for a session. Only the app that started the sign-in
+    /// holds `verifier`, so a code that leaks on the way is no use to anyone else.
+    pub fn exchange_code(
         &self,
-        id_token: &str,
-        nonce: &str,
+        code: &str,
+        verifier: &str,
         now: i64,
     ) -> Result<Session, AuthError> {
-        let body = json!({ "provider": "apple", "id_token": id_token, "nonce": nonce });
-        self.token("id_token", &body, now)
+        let body = json!({ "auth_code": code, "code_verifier": verifier });
+        self.token("pkce", &body, now)
     }
 
     /// A fresh session from a saved refresh token. Supabase hands out a new refresh token each time and
@@ -248,28 +261,112 @@ fn parse_session(body: &str, now: i64) -> Option<Session> {
     })
 }
 
-/// A one-time value tying Apple's token to this sign-in: Apple gets the hash, Supabase the raw value,
-/// and Supabase checks they match, so a token taken from somewhere else can't be replayed.
+/// The secret pair that ties a browser sign-in to this app (PKCE): Supabase gets the challenge when the
+/// sign-in starts, and the code it hands back only works together with the verifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Nonce {
-    pub raw: String,
-    /// SHA-256 of `raw`, as lowercase hex.
-    pub hashed: String,
+pub struct Pkce {
+    pub verifier: String,
+    /// SHA-256 of `verifier`, in URL-safe base64 without padding.
+    pub challenge: String,
 }
 
-impl Nonce {
-    pub fn new() -> Result<Nonce, String> {
+impl Pkce {
+    pub fn new() -> Result<Pkce, String> {
         let mut bytes = [0u8; 32];
         getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
-        Ok(Nonce::from_raw(hex(&bytes)))
+        Ok(Pkce::from_verifier(base64url(&bytes)))
     }
 
-    pub fn from_raw(raw: String) -> Nonce {
-        let hashed = hex(&Sha256::digest(raw.as_bytes()));
-        Nonce { raw, hashed }
+    pub fn from_verifier(verifier: String) -> Pkce {
+        let challenge = base64url(&Sha256::digest(verifier.as_bytes()));
+        Pkce {
+            verifier,
+            challenge,
+        }
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+/// What came back to the app's sign-in address from the browser.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Callback {
+    /// The sign-in worked: the one-time code to trade for a session.
+    Code(String),
+    /// The sign-in didn't work (refused, or cancelled on Apple's page), with the reason given.
+    Failed(String),
+    /// Some other request (the browser asking for an icon), to answer and ignore.
+    Other,
+}
+
+/// Reads the path and query of a request to the app's sign-in address, `/auth/callback?...`.
+pub fn parse_callback(target: &str) -> Callback {
+    let (path, query) = target.split_once('?').unwrap_or((target, ""));
+    if path != CALLBACK_PATH {
+        return Callback::Other;
+    }
+    let param = |name: &str| {
+        query.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
+            (k == name).then(|| decode(v))
+        })
+    };
+    if let Some(code) = param("code").filter(|c| !c.is_empty()) {
+        return Callback::Code(code);
+    }
+    let reason = param("error_description")
+        .or_else(|| param("error"))
+        .unwrap_or_else(|| "no sign-in code came back".to_string());
+    Callback::Failed(reason)
+}
+
+/// The path of the app's sign-in address.
+pub const CALLBACK_PATH: &str = "/auth/callback";
+
+fn base64url(bytes: &[u8]) -> String {
+    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
+        for i in 0..=chunk.len() {
+            out.push(ABC[(n >> (18 - 6 * i) & 63) as usize] as char);
+        }
+    }
+    out
+}
+
+/// Percent-encodes a query value.
+fn encode(text: &str) -> String {
+    text.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// Decodes a percent-encoded query value (`+` is a space). Bad escapes are kept as they are.
+fn decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    let hex = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => out.push(b' '),
+            b'%' if i + 2 < bytes.len() => match (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                (Some(hi), Some(lo)) => {
+                    out.push(hi << 4 | lo);
+                    i += 2;
+                }
+                _ => out.push(b'%'),
+            },
+            b => out.push(b),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }

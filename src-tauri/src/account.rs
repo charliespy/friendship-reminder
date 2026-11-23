@@ -1,13 +1,24 @@
 //! The Friends account: Sign in with Apple, traded for a Supabase session that is kept in the Keychain.
 //! The sign-in rules live in friends-account; this file connects them to macOS and the windows.
 //!
+//! Signing in happens in the browser: the app opens Supabase's Sign in with Apple page, and when it's
+//! done the browser comes back to a one-off address on this Mac (`http://127.0.0.1:<port>/auth/callback`)
+//! with a code the app trades for a session. (Apple's own sign-in sheet needs the Mac App Store: apps
+//! signed with a Developer ID can't use it.)
+//!
 //! Signing in is optional. A build without the Supabase settings (`FRIENDS_SUPABASE_URL` and
-//! `FRIENDS_SUPABASE_PUBLISHABLE_KEY` at build time) or without the Sign in with Apple entitlement
-//! shows the Account section as unavailable, and touches neither the network nor the Keychain.
+//! `FRIENDS_SUPABASE_PUBLISHABLE_KEY` at build time) shows the Account section as unavailable, and
+//! touches neither the network nor the Keychain.
 
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
-use friends_account::{AccountView, AuthError, Client, Config, HttpTransport, Nonce, Session};
+use friends_account::{
+    parse_callback, AccountView, AuthError, Callback, Client, Config, HttpTransport, Pkce, Session,
+};
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Sent to every window when the account changes, with the new [`AccountView`].
@@ -35,8 +46,9 @@ pub struct Account {
     /// Why this build can't sign in, or the project to sign in to.
     config: Result<Config, String>,
     state: Mutex<Signed>,
-    /// Held for the whole of a sign-in, so a second click can't start another one.
-    signing_in: Mutex<()>,
+    /// Goes up with every sign-in started or cancelled, so a sign-in still waiting for the browser
+    /// knows it was replaced and stops.
+    attempt: AtomicU64,
 }
 
 impl Account {
@@ -48,7 +60,7 @@ impl Account {
                 session: None,
                 warning: None,
             }),
-            signing_in: Mutex::new(()),
+            attempt: AtomicU64::new(0),
         }
     }
 
@@ -100,19 +112,11 @@ impl Account {
 }
 
 fn available() -> Result<Config, String> {
-    let config = Config::new(
+    Config::new(
         option_env!("FRIENDS_SUPABASE_URL"),
         option_env!("FRIENDS_SUPABASE_PUBLISHABLE_KEY"),
     )
-    .ok_or("This copy of Friends was built without an account server.")?;
-    #[cfg(target_os = "macos")]
-    if !crate::apple::entitled() {
-        return Err("This copy of Friends isn't signed for Sign in with Apple.".into());
-    }
-    #[cfg(not(target_os = "macos"))]
-    return Err("Sign in with Apple works on macOS only.".into());
-    #[allow(unreachable_code)]
-    Ok(config)
+    .ok_or_else(|| "This copy of Friends was built without an account server.".to_string())
 }
 
 fn now() -> i64 {
@@ -204,7 +208,8 @@ pub fn get_account(account: tauri::State<'_, Account>) -> AccountView {
     account.view()
 }
 
-/// Shows Apple's sign-in sheet over Preferences, then trades its token for a session.
+/// Opens Sign in with Apple in the browser and waits for it to come back, then trades the code for a
+/// session. Starting again (or cancelling) while one waits makes the earlier one stop quietly.
 #[tauri::command]
 pub async fn sign_in_with_apple(app: AppHandle) -> Result<AccountView, String> {
     let handle = app.clone();
@@ -213,19 +218,41 @@ pub async fn sign_in_with_apple(app: AppHandle) -> Result<AccountView, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// Stops a sign-in that is waiting for the browser.
+#[tauri::command]
+pub fn cancel_sign_in(account: tauri::State<'_, Account>) -> AccountView {
+    account.attempt.fetch_add(1, Ordering::SeqCst);
+    account.view()
+}
+
+/// How long a sign-in waits for the browser to come back.
+const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);
+
 fn sign_in(app: &AppHandle) -> Result<AccountView, String> {
     let account = app.state::<Account>();
     let client = account.client()?;
-    let Ok(_busy) = account.signing_in.try_lock() else {
-        return Err("Signing in already.".into());
-    };
-    let Some((token, nonce)) = apple_token(app)? else {
-        // Closed the sheet: nothing changes and there's nothing to report.
+    let attempt = account.attempt.fetch_add(1, Ordering::SeqCst) + 1;
+    let current = || account.attempt.load(Ordering::SeqCst) == attempt;
+
+    // A one-off address on this Mac only, on a port the system picks.
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    let redirect = format!("http://127.0.0.1:{port}{}", friends_account::CALLBACK_PATH);
+    let pkce = Pkce::new()?;
+    open_in_browser(&client.authorize_url("apple", &redirect, &pkce))?;
+
+    let Some(code) = wait_for_code(&listener, &current)? else {
+        // Cancelled, or replaced by a newer sign-in: nothing to report.
         return Ok(account.view());
     };
     let session = client
-        .sign_in_with_apple(&token, &nonce.raw, now())
+        .exchange_code(&code, &pkce.verifier, now())
         .map_err(|e| e.to_string())?;
+    if !current() {
+        // Cancelled while the code was being traded: don't keep the session.
+        end_on_server(client, session);
+        return Ok(account.view());
+    }
     if let Err(e) = save(Some(&session)) {
         // Without the Keychain the app can't keep this session, so end it rather than leave it live.
         end_on_server(client, session);
@@ -238,48 +265,84 @@ fn sign_in(app: &AppHandle) -> Result<AccountView, String> {
         state.warning = None;
     }
     publish(app);
+    // Back from the browser to Friends.
+    let _ = crate::show_preferences(app);
     Ok(account.view())
 }
 
-/// Apple's identity token and the nonce it was made for, or `None` when the user closed the sheet.
-#[cfg(target_os = "macos")]
-fn apple_token(app: &AppHandle) -> Result<Option<(String, Nonce)>, String> {
-    use crate::apple::{self, AppleError};
-    use std::sync::mpsc::RecvTimeoutError;
-    use std::time::Duration;
-
-    /// Apple's sheet always answers, but if it never did, sign-in would stay stuck until a relaunch.
-    const SHEET_TIMEOUT: Duration = Duration::from_secs(600);
-
-    let nonce = Nonce::new()?;
-    let window = app
-        .get_webview_window(crate::PREFERENCES)
-        .ok_or("Open Preferences to sign in.")?;
-    // A raw pointer isn't Send; it is only turned back into a window on the main thread.
-    let ns_window = window.ns_window().map_err(|e| e.to_string())? as usize;
-    let (tx, rx) = std::sync::mpsc::channel();
-    let hashed = nonce.hashed.clone();
-    app.run_on_main_thread(move || apple::start(ns_window as *mut _, &hashed, tx))
-        .map_err(|e| e.to_string())?;
-    let answer = rx.recv_timeout(SHEET_TIMEOUT);
-    // Let go of the sheet's controller and window, after its callback has returned.
-    let _ = app.run_on_main_thread(apple::finish);
-    match answer {
-        Ok(Ok(token)) => Ok(Some((token, nonce))),
-        Ok(Err(AppleError::Canceled)) => Ok(None),
-        Ok(Err(AppleError::Failed(e))) => Err(format!("Sign in with Apple didn't finish: {e}")),
-        Err(RecvTimeoutError::Timeout) => {
-            Err("Sign in with Apple took too long. Try again.".into())
-        }
-        Err(RecvTimeoutError::Disconnected) => {
-            Err("Sign in with Apple stopped without an answer.".into())
-        }
+fn open_in_browser(url: &str) -> Result<(), String> {
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg(url)
+        .status()
+        .map_err(|e| format!("Couldn't open the browser: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Couldn't open the browser.".into())
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn apple_token(_app: &AppHandle) -> Result<Option<(String, Nonce)>, String> {
-    Err("Sign in with Apple works on macOS only.".into())
+/// Waits for the browser to come back with a code. `None` when this sign-in was cancelled or replaced.
+fn wait_for_code(
+    listener: &TcpListener,
+    current: &dyn Fn() -> bool,
+) -> Result<Option<String>, String> {
+    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + BROWSER_TIMEOUT;
+    while current() {
+        if Instant::now() > deadline {
+            return Err("Signing in took too long. Try again.".into());
+        }
+        let stream = match listener.accept() {
+            Ok((stream, _)) => stream,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        match answer_browser(stream) {
+            Callback::Code(code) => return Ok(Some(code)),
+            Callback::Failed(reason) => {
+                return Err(format!("Sign in with Apple didn't finish: {reason}"))
+            }
+            Callback::Other => {}
+        }
+    }
+    Ok(None)
+}
+
+/// Reads one request from the browser and answers it with a short page.
+fn answer_browser(mut stream: TcpStream) -> Callback {
+    let _ = stream.set_nonblocking(false);
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let mut line = String::new();
+    let _ = BufReader::new(&stream).read_line(&mut line);
+    // "GET /auth/callback?code=... HTTP/1.1"
+    let target = line.split_whitespace().nth(1).unwrap_or("");
+    let callback = parse_callback(target);
+    let (status, text) = match &callback {
+        Callback::Code(_) => (
+            "200 OK",
+            "You're signed in to Friends. You can close this tab.",
+        ),
+        Callback::Failed(_) => (
+            "200 OK",
+            "Signing in to Friends didn't work. Go back to Friends to try again.",
+        ),
+        Callback::Other => ("404 Not Found", "Not found."),
+    };
+    let body = format!(
+        "<!doctype html><meta charset=utf-8><title>Friends</title>\
+         <body style=\"font:15px -apple-system,sans-serif;margin:4em auto;max-width:32em;text-align:center\">\
+         <p>{text}</p></body>"
+    );
+    let _ = write!(
+        stream,
+        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    callback
 }
 
 /// Ends a session on Supabase's side, in the background. The access token kept in memory may have run
@@ -318,4 +381,61 @@ pub fn sign_out(app: AppHandle) -> Result<AccountView, String> {
     }
     removed.map_err(|e| format!("Couldn't remove the sign-in from the Keychain: {e}"))?;
     Ok(account.view())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sends one request to the listener the way a browser would, and returns the answer.
+    fn browse(port: u16, target: &str) -> std::thread::JoinHandle<String> {
+        let target = target.to_string();
+        // Connected before returning, so requests reach the listener in the order they were made.
+        let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        std::thread::spawn(move || {
+            write!(s, "GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+            let mut answer = String::new();
+            let _ = std::io::Read::read_to_string(&mut s, &mut answer);
+            answer
+        })
+    }
+
+    fn listener() -> (TcpListener, u16) {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        (l, port)
+    }
+
+    #[test]
+    fn the_browser_brings_back_the_code_after_other_requests() {
+        let (l, port) = listener();
+        let icon = browse(port, "/favicon.ico");
+        let page = browse(port, "/auth/callback?code=abc");
+        // The icon request is answered and ignored; the callback ends the wait.
+        assert_eq!(wait_for_code(&l, &|| true), Ok(Some("abc".to_string())));
+        assert!(icon.join().unwrap().starts_with("HTTP/1.1 404"));
+        let page = page.join().unwrap();
+        assert!(page.starts_with("HTTP/1.1 200 OK"));
+        assert!(page.contains("You're signed in to Friends"));
+    }
+
+    #[test]
+    fn a_refused_sign_in_is_an_error_and_the_page_says_so() {
+        let (l, port) = listener();
+        let page = browse(
+            port,
+            "/auth/callback?error=access_denied&error_description=Nope",
+        );
+        assert_eq!(
+            wait_for_code(&l, &|| true),
+            Err("Sign in with Apple didn't finish: Nope".to_string())
+        );
+        assert!(page.join().unwrap().contains("didn't work"));
+    }
+
+    #[test]
+    fn a_cancelled_sign_in_stops_waiting() {
+        let (l, _) = listener();
+        assert_eq!(wait_for_code(&l, &|| false), Ok(None));
+    }
 }

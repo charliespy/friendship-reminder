@@ -2,8 +2,6 @@
 //! login. The rules and the data live in friends-core; this file only connects them to macOS.
 
 mod account;
-#[cfg(target_os = "macos")]
-mod apple;
 
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
@@ -384,6 +382,7 @@ pub fn run() {
             quit,
             account::get_account,
             account::sign_in_with_apple,
+            account::cancel_sign_in,
             account::sign_out
         ])
         .setup(|app| {
