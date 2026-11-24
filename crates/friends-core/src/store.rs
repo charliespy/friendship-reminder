@@ -75,6 +75,11 @@ impl Store {
             Ok(mut data) if data.is_sane() => {
                 data.repair_ids();
                 data.fill_uids();
+                // A day setting chosen before syncing existed counts as a change, so it goes up to
+                // the account instead of losing to another device's default.
+                if data.version < 2 && data.settings.day_toggle != Default::default() {
+                    data.sync.settings_modified = crate::now_ms();
+                }
                 // Saved from now on in this version's format.
                 data.version = CURRENT_VERSION;
                 Ok(Loaded::Existing(data))
@@ -100,6 +105,25 @@ impl Store {
         };
         fs::rename(&self.path, &aside)?;
         Ok(Loaded::MovedAside(Data::default(), aside))
+    }
+
+    /// Saves `data` to a new file next to this one, `<name>.<label>-<n>`, and returns its path.
+    pub fn save_copy(&self, data: &Data, label: &str) -> io::Result<PathBuf> {
+        let name = self
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("friends.json");
+        let mut n = 1;
+        let copy = loop {
+            let candidate = self.path.with_file_name(format!("{name}.{label}-{n}"));
+            if !candidate.exists() {
+                break candidate;
+            }
+            n += 1;
+        };
+        Store::new(&copy).save(data)?;
+        Ok(copy)
     }
 
     pub fn save(&self, data: &Data) -> io::Result<()> {

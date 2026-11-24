@@ -131,6 +131,19 @@ pub fn set_sync(app: &AppHandle, change: impl FnOnce(&mut SyncView)) {
     publish(app);
 }
 
+/// Who is signed in, by account id.
+pub fn signed_in_user(app: &AppHandle) -> Option<String> {
+    app.state::<Account>()
+        .state()
+        .session()
+        .map(|s| s.user_id.clone())
+}
+
+/// Forgets how syncing went (a new sign-in, or a sign-out).
+fn reset_sync(account: &Account) {
+    *account.sync.lock().unwrap_or_else(|e| e.into_inner()) = SyncView::default();
+}
+
 /// A session to sync with: the signed-in one, refreshed first when its access token has run out (or
 /// `force`, when the server just refused it). `Ok(None)` when signed out; `Err` says why a refresh
 /// that was needed didn't work. Only the sync thread calls this (and `restore`, before it starts), so
@@ -354,6 +367,7 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
         end_on_server(client, session);
         return Ok(account.view());
     }
+    reset_sync(&account);
     let (replaced, saved) = account.state().signed_in(session, save);
     if let Err(e) = saved {
         eprintln!("friends: couldn't save the sign-in in the Keychain: {e}");
@@ -449,6 +463,7 @@ pub async fn sign_out(app: AppHandle) -> Result<Shown, String> {
             .state()
             .sign_out(save)
             .map_err(|e| format!("Couldn't remove the sign-in from the Keychain: {e}"))?;
+        reset_sync(&account);
         publish(app);
         if let (Some(old), Ok(client)) = (old, account.client()) {
             end_on_server(client, old);

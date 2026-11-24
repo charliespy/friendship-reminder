@@ -140,9 +140,9 @@ async fn call(
         Ok(view) => publish(&app, view),
         Err(_) => publish(&app, &core.view(day)),
     }
+    let unsynced = core.has_unsynced();
     drop(core);
-    // A change to upload (a command that changed nothing just makes a sync with nothing to send).
-    if result.is_ok() && cmd != "get_view" {
+    if unsynced {
         sync::nudge(&app, sync::Nudge::Soon);
     }
     result

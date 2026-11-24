@@ -146,12 +146,6 @@ pub struct App {
     clock: fn() -> i64,
 }
 
-fn system_clock() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis() as i64)
-}
-
 impl App {
     /// Loads the data from `store` (see [`Store::load`] for what happens to a file it can't read).
     pub fn open(store: Store) -> io::Result<App> {
@@ -163,7 +157,7 @@ impl App {
             store,
             data,
             unreadable_file,
-            clock: system_clock,
+            clock: crate::now_ms,
         })
     }
 
@@ -292,7 +286,12 @@ impl App {
 
     /// Starts a sync with account `owner`: what to upload (see [`Data::sync_start`]). Saved, since a
     /// new account resets what was synced.
+    /// A list that last synced with another account is that account's: it is saved to a copy next to
+    /// the data file (`friends.json.other-account-<n>`) before it is cleared, so nothing is lost.
     pub fn sync_start(&mut self, owner: &str) -> io::Result<Changes> {
+        if self.data.belongs_to_another_account(owner) {
+            self.store.save_copy(&self.data, "other-account")?;
+        }
         let before = self.data.clone();
         let changes = self.data.sync_start(owner);
         self.save_or_undo(before)?;
@@ -304,6 +303,11 @@ impl App {
         let before = self.data.clone();
         self.data.sync_pushed(sent);
         self.save_or_undo(before)
+    }
+
+    /// Whether a change here waits to upload.
+    pub fn has_unsynced(&self) -> bool {
+        self.data.has_unsynced()
     }
 
     /// Where the next download starts: the newest server change already taken in.
@@ -320,9 +324,8 @@ impl App {
         today: NaiveDate,
     ) -> io::Result<bool> {
         let before = self.data.clone();
-        self.data.catch_up(today);
-        self.data.sync_pulled(got, cursor, today);
-        let changed = self.data != before;
+        let caught_up = self.data.catch_up(today);
+        let changed = self.data.sync_pulled(got, cursor, today) || caught_up;
         self.save_or_undo(before)?;
         Ok(changed)
     }

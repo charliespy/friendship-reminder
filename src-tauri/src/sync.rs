@@ -7,7 +7,7 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use friends_account::{HttpTransport, Session};
+use friends_account::HttpTransport;
 use friends_sync::{Server, SyncError};
 use tauri::{AppHandle, Manager};
 
@@ -93,56 +93,36 @@ fn run(app: &AppHandle) -> bool {
     };
     account::set_sync(app, |v| v.syncing = true);
     let server = Server::new(config, HttpTransport::default());
-    let result = match sync_with(app, &server, &session) {
-        // The access token was refused: renew the sign-in once and try again.
-        Err(SyncError::Expired) => match account::session_for_sync(app, true) {
-            Ok(Some(fresh)) => sync_with(app, &server, &fresh).map_err(|e| e.to_string()),
-            Ok(None) => Ok(()),
-            Err(e) => Err(e),
-        },
-        other => other.map_err(|e| e.to_string()),
-    };
-    if let Err(e) = &result {
-        eprintln!("friends: sync failed: {e}");
+    let state = app.state::<crate::State>();
+    let result = friends_sync::sync(
+        &server,
+        &session,
+        &state.0,
+        crate::today(),
+        |user| account::signed_in_user(app).as_deref() == Some(user),
+        || account::session_for_sync(app, true),
+    );
+    match &result {
+        Ok(true) => {
+            let core = crate::lock(&state);
+            // Under the lock, so views reach the windows in order.
+            crate::publish_if_changed(app, &core.view(crate::today()));
+        }
+        Ok(false) | Err(SyncError::SignedOut) => {}
+        Err(e) => eprintln!("friends: sync failed: {e}"),
     }
-    let finished = chrono::Utc::now().timestamp_millis();
-    let ok = result.is_ok();
+    let finished = friends_core::now_ms();
     account::set_sync(app, |v| {
         v.syncing = false;
-        match result {
-            Ok(()) => {
+        match &result {
+            Ok(_) => {
                 v.last_synced = Some(finished);
                 v.error = None;
             }
-            Err(e) => v.error = Some(e),
+            // Signed out meanwhile: the sign-out already cleared what's shown.
+            Err(SyncError::SignedOut) => {}
+            Err(e) => v.error = Some(e.to_string()),
         }
     });
-    ok
-}
-
-/// Uploads what changed here, then takes in what changed elsewhere.
-fn sync_with(
-    app: &AppHandle,
-    server: &Server<HttpTransport>,
-    session: &Session,
-) -> Result<(), SyncError> {
-    let state = app.state::<crate::State>();
-    let saving = |e: std::io::Error| SyncError::Failed(format!("couldn't save the list ({e})"));
-    let changes = crate::lock(&state)
-        .sync_start(&session.user_id)
-        .map_err(saving)?;
-    if !changes.is_empty() {
-        server.push(&session.access_token, &session.user_id, &changes)?;
-        crate::lock(&state).sync_pushed(&changes).map_err(saving)?;
-    }
-    let cursor = crate::lock(&state).sync_cursor();
-    let (got, newest) = server.pull(&session.access_token, cursor)?;
-    let mut core = crate::lock(&state);
-    let day = crate::today();
-    let changed = core.sync_pulled(&got, newest, day).map_err(saving)?;
-    if changed {
-        // Under the lock, so views reach the windows in order.
-        crate::publish_if_changed(app, &core.view(day));
-    }
-    Ok(())
+    matches!(result, Ok(_) | Err(SyncError::SignedOut))
 }

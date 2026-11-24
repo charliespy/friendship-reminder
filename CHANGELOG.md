@@ -11,8 +11,9 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 
 ### New
 
-- You can sign in with Apple in Preferences → Settings, to set up a Friends account for syncing
-  with a later iPhone app. Nothing syncs yet: your list stays on this Mac.
+- You can sign in with Apple in Preferences → Settings. While you're signed in, your list syncs
+  with your Friends account, ready for a later iPhone app: the people, blocked dates and the day
+  setting. Signed out, everything stays on this Mac as before.
 
 ### Changed
 

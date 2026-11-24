@@ -93,6 +93,7 @@ fn ada() -> RemotePerson {
         last_connected: chrono_date("2026-08-01"),
         deleted: false,
         modified_at: 100,
+        updated_ms: 0,
     }
 }
 
@@ -110,6 +111,7 @@ fn uploads_merge_into_the_users_rows() {
         settings: Some(RemoteSettings {
             day_toggle: DayToggle::WeekdaysOnly,
             modified_at: 7,
+            updated_ms: 0,
         }),
     };
     server.push("token-1", "user-1", &changes).unwrap();
@@ -169,13 +171,20 @@ fn downloads_read_what_changed_since_the_cursor() {
     let (changes, cursor) = server.pull("token-1", 60_000).unwrap();
     assert_eq!(cursor, 95_000);
     assert_eq!(changes.people.len(), 2);
-    assert_eq!(changes.people[0], ada());
+    assert_eq!(
+        changes.people[0],
+        RemotePerson {
+            updated_ms: 90_000,
+            ..ada()
+        }
+    );
     assert!(changes.people[1].deleted);
     assert_eq!(
         changes.settings,
         Some(RemoteSettings {
             day_toggle: DayToggle::AllDays,
-            modified_at: 3
+            modified_at: 3,
+            updated_ms: 80_000,
         })
     );
     let sent = fake.sent.borrow();
@@ -184,7 +193,7 @@ fn downloads_read_what_changed_since_the_cursor() {
     assert_eq!(
         sent[0].url,
         format!(
-            "https://example.supabase.co/rest/v1/people?select=id,name,frequency_days,last_connected,deleted,modified_at,updated_ms&updated_ms=gt.{}&order=updated_ms.asc&limit=500&offset=0",
+            "https://example.supabase.co/rest/v1/people?select=id,name,frequency_days,last_connected,deleted,modified_at,updated_ms&updated_ms=gt.{}&order=updated_ms.asc,id.asc&limit=500",
             60_000 - OVERLAP_MS
         )
     );
@@ -208,7 +217,7 @@ fn a_full_page_asks_for_the_next() {
             json!({
                 "id": format!("id-{i}"), "name": "A", "frequency_days": 30,
                 "last_connected": "2026-08-01", "deleted": false, "modified_at": 1,
-                "updated_ms": i
+                "updated_ms": 1000 + i / 2
             })
         })
         .collect();
@@ -217,7 +226,11 @@ fn a_full_page_asks_for_the_next() {
     let (changes, _) = server.pull("t", 0).unwrap();
     assert_eq!(changes.people.len(), 500);
     let sent = fake.sent.borrow();
-    assert!(sent[1].url.contains("/rest/v1/people?") && sent[1].url.ends_with("offset=500"));
+    // The next page starts after the last row seen, by time and then id (rows can share a time).
+    assert!(sent[1].url.contains(
+        "/rest/v1/people?select=id,name,frequency_days,last_connected,deleted,modified_at,updated_ms&or=(updated_ms.gt.1249,and(updated_ms.eq.1249,id.gt.id-499))&order=updated_ms.asc,id.asc&limit=500"
+    ));
+    assert!(sent[2].url.contains("/rest/v1/blocked_dates?"));
 }
 
 #[test]
@@ -255,4 +268,106 @@ fn errors_say_what_to_do() {
     let fake = Fake::default().answer(200, json!({"not": "a list"}));
     let server = Server::new(config(), &fake);
     assert!(matches!(server.pull("t", 0), Err(SyncError::Failed(_))));
+}
+
+mod whole_sync {
+    use super::*;
+    use friends_account::Session;
+    use friends_core::api::App;
+    use friends_core::store::Store;
+    use std::sync::Mutex;
+
+    fn session(token: &str) -> Session {
+        Session {
+            access_token: token.into(),
+            refresh_token: "r".into(),
+            expires_at: i64::MAX,
+            user_id: "user-1".into(),
+            email: None,
+        }
+    }
+
+    fn app(name: &str) -> Mutex<App> {
+        let dir =
+            std::env::temp_dir().join(format!("friends-sync-run-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut app = App::open(Store::new(dir.join("friends.json"))).unwrap();
+        app.call(
+            "add_person",
+            json!({"name": "Ada", "frequencyDays": 30, "lastConnected": "2026-08-01"}),
+            today(),
+        )
+        .unwrap();
+        Mutex::new(app)
+    }
+
+    fn today() -> chrono::NaiveDate {
+        "2026-08-19".parse().unwrap()
+    }
+
+    #[test]
+    fn uploads_then_downloads_and_renews_a_refused_token_once() {
+        let app = app("renew");
+        let grace = json!([{
+            "id": "cccc", "name": "Grace", "frequency_days": 90, "last_connected": "2026-08-02",
+            "deleted": false, "modified_at": 5, "updated_ms": 70_000
+        }]);
+        // The first upload is refused (token ran out); after renewing, upload, then three downloads.
+        let fake = Fake::default()
+            .answer(401, json!({"message": "JWT expired"}))
+            .answer(201, json!(null))
+            .answer(200, grace);
+        let server = Server::new(config(), &fake);
+        let renewed = std::cell::Cell::new(0);
+        let changed = friends_sync::sync(
+            &server,
+            &session("old"),
+            &app,
+            today(),
+            |user| user == "user-1",
+            || {
+                renewed.set(renewed.get() + 1);
+                Ok(Some(session("new")))
+            },
+        )
+        .unwrap();
+        assert!(changed);
+        assert_eq!(renewed.get(), 1);
+        let sent = fake.sent.borrow();
+        assert_eq!(header(&sent[0], "Authorization"), Some("Bearer old"));
+        assert!(sent[1..]
+            .iter()
+            .all(|s| header(s, "Authorization") == Some("Bearer new")));
+        assert_eq!(sent.len(), 5);
+        let app = app.lock().unwrap();
+        let names: Vec<_> = app.data().people.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Ada", "Grace"]);
+        assert!(!app.has_unsynced());
+        assert_eq!(app.sync_cursor(), 70_000);
+    }
+
+    #[test]
+    fn a_sign_out_meanwhile_stops_the_sync() {
+        let app = app("signed-out");
+        let fake = Fake::default();
+        let server = Server::new(config(), &fake);
+        let result = friends_sync::sync(
+            &server,
+            &session("t"),
+            &app,
+            today(),
+            |_| false,
+            || unreachable!(),
+        );
+        assert_eq!(result, Err(SyncError::SignedOut));
+        assert!(fake.sent.borrow().is_empty());
+
+        // A refused token whose renewal finds the account signed out isn't a sync that worked.
+        let fake = Fake::default().answer(401, json!({}));
+        let server = Server::new(config(), &fake);
+        let result =
+            friends_sync::sync(&server, &session("t"), &app, today(), |_| true, || Ok(None));
+        assert_eq!(result, Err(SyncError::SignedOut));
+    }
 }

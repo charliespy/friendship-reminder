@@ -11,6 +11,4 @@ friends-account = { path = "../friends-account" }
 friends-core = { path = "../friends-core" }
 serde.workspace = true
 serde_json.workspace = true
-
-[dev-dependencies]
 chrono.workspace = true

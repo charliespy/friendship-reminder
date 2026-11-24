@@ -149,10 +149,7 @@ impl Dev {
     fn account(&self) -> Value {
         if self.signed_in {
             // Synced two minutes ago, as the app shows it most of the time.
-            let two_minutes_ago = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_millis() as i64)
-                - 120_000;
+            let two_minutes_ago = friends_core::now_ms() - 120_000;
             json!({
                 "status": "signedIn",
                 "email": "ana.torres@example.com",

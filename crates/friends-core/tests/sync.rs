@@ -33,6 +33,7 @@ fn remote_person(id: &str, name: &str, modified_at: i64) -> RemotePerson {
         last_connected: Some(day(2026, 8, 1)),
         deleted: false,
         modified_at,
+        updated_ms: 0,
     }
 }
 
@@ -44,6 +45,7 @@ fn deleted_person(id: &str, modified_at: i64) -> RemotePerson {
         last_connected: None,
         deleted: true,
         modified_at,
+        updated_ms: 0,
     }
 }
 
@@ -84,13 +86,60 @@ fn a_first_sync_uploads_everything_once() {
     assert_eq!((ada.deleted, ada.modified_at), (false, 100));
     assert_eq!(sent.blocked.len(), 1);
     assert_eq!(sent.blocked[0].label.as_deref(), Some("Trip"));
-    // The day setting goes up too, so other devices start from this Mac's.
-    assert_eq!(
-        sent.settings.as_ref().map(|s| s.day_toggle),
-        Some(DayToggle::WeekendsOnly)
-    );
+    // A day setting never changed stays here, so it can't override one chosen on another device.
+    assert_eq!(sent.settings, None);
     data.sync_pushed(&sent);
     assert!(data.sync_start(OWNER).is_empty());
+    assert!(!data.has_unsynced());
+    // Once chosen, it goes up.
+    change(&mut data, 200, |d| {
+        d.set_day_toggle(DayToggle::AllDays, today())
+    });
+    assert!(data.has_unsynced());
+    let sent = data.sync_start(OWNER);
+    assert_eq!(
+        sent.settings.map(|s| (s.day_toggle, s.modified_at)),
+        Some((DayToggle::AllDays, 200))
+    );
+}
+
+#[test]
+fn a_new_device_takes_the_accounts_day_setting() {
+    let mut data = Data::default();
+    let sent = data.sync_start(OWNER);
+    assert_eq!(sent.settings, None);
+    let got = Changes {
+        settings: Some(RemoteSettings {
+            day_toggle: DayToggle::WeekdaysOnly,
+            modified_at: 1,
+            updated_ms: 0,
+        }),
+        ..Changes::default()
+    };
+    data.sync_pulled(&got, 1, today());
+    assert_eq!(data.settings.day_toggle, DayToggle::WeekdaysOnly);
+}
+
+#[test]
+fn rows_this_version_cant_use_come_down_again() {
+    let mut data = Data::default();
+    let sent = data.sync_start(OWNER);
+    data.sync_pushed(&sent);
+    let mut sixty = remote_person("a", "A", 1);
+    sixty.frequency_days = Some(60);
+    sixty.updated_ms = 5_000;
+    let mut fine = remote_person("b", "B", 1);
+    fine.updated_ms = 9_000;
+    data.sync_pulled(&people(vec![sixty.clone(), fine]), 9_000, today());
+    assert_eq!(data.people.len(), 1);
+    // The cursor stays at the row it skipped, so the next download includes it again.
+    assert_eq!(data.sync.cursor, 5_000);
+    // A row it can't use but that lost to a newer change here anyway doesn't hold the cursor.
+    let (mut data, uid) = synced_with_ada();
+    let mut stale = remote_person(&uid, "A", 50);
+    stale.frequency_days = Some(60);
+    data.sync_pulled(&people(vec![stale]), 9_000, today());
+    assert_eq!(data.sync.cursor, 9_000);
 }
 
 #[test]
@@ -252,6 +301,7 @@ fn rows_that_make_no_sense_are_skipped() {
         label: Some(String::new()),
         deleted: false,
         modified_at: 1,
+        updated_ms: 0,
     };
     let got = Changes {
         people: vec![odd_frequency, blank, ancient, missing],
@@ -276,6 +326,7 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
             label: Some("Trip".into()),
             deleted: false,
             modified_at: 500,
+            updated_ms: 0,
         }],
         settings: None,
     };
@@ -286,6 +337,7 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
         settings: Some(RemoteSettings {
             day_toggle: DayToggle::AllDays,
             modified_at: 500,
+            updated_ms: 0,
         }),
         ..Changes::default()
     };
@@ -300,6 +352,7 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
         settings: Some(RemoteSettings {
             day_toggle: DayToggle::AllDays,
             modified_at: 800,
+            updated_ms: 0,
         }),
         ..Changes::default()
     };
@@ -308,23 +361,41 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
 }
 
 #[test]
-fn another_account_gets_everything_and_not_the_old_accounts_deletions() {
+fn another_accounts_list_isnt_uploaded_into_this_one() {
     let (mut data, _) = synced_with_ada();
     change(&mut data, 200, |d| {
-        d.add_person("Grace", 30, today(), today()).unwrap();
+        d.set_day_toggle(DayToggle::AllDays, today())
     });
-    let grace = data.people[1].id;
+    let id = data.people[0].id;
     change(&mut data, 300, |d| {
-        d.delete_people(&[grace]);
+        d.delete_people(&[id]);
+        d.add_person("Grace", 30, today(), today()).unwrap();
     });
     data.sync_pulled(&Changes::default(), 1000, today());
     let other = "22222222-2222-2222-2222-222222222222";
+    assert!(data.belongs_to_another_account(other));
+    // The list here is the first account's: it is cleared, and nothing of it goes up.
     let sent = data.sync_start(other);
-    assert_eq!(sent.people.len(), 1);
-    assert_eq!(sent.people[0].name.as_deref(), Some("Ada"));
-    assert!(!sent.people[0].deleted);
-    assert!(sent.settings.is_some());
+    assert!(sent.is_empty());
+    assert!(data.people.is_empty());
+    assert_eq!(data.settings.day_toggle, DayToggle::default());
     assert_eq!(data.sync.cursor, 0);
+    assert!(data.sync.tombstones.is_empty());
+    // The other account's list comes down instead.
+    data.sync_pulled(&people(vec![remote_person("cccc", "Alan", 5)]), 7, today());
+    assert_eq!(data.people[0].name, "Alan");
+}
+
+#[test]
+fn the_first_sign_in_keeps_the_list_entered_before() {
+    let mut data = Data::default();
+    change(&mut data, 100, |d| {
+        d.add_person("Ada", 30, today(), today()).unwrap();
+    });
+    assert!(!data.belongs_to_another_account(OWNER));
+    // Signed out, nothing waits to upload: there's no account yet.
+    assert!(!data.has_unsynced());
+    assert_eq!(data.sync_start(OWNER).people.len(), 1);
 }
 
 #[test]
@@ -335,11 +406,13 @@ fn the_app_stamps_changes_and_upgrades_old_files() {
     let path = dir.join("friends.json");
     std::fs::write(
         &path,
-        r#"{"version":1,"lastId":1,"people":[{"id":1,"name":"Ada","frequencyDays":30,"lastConnected":"2026-08-01","nextTarget":"2026-08-31","notificationDate":"2026-08-31"}]}"#,
+        r#"{"version":1,"lastId":1,"settings":{"dayToggle":"allDays"},"people":[{"id":1,"name":"Ada","frequencyDays":30,"lastConnected":"2026-08-01","nextTarget":"2026-08-31","notificationDate":"2026-08-31"}]}"#,
     )
     .unwrap();
     let mut app = App::open(Store::new(&path)).unwrap();
     assert!(!app.data().people[0].uid.is_empty());
+    // A day setting chosen before syncing existed counts as chosen, so it goes up.
+    assert!(app.data().sync.settings_modified > 0);
     app.set_clock(|| 4242);
     app.call(
         "add_person",
@@ -359,4 +432,11 @@ fn the_app_stamps_changes_and_upgrades_old_files() {
     assert_eq!(app.sync_cursor(), 77);
     let reopened = App::open(Store::new(&path)).unwrap();
     assert_eq!(reopened.data(), app.data());
+
+    // Another account: the list goes to a copy first, then is cleared.
+    app.sync_start("22222222-2222-2222-2222-222222222222")
+        .unwrap();
+    assert!(app.data().people.is_empty());
+    let copy = App::open(Store::new(dir.join("friends.json.other-account-1"))).unwrap();
+    assert_eq!(copy.data().people.len(), 3);
 }
