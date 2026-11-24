@@ -35,6 +35,7 @@ const signInButton = () => screen.getByRole("button", { name: /Sign in with Appl
 beforeEach(() => {
   getAccount.mockReset();
   signInWithApple.mockReset();
+  cancelSignIn.mockReset();
   signOut.mockReset();
 });
 afterEach(cleanup);
@@ -104,6 +105,14 @@ describe("AccountSection", () => {
     act(() => pushAccount({ status: "signedOut", warning: null }));
     await act(async () => answer({ status: "signedIn", email: "ana@example.com", warning: null }));
     expect(signInButton()).toBeTruthy();
+  });
+
+  it("doesn't take a double-click on Sign in for a Cancel", async () => {
+    await open({ status: "signedOut", warning: null });
+    signInWithApple.mockReturnValue(new Promise(() => {}));
+    await act(async () => fireEvent.click(signInButton()));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Cancel" }), { detail: 2 }));
+    expect(cancelSignIn).not.toHaveBeenCalled();
   });
 
   it("says when Cancel didn't work", async () => {

@@ -66,7 +66,11 @@ export function AccountSection() {
             {/* Cancelling makes the waiting sign-in stop, which ends the busy state. */}
             <button
               className="btn btn-outline"
-              onClick={() => api.cancelSignIn(attempt).catch((e) => setCancelError(errorMessage(e)))}
+              onClick={(e) => {
+                // The second click of a double-click on Sign in lands here: not a Cancel.
+                if (e.detail > 1) return;
+                api.cancelSignIn(attempt).catch((err) => setCancelError(errorMessage(err)));
+              }}
             >
               Cancel
             </button>
