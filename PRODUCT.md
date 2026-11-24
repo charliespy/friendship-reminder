@@ -29,8 +29,8 @@ attention.
 ## Positioning
 
 A personal reminder that lives in the menu bar, keeps everything on the Mac with no tracking, and
-is open source. Signing in with Apple to a Friends account is optional, ready for a Friends app on
-iPhone; nothing syncs yet. It is not a contacts manager or a CRM: there are no notes,
+is open source. Signing in with Apple to a Friends account is optional; it keeps the list in sync
+with the account, ready for a Friends app on iPhone. It is not a contacts manager or a CRM: there are no notes,
 fields, pipelines or scores, only a name, a rhythm, and the last time you were in touch.
 
 ## Operating Context
@@ -39,7 +39,7 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
   Escape): who to reach out to now, with a Done button each, and the next few coming up.
 - The Preferences window: People (add, edit, mark done, select and delete), Blocked dates (add,
   remove), Settings (which days count, notifications, open at login, and Account: sign in with
-  Apple, sign out).
+  Apple, sign out, and how syncing is going).
 - macOS notifications on the reminder day; the menu bar shows the count of people due.
 - Light and dark mode both, following the system.
 
@@ -54,8 +54,9 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 - Tests address the UI by accessible names, labels and a few `data-testid`s
   (`due-person`, `upcoming-person`, `person-row`, `blocked-row`); copy changes must keep them.
 - The web page loads no web fonts and makes no network requests: the content security policy
-  allows only the app's own files. Signing in to a Friends account (optional) is the only network
-  use: the sign-in page opens in the browser, and the app's own requests go from the Rust side.
+  allows only the app's own files. Signing in to a Friends account (optional) and syncing with it
+  are the only network use: the sign-in page opens in the browser, and the app's own requests
+  (signing in, syncing) go from the Rust side.
 
 ## Brand Commitments
 

@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use crate::model::Data;
 
 /// The newest file format this version of the app understands.
-pub const CURRENT_VERSION: u32 = 1;
+/// 2 added what syncing needs (an id every device shares, and change times); a version 1 file is
+/// upgraded as it loads, and an older app refuses a version 2 file instead of dropping those.
+pub const CURRENT_VERSION: u32 = 2;
 
 #[derive(Debug, Clone)]
 pub struct Store {
@@ -72,6 +74,12 @@ impl Store {
         match serde_json::from_str::<Data>(&text) {
             Ok(mut data) if data.is_sane() => {
                 data.repair_ids();
+                data.fill_uids();
+                // A day setting chosen before syncing existed counts as a change, so it goes up to
+                // the account instead of losing to another device's default.
+                if data.version < 2 && data.settings.day_toggle != Default::default() {
+                    data.sync.settings_modified = crate::now_ms();
+                }
                 // Saved from now on in this version's format.
                 data.version = CURRENT_VERSION;
                 Ok(Loaded::Existing(data))
@@ -97,6 +105,25 @@ impl Store {
         };
         fs::rename(&self.path, &aside)?;
         Ok(Loaded::MovedAside(Data::default(), aside))
+    }
+
+    /// Saves `data` to a new file next to this one, `<name>.<label>-<n>`, and returns its path.
+    pub fn save_copy(&self, data: &Data, label: &str) -> io::Result<PathBuf> {
+        let name = self
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("friends.json");
+        let mut n = 1;
+        let copy = loop {
+            let candidate = self.path.with_file_name(format!("{name}.{label}-{n}"));
+            if !candidate.exists() {
+                break candidate;
+            }
+            n += 1;
+        };
+        Store::new(&copy).save(data)?;
+        Ok(copy)
     }
 
     pub fn save(&self, data: &Data) -> io::Result<()> {
@@ -250,7 +277,7 @@ mod tests {
         let path = dir.join("friends.json");
         for text in [
             r#"{"version": 99}"#,
-            r#"{"version":2,"settings":{"dayToggle":"custom"}}"#,
+            r#"{"version":3,"settings":{"dayToggle":"custom"}}"#,
         ] {
             fs::write(&path, text).unwrap();
             assert!(Store::new(&path).load().is_err());

@@ -14,6 +14,7 @@ use serde_json::Value;
 use crate::model::{Blocked, Data, Person, Settings};
 use crate::schedule::DayToggle;
 use crate::store::{Loaded, Store};
+use crate::sync::Changes;
 
 /// What the UI shows: everything, worked out for `today`.
 #[derive(Debug, Clone, Serialize)]
@@ -141,6 +142,8 @@ pub struct App {
     store: Store,
     data: Data,
     unreadable_file: Option<PathBuf>,
+    /// The time now, in milliseconds since 1970, to stamp changes with (see [`crate::sync`]).
+    clock: fn() -> i64,
 }
 
 impl App {
@@ -154,7 +157,13 @@ impl App {
             store,
             data,
             unreadable_file,
+            clock: crate::now_ms,
         })
+    }
+
+    /// Uses `clock` for the time changes are stamped with, for tests.
+    pub fn set_clock(&mut self, clock: fn() -> i64) {
+        self.clock = clock;
     }
 
     pub fn data(&self) -> &Data {
@@ -205,6 +214,7 @@ impl App {
             self.data = before;
             return Err(e);
         }
+        self.data.stamp(&before, (self.clock)());
         if self.data != before {
             if let Err(e) = self.store.save(&self.data) {
                 self.data = before;
@@ -269,6 +279,62 @@ impl App {
                     ErrorKind::BadCall,
                     format!("unknown command: {cmd}"),
                 ))
+            }
+        }
+        Ok(())
+    }
+
+    /// Starts a sync with account `owner`: what to upload (see [`Data::sync_start`]). Saved, since a
+    /// new account resets what was synced.
+    /// A list that last synced with another account is that account's: it is saved to a copy next to
+    /// the data file (`friends.json.other-account-<n>`) before it is cleared, so nothing is lost.
+    pub fn sync_start(&mut self, owner: &str) -> io::Result<Changes> {
+        if self.data.belongs_to_another_account(owner) {
+            self.store.save_copy(&self.data, "other-account")?;
+        }
+        let before = self.data.clone();
+        let changes = self.data.sync_start(owner);
+        self.save_or_undo(before)?;
+        Ok(changes)
+    }
+
+    /// The account took `sent` (see [`Data::sync_pushed`]).
+    pub fn sync_pushed(&mut self, sent: &Changes) -> io::Result<()> {
+        let before = self.data.clone();
+        self.data.sync_pushed(sent);
+        self.save_or_undo(before)
+    }
+
+    /// Whether a change here waits to upload.
+    pub fn has_unsynced(&self) -> bool {
+        self.data.has_unsynced()
+    }
+
+    /// Where the next download starts: the newest server change already taken in.
+    pub fn sync_cursor(&self) -> i64 {
+        self.data.sync.cursor
+    }
+
+    /// Takes in what the account sent, up to `cursor` (see [`Data::sync_pulled`]). Returns whether
+    /// anything here changed, so the windows need the new view.
+    pub fn sync_pulled(
+        &mut self,
+        got: &Changes,
+        cursor: i64,
+        today: NaiveDate,
+    ) -> io::Result<bool> {
+        let before = self.data.clone();
+        let caught_up = self.data.catch_up(today);
+        let changed = self.data.sync_pulled(got, cursor, today) || caught_up;
+        self.save_or_undo(before)?;
+        Ok(changed)
+    }
+
+    fn save_or_undo(&mut self, before: Data) -> io::Result<()> {
+        if self.data != before {
+            if let Err(e) = self.store.save(&self.data) {
+                self.data = before;
+                return Err(e);
             }
         }
         Ok(())

@@ -8,8 +8,8 @@ blocked (trips, busy weeks), can aim only for weekends or only for weekdays, and
 aim for goes by without you reaching out, it keeps them on your list and aims for the next good
 days.
 
-Everything stays on your Mac, with no tracking. You can sign in with Apple to set up a Friends
-account, ready for a Friends app on iPhone; nothing syncs yet.
+No tracking. Your list stays on your Mac unless you sign in with Apple: then it syncs with your
+Friends account, ready for a Friends app on iPhone.
 
 <p>
   <img src="docs/screenshots/dropdown-light.png" width="300" alt="The Friends menu bar dropdown: three people to reach out to now, each with a Done button, and three coming up">
@@ -61,6 +61,18 @@ FRIENDS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
 For a release build with them: `set -a; . ./.env.local; set +a; npm run tauri build`.
+
+### Sync
+
+While signed in, Friends syncs the list with the account's database: at launch, right after
+signing in, a few seconds after each change, and every five minutes. The tables and their privacy
+rules (each account sees only its own rows) are in `supabase/migrations/`: run them once in the
+project's SQL Editor. Only what you typed is synced (names, how often, the last time in touch,
+blocked dates and the day setting); each device works out targets and reminders itself, and keeps
+its own notification setting. When two devices change the same thing, the later change wins.
+Signing in to a different account than the list last synced with saves the list to a copy next to
+the data file (`friends.json.other-account-<n>`) and starts from that account's list. The rules
+are in `crates/friends-core/src/sync.rs`, the requests in `crates/friends-sync`.
 
 The Supabase project needs the Apple provider on (with a Services ID and its secret key) and
 `http://127.0.0.1:*/auth/callback` in its allowed redirect URLs.

@@ -18,6 +18,8 @@ use friends_account::{
     parse_callback, AccountState, AccountView, Attempts, Callback, Client, Config, HttpTransport,
     Pkce, Restore, Session, Started,
 };
+use friends_sync::SyncView;
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Sent to every window when the account changes, with the new [`AccountView`].
@@ -43,6 +45,16 @@ pub struct Account {
     config: Result<Config, String>,
     state: Mutex<AccountState>,
     waiting: Mutex<Waiting>,
+    /// How syncing is going, for the Account section.
+    sync: Mutex<SyncView>,
+}
+
+/// What the Account section shows: the account, and how syncing is going while signed in.
+#[derive(Debug, Clone, Serialize)]
+pub struct Shown {
+    #[serde(flatten)]
+    account: AccountView,
+    sync: Option<SyncView>,
 }
 
 impl Account {
@@ -51,6 +63,7 @@ impl Account {
             config: available(),
             state: Mutex::new(AccountState::default()),
             waiting: Mutex::new(Waiting::default()),
+            sync: Mutex::new(SyncView::default()),
         }
     }
 
@@ -62,17 +75,24 @@ impl Account {
         self.waiting.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn view(&self) -> AccountView {
+    fn view(&self) -> Shown {
         self.view_of(&self.state())
     }
 
-    fn view_of(&self, state: &AccountState) -> AccountView {
-        match &self.config {
+    fn view_of(&self, state: &AccountState) -> Shown {
+        let account = match &self.config {
             Err(reason) => AccountView::Unavailable {
                 reason: reason.clone(),
             },
             Ok(_) => state.view(),
-        }
+        };
+        let sync = matches!(account, AccountView::SignedIn { .. })
+            .then(|| self.sync.lock().unwrap_or_else(|e| e.into_inner()).clone());
+        Shown { account, sync }
+    }
+
+    pub fn config(&self) -> Option<Config> {
+        self.config.clone().ok()
     }
 
     fn client(&self) -> Result<Client<HttpTransport>, String> {
@@ -97,6 +117,65 @@ fn available() -> Result<Config, String> {
 
 fn now() -> i64 {
     chrono::Utc::now().timestamp()
+}
+
+/// Records how syncing is going and tells the windows.
+pub fn set_sync(app: &AppHandle, change: impl FnOnce(&mut SyncView)) {
+    change(
+        &mut app
+            .state::<Account>()
+            .sync
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()),
+    );
+    publish(app);
+}
+
+/// Who is signed in, by account id.
+pub fn signed_in_user(app: &AppHandle) -> Option<String> {
+    app.state::<Account>()
+        .state()
+        .session()
+        .map(|s| s.user_id.clone())
+}
+
+/// Forgets how syncing went (a new sign-in, or a sign-out).
+fn reset_sync(account: &Account) {
+    *account.sync.lock().unwrap_or_else(|e| e.into_inner()) = SyncView::default();
+}
+
+/// A session to sync with: the signed-in one, refreshed first when its access token has run out (or
+/// `force`, when the server just refused it). `Ok(None)` when signed out; `Err` says why a refresh
+/// that was needed didn't work. Only the sync thread calls this (and `restore`, before it starts), so
+/// two refreshes never race with the same refresh token.
+pub fn session_for_sync(app: &AppHandle, force: bool) -> Result<Option<Session>, String> {
+    let account = app.state::<Account>();
+    let Ok(client) = account.client() else {
+        return Ok(None);
+    };
+    let (generation, session) = {
+        let state = account.state();
+        match state.session() {
+            Some(s) => (state.generation(), s.clone()),
+            None => return Ok(None),
+        }
+    };
+    if !force && !session.needs_refresh(now()) {
+        return Ok(Some(session));
+    }
+    let refreshed = client.refresh(&session.refresh_token, now());
+    let failure = refreshed.as_ref().err().map(|e| e.to_string());
+    let finished = account.state().finish_restore(generation, refreshed, save);
+    match finished {
+        Ok(Some(unwanted)) => end_on_server(client, unwanted),
+        Ok(None) => {}
+        Err(e) => eprintln!("friends: couldn't update the Keychain: {e}"),
+    }
+    publish(app);
+    match failure {
+        Some(e) => Err(e),
+        None => Ok(account.state().session().cloned()),
+    }
 }
 
 /// Sends the account to the windows. Sent while holding the state, so two changes at once can't send
@@ -199,20 +278,20 @@ async fn blocking<T: Send + 'static>(
 }
 
 #[tauri::command]
-pub async fn get_account(app: AppHandle) -> Result<AccountView, String> {
+pub async fn get_account(app: AppHandle) -> Result<Shown, String> {
     blocking(app, |app| Ok(app.state::<Account>().view())).await
 }
 
 /// Opens Sign in with Apple in the browser and waits for it to come back, then trades the code for a
 /// session. Starting again (or cancelling) while one waits makes the earlier one stop quietly.
 #[tauri::command]
-pub async fn sign_in_with_apple(app: AppHandle, attempt: String) -> Result<AccountView, String> {
+pub async fn sign_in_with_apple(app: AppHandle, attempt: String) -> Result<Shown, String> {
     blocking(app, move |app| sign_in(app, &attempt)).await
 }
 
 /// Stops sign-in `attempt`, whether it's waiting for the browser yet or not.
 #[tauri::command]
-pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<AccountView, String> {
+pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<Shown, String> {
     blocking(app, move |app| {
         let account = app.state::<Account>();
         if let Some(server) = account.waiting().cancel(&attempt) {
@@ -231,7 +310,7 @@ pub fn cancel_waiting(app: &AppHandle) {
     }
 }
 
-fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
+fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
     let account = app.state::<Account>();
     let client = account.client()?;
     // A one-off address on this Mac only, on a port the system picks.
@@ -288,6 +367,7 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
         end_on_server(client, session);
         return Ok(account.view());
     }
+    reset_sync(&account);
     let (replaced, saved) = account.state().signed_in(session, save);
     if let Err(e) = saved {
         eprintln!("friends: couldn't save the sign-in in the Keychain: {e}");
@@ -297,6 +377,7 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
     }
     answer(request, 200, SIGNED_IN_PAGE);
     publish(app);
+    crate::sync::nudge(app, crate::sync::Nudge::Now);
     // Back from the browser to Friends.
     let _ = crate::show_preferences(app);
     Ok(account.view())
@@ -375,13 +456,14 @@ fn end_on_server(client: Client<HttpTransport>, session: Session) {
 /// Signs out once the Keychain has let go of the session (one left behind would sign back in at the
 /// next launch), then ends the session on Supabase's side in the background.
 #[tauri::command]
-pub async fn sign_out(app: AppHandle) -> Result<AccountView, String> {
+pub async fn sign_out(app: AppHandle) -> Result<Shown, String> {
     blocking(app, |app| {
         let account = app.state::<Account>();
         let old = account
             .state()
             .sign_out(save)
             .map_err(|e| format!("Couldn't remove the sign-in from the Keychain: {e}"))?;
+        reset_sync(&account);
         publish(app);
         if let (Some(old), Ok(client)) = (old, account.client()) {
             end_on_server(client, old);

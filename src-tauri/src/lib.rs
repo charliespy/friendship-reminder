@@ -2,6 +2,7 @@
 //! login. The rules and the data live in friends-core; this file only connects them to macOS.
 
 mod account;
+mod sync;
 
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
@@ -139,7 +140,11 @@ async fn call(
         Ok(view) => publish(&app, view),
         Err(_) => publish(&app, &core.view(day)),
     }
+    let unsynced = core.has_unsynced();
     drop(core);
+    if unsynced {
+        sync::nudge(&app, sync::Nudge::Soon);
+    }
     result
 }
 
@@ -411,8 +416,8 @@ pub fn run() {
             };
             app.manage(State(Mutex::new(core)));
             app.manage(account::Account::new());
-            let restoring = handle.clone();
-            std::thread::spawn(move || account::restore(&restoring));
+            app.manage(sync::Syncer::new());
+            sync::start(&handle);
 
             app.manage(DropdownHiddenAt(Mutex::new(None)));
             app.manage(LastPublished(Mutex::new(None)));

@@ -37,6 +37,16 @@ pub struct Person {
     /// The notification date the app last sent a notification for, so each one goes out once.
     #[serde(default)]
     pub notified_for: Option<NaiveDate>,
+    /// The id every device knows this row by (the local `id` is this Mac's own number for it).
+    #[serde(default)]
+    pub uid: String,
+    /// When this row last changed, here or on another device, in milliseconds since 1970: when two
+    /// devices change the same row, the later change wins.
+    #[serde(default)]
+    pub modified: i64,
+    /// The `modified` the account has. Behind `modified`, a change here is waiting to upload.
+    #[serde(default)]
+    pub synced: i64,
 }
 
 impl Person {
@@ -60,6 +70,16 @@ pub struct Blocked {
     pub start: NaiveDate,
     pub end: NaiveDate,
     pub label: String,
+    /// The id every device knows this row by (the local `id` is this Mac's own number for it).
+    #[serde(default)]
+    pub uid: String,
+    /// When this row last changed, here or on another device, in milliseconds since 1970: when two
+    /// devices change the same row, the later change wins.
+    #[serde(default)]
+    pub modified: i64,
+    /// The `modified` the account has. Behind `modified`, a change here is waiting to upload.
+    #[serde(default)]
+    pub synced: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,6 +120,9 @@ pub struct Data {
     /// The last id handed out, so a deleted id is never reused.
     #[serde(default)]
     pub last_id: u64,
+    /// What syncing with the Friends account needs to remember.
+    #[serde(default)]
+    pub sync: crate::sync::SyncState,
 }
 
 impl Default for Data {
@@ -110,6 +133,7 @@ impl Default for Data {
             blocked: Vec::new(),
             settings: Settings::default(),
             last_id: 0,
+            sync: Default::default(),
         }
     }
 }
@@ -131,11 +155,11 @@ fn invalid<T>(msg: impl Into<String>) -> Result<T, Invalid> {
 }
 
 /// Trims a name or label and squeezes runs of spaces into one.
-fn squeeze(text: &str) -> String {
+pub(crate) fn squeeze(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn clean_name(name: &str) -> Result<String, Invalid> {
+pub(crate) fn clean_name(name: &str) -> Result<String, Invalid> {
     let name = squeeze(name);
     if name.is_empty() {
         return invalid("Give them a name.");
@@ -201,7 +225,7 @@ impl Data {
         ids.dedup();
         let ids_ok =
             ids.len() == count && self.last_id < MAX_ID && ids.last().is_none_or(|&id| id < MAX_ID);
-        people_ok && blocked_ok && ids_ok
+        people_ok && blocked_ok && ids_ok && self.uids_ok()
     }
 
     fn ids(&self) -> impl Iterator<Item = u64> + '_ {
@@ -217,7 +241,7 @@ impl Data {
     }
 
     /// A new id, refused at MAX_ID so the saved file stays one the app will load.
-    fn next_id(&mut self) -> Result<u64, Invalid> {
+    pub(crate) fn next_id(&mut self) -> Result<u64, Invalid> {
         if self.last_id + 1 >= MAX_ID {
             return invalid("Friends has run out of ids.");
         }
@@ -225,7 +249,7 @@ impl Data {
         Ok(self.last_id)
     }
 
-    fn ranges(&self) -> Vec<BlockedRange> {
+    pub(crate) fn ranges(&self) -> Vec<BlockedRange> {
         self.blocked
             .iter()
             .map(|b| BlockedRange {
@@ -247,7 +271,7 @@ impl Data {
     }
 
     /// A fresh schedule for one person from their last time in touch, caught up to `today`.
-    fn reschedule(
+    pub(crate) fn reschedule(
         person: &mut Person,
         toggle: DayToggle,
         ranges: &[BlockedRange],
@@ -309,6 +333,9 @@ impl Data {
             notification_date: last_connected,
             overdue: false,
             notified_for: None,
+            uid: crate::sync::new_uid(),
+            modified: 0,
+            synced: 0,
         };
         Self::reschedule(&mut person, self.settings.day_toggle, &self.ranges(), today);
         self.people.push(person);
@@ -384,6 +411,9 @@ impl Data {
             start,
             end,
             label,
+            uid: crate::sync::new_uid(),
+            modified: 0,
+            synced: 0,
         });
         self.blocked.sort_by_key(|b| (b.start, b.end, b.id));
         self.recompute_all(today);
