@@ -20,7 +20,10 @@ npm run dev:web        # the UI in a browser, against a scratch data file
 
 - `crates/friends-core/`: all the rules (scheduling, the data file, the commands). Plain Rust,
   no macOS code, fully unit-tested.
-- `src-tauri/`: the macOS shell: menu bar icon, windows, notifications, open at login.
+- `crates/friends-account/`: signing in to the Friends account (Supabase Auth): the requests,
+  the session and its rules. Plain Rust, tested without a network.
+- `src-tauri/`: the macOS shell: menu bar icon, windows, notifications, open at login, and for
+  the account the browser sign-in and the Keychain.
 - `src/`: the React UI. It only shows data and calls commands.
 - `crates/friends-devserver/` and `src/dev/`: the browser dev mode and the end-to-end tests run
   the real rules through a small local server.

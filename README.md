@@ -8,7 +8,8 @@ blocked (trips, busy weeks), can aim only for weekends or only for weekdays, and
 aim for goes by without you reaching out, it keeps them on your list and aims for the next good
 days.
 
-Everything stays on your Mac: no account, no sync, no tracking.
+Everything stays on your Mac, with no tracking. You can sign in with Apple to set up a Friends
+account, ready for a Friends app on iPhone; nothing syncs yet.
 
 <p>
   <img src="docs/screenshots/dropdown-light.png" width="300" alt="The Friends menu bar dropdown: three people to reach out to now, each with a Done button, and three coming up">
@@ -29,8 +30,8 @@ The people in these screenshots are made up.
    only asks once whether you want to open an app downloaded from the internet. (Versions before
    0.1.2 weren't: macOS blocks their first launch until you click **Open Anyway** in
    **System Settings → Privacy & Security**.)
-4. Friends appears in the menu bar. Click it to see who's due; open **Preferences** to add
-   people.
+4. Friends appears in the menu bar and the Dock. Click the menu bar icon to see who's due;
+   click the Dock icon or open **Preferences** to add people.
 
 Requires macOS 13 (Ventura) or newer.
 
@@ -43,6 +44,26 @@ npm install
 npm run tauri dev        # run the app
 npm run tauri build      # build Friends.app and a .dmg into target/release/bundle/
 ```
+
+### Sign in with Apple
+
+Signing in happens in the browser: Friends opens Sign in with Apple there, and the browser comes
+back to Friends at `http://127.0.0.1:<port>/auth/callback` when it's done. (Apple's own sign-in
+sheet only works in Mac App Store apps.) A build offers it only when it has the account server's settings,
+`FRIENDS_SUPABASE_URL` and `FRIENDS_SUPABASE_PUBLISHABLE_KEY`; otherwise the Account section in
+Settings says sign-in isn't available, and everything else works the same. Release builds take them
+from the environment when they are built. `npm run tauri dev` also reads them from `.env.local` at
+the repo root, which git ignores:
+
+```sh
+FRIENDS_SUPABASE_URL=https://<project>.supabase.co
+FRIENDS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+For a release build with them: `set -a; . ./.env.local; set +a; npm run tauri build`.
+
+The Supabase project needs the Apple provider on (with a Services ID and its secret key) and
+`http://127.0.0.1:*/auth/callback` in its allowed redirect URLs.
 
 ## Test
 

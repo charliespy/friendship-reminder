@@ -7,6 +7,8 @@ name: Release
 #   APPLE_API_ISSUER, APPLE_API_KEY (an App Store Connect API key's issuer ID and key ID) and
 #   APPLE_API_KEY_PRIVATE_KEY_BASE64 (that key's .p8 file, base64).
 # Without them the app is only ad-hoc signed (see the README for opening it).
+# The account (Sign in with Apple) needs the repository variables FRIENDS_SUPABASE_URL and
+# FRIENDS_SUPABASE_PUBLISHABLE_KEY. Without them the app builds as before, with the account unavailable.
 # A PR that changes this file, the release script or the app version (a release PR), or a manual
 # run, does a dry run: it prints the release plan and notes, builds the app and keeps the .dmg
 # as a workflow artifact, but publishes nothing.
@@ -146,6 +148,8 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          FRIENDS_SUPABASE_URL: ${{ vars.FRIENDS_SUPABASE_URL }}
+          FRIENDS_SUPABASE_PUBLISHABLE_KEY: ${{ vars.FRIENDS_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
 
       # "-" signs ad hoc. An app with no signature at all is reported as "damaged" on Apple silicon,
@@ -154,6 +158,8 @@ jobs:
         if: steps.signing.outputs.sign != 'true'
         env:
           APPLE_SIGNING_IDENTITY: "-"
+          FRIENDS_SUPABASE_URL: ${{ vars.FRIENDS_SUPABASE_URL }}
+          FRIENDS_SUPABASE_PUBLISHABLE_KEY: ${{ vars.FRIENDS_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
 
       # Tauri notarizes the .app but not the .dmg it is shipped in, and Gatekeeper checks the .dmg

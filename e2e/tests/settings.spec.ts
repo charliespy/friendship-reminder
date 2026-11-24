@@ -43,3 +43,17 @@ test("a weekend that goes by without Done pushes the person to the next one", as
   await page.reload();
   await expect(page.getByTestId("due-person")).toContainText("Missed last time · aim for Sat, Dec 12");
 });
+
+test("signing in with Apple shows the account, and signing out clears it", async ({ page, request }) => {
+  await seed(request);
+  await openPreferences(page, "Settings");
+  // The test server stands in for Apple's sheet and the account server.
+  await page.getByRole("button", { name: /Sign in with Apple/ }).click();
+  await expect(page.getByText("Signed in with Apple")).toBeVisible();
+  await expect(page.getByTestId("account-email")).toHaveText("ana.torres@example.com");
+  await page.reload();
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await expect(page.getByText("Signed in with Apple")).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("button", { name: /Sign in with Apple/ })).toBeEnabled();
+});

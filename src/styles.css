@@ -723,6 +723,41 @@ input[type="radio"] {
   margin-top: var(--space-6);
 }
 
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Apple's Sign in with Apple button: black on a light window, white on a dark one. */
+.btn-apple {
+  background: #000000;
+  color: #ffffff;
+  box-shadow: var(--lift);
+}
+
+.btn-apple:active:not(:disabled) {
+  background: #1c1c1e;
+}
+
+.apple-logo {
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-apple {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .btn-apple:active:not(:disabled) {
+    background: #e5e5ea;
+  }
+}
+
 .plain-fieldset {
   min-width: 0;
   margin: 0;

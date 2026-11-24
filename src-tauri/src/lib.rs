@@ -1,6 +1,8 @@
 //! The Tauri shell: the menu bar icon, the dropdown and Preferences windows, notifications and launch at
 //! login. The rules and the data live in friends-core; this file only connects them to macOS.
 
+mod account;
+
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -190,6 +192,12 @@ fn show_preferences(app: &AppHandle) -> tauri::Result<()> {
         .resizable(true)
         .center()
         .build()?;
+    let closing = app.clone();
+    w.on_window_event(move |e| {
+        if let WindowEvent::Destroyed = e {
+            account::cancel_waiting(&closing);
+        }
+    });
     w.set_focus()?;
     Ok(())
 }
@@ -377,7 +385,11 @@ pub fn run() {
             set_launch_at_login,
             open_preferences,
             hide_dropdown,
-            quit
+            quit,
+            account::get_account,
+            account::sign_in_with_apple,
+            account::cancel_sign_in,
+            account::sign_out
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -398,11 +410,10 @@ pub fn run() {
                 }
             };
             app.manage(State(Mutex::new(core)));
+            app.manage(account::Account::new());
+            let restoring = handle.clone();
+            std::thread::spawn(move || account::restore(&restoring));
 
-            // A menu bar app: no Dock icon, no app menu. Switched after the data opens, so the alert
-            // above still comes to the front as a normal app's would.
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             app.manage(DropdownHiddenAt(Mutex::new(None)));
             app.manage(LastPublished(Mutex::new(None)));
 
@@ -459,9 +470,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the Friends app")
         .run(|app, event| {
-            // Opening Friends again from Finder or Spotlight while it runs doesn't start a second
-            // copy on macOS; the system sends the running one a "reopen". Show Preferences, so the
-            // app is reachable even when its menu bar icon is hidden (a full menu bar, the notch).
+            // Friends lives in both the menu bar and the Dock. Clicking its Dock icon, or opening it
+            // again from Finder or Spotlight while it runs (macOS doesn't start a second copy), sends
+            // the running one a "reopen". Show Preferences, so the app is reachable even when its
+            // menu bar icon is hidden (a full menu bar, the notch).
             if let tauri::RunEvent::Reopen { .. } = event {
                 let _ = show_preferences(app);
             }

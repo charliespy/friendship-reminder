@@ -14,7 +14,8 @@ needs. `CLAUDE.md` and `AGENTS.md` hold the same text: change both together.
 - **Conventional commits** for commit messages and PR titles.
 - **Logic lives in `crates/friends-core`**, never in the UI or the Tauri shell. The UI calls
   commands through `src/api.ts`; the shell only does macOS things (tray, windows,
-  notifications, open at login).
+  notifications, open at login). Account sign-in rules live in `crates/friends-account`; the
+  shell only opens the browser sign-in and keeps the session in the Keychain.
 - **Dates are calendar dates** (`chrono::NaiveDate`, `"YYYY-MM-DD"` in JSON). Never store a time
   for a reminder: time zones and daylight saving would shift it.
 - **Scheduling changes are test-first**: a failing test in `crates/friends-core/tests/`, then the

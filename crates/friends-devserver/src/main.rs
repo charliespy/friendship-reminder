@@ -99,6 +99,8 @@ struct Dev {
     store_path: PathBuf,
     today: Option<NaiveDate>,
     launch_at_login: bool,
+    /// Stands in for Sign in with Apple: there's no Apple page in the tests, so signing in always works.
+    signed_in: bool,
 }
 
 impl Dev {
@@ -128,9 +130,27 @@ impl Dev {
                 self.launch_at_login = args.get("on").and_then(Value::as_bool).unwrap_or(false);
                 Ok(json!(self.launch_at_login))
             }
+            "get_account" => Ok(self.account()),
+            "sign_in_with_apple" => {
+                self.signed_in = true;
+                Ok(self.account())
+            }
+            "cancel_sign_in" => Ok(self.account()),
+            "sign_out" => {
+                self.signed_in = false;
+                Ok(self.account())
+            }
             // Window commands have nothing to do in a browser.
             "open_preferences" | "hide_dropdown" | "quit" => Ok(Value::Null),
             _ => Err(json!(format!("unknown command: {cmd}"))),
+        }
+    }
+
+    fn account(&self) -> Value {
+        if self.signed_in {
+            json!({ "status": "signedIn", "email": "ana.torres@example.com", "warning": null })
+        } else {
+            json!({ "status": "signedOut", "warning": null })
         }
     }
 
@@ -149,6 +169,7 @@ impl Dev {
         .map_err(|e| e.to_string())?;
         self.app = App::open(Store::new(&self.store_path)).map_err(|e| e.to_string())?;
         self.launch_at_login = false;
+        self.signed_in = false;
         Ok(())
     }
 }
@@ -177,6 +198,7 @@ fn main() {
         store_path: opts.data.clone(),
         today: opts.today,
         launch_at_login: false,
+        signed_in: false,
     };
     let server = Server::http(("127.0.0.1", opts.port)).unwrap_or_else(|e| {
         eprintln!(

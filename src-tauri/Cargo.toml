@@ -15,6 +15,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 friends-core = { path = "../crates/friends-core" }
+friends-account = { path = "../crates/friends-account" }
+# The one-off address the browser comes back to after Sign in with Apple.
+tiny_http = "0.12"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 chrono = { workspace = true, features = ["clock"] }
 serde_json.workspace = true
@@ -26,3 +29,7 @@ rfd = { version = "0.18.0", default-features = false }
 [features]
 # Set by `tauri build`: serve the built front end from inside the app instead of the dev server.
 custom-protocol = ["tauri/custom-protocol"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The Keychain, for the account's session.
+security-framework = { version = "3", default-features = false }
