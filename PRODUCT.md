@@ -51,7 +51,9 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 - macOS 13 or newer. WebKit only (Safari's engine), so CSS must work in Safari 16.
 - Tests address the UI by accessible names, labels and a few `data-testid`s
   (`due-person`, `upcoming-person`, `person-row`, `blocked-row`); copy changes must keep them.
-- No web fonts or network requests: the content security policy allows only the app's own files.
+- The web page loads no web fonts and makes no network requests: the content security policy
+  allows only the app's own files. Signing in to a Friends account (optional) is the only network
+  use, and it goes from the Rust side, not the web page.
 
 ## Brand Commitments
 
