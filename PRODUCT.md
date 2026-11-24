@@ -53,7 +53,7 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
   (`due-person`, `upcoming-person`, `person-row`, `blocked-row`); copy changes must keep them.
 - The web page loads no web fonts and makes no network requests: the content security policy
   allows only the app's own files. Signing in to a Friends account (optional) is the only network
-  use, and it goes from the Rust side, not the web page.
+  use: the sign-in page opens in the browser, and the app's own requests go from the Rust side.
 
 ## Brand Commitments
 
