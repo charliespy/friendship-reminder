@@ -1,9 +1,17 @@
 use std::cell::RefCell;
 
 use friends_account::{
-    env_file_value, AccountState, AccountView, Attempts, AuthError, Config, Session, Started,
-    NOT_READ, NOT_SAVED,
+    env_file_value, AccountState, AccountView, Attempts, AuthError, Config, Restore, Session,
+    Started, NOT_READ, NOT_REMOVED, NOT_SAVED,
 };
+
+/// Starts a restore of `saved` and returns the generation to finish it with.
+fn restoring(state: &mut AccountState, saved: Session) -> u64 {
+    match state.start_restore(state.generation(), Ok(Some(saved))) {
+        Restore::Refresh { generation, .. } => generation,
+        other => panic!("expected a refresh, got {other:?}"),
+    }
+}
 
 fn session(name: &str) -> Session {
     Session {
@@ -38,9 +46,7 @@ impl Keychain {
 fn a_saved_session_shows_at_once_and_its_refresh_replaces_it() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    let generation = state
-        .start_restore(state.generation(), Ok(Some(session("old"))))
-        .unwrap();
+    let generation = restoring(&mut state, session("old"));
     assert!(matches!(state.view(), AccountView::SignedIn { .. }));
     state
         .finish_restore(generation, Ok(session("new")), keychain.save())
@@ -54,9 +60,7 @@ fn a_dead_saved_session_signs_out_but_offline_keeps_it() {
     let keychain = Keychain::default();
     *keychain.held.borrow_mut() = Some(session("old"));
     let mut state = AccountState::default();
-    let g = state
-        .start_restore(state.generation(), Ok(Some(session("old"))))
-        .unwrap();
+    let g = restoring(&mut state, session("old"));
     state
         .finish_restore(
             g,
@@ -86,9 +90,7 @@ fn a_dead_saved_session_signs_out_but_offline_keeps_it() {
 fn a_sign_in_during_the_launch_refresh_wins() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    let g = state
-        .start_restore(state.generation(), Ok(Some(session("old"))))
-        .unwrap();
+    let g = restoring(&mut state, session("old"));
     assert_eq!(state.signed_in(session("new"), keychain.save()).1, Ok(()));
     // The launch refresh comes back late, either way: dropped, and a fresh one is handed back to end.
     assert_eq!(
@@ -106,9 +108,7 @@ fn a_sign_in_during_the_launch_refresh_wins() {
 fn a_sign_out_during_the_launch_refresh_wins() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    let g = state
-        .start_restore(state.generation(), Ok(Some(session("old"))))
-        .unwrap();
+    let g = restoring(&mut state, session("old"));
     assert_eq!(state.sign_out(keychain.save()), Ok(Some(session("old"))));
     // The refresh replaced the tokens the sign-out ended the session with, so it comes back to end.
     assert_eq!(
@@ -156,7 +156,7 @@ fn an_unreadable_keychain_says_so_instead_of_looking_signed_out() {
     let mut state = AccountState::default();
     assert_eq!(
         state.start_restore(state.generation(), Err("locked".into())),
-        None
+        Restore::Done
     );
     assert_eq!(
         state.view(),
@@ -164,7 +164,10 @@ fn an_unreadable_keychain_says_so_instead_of_looking_signed_out() {
             warning: Some(NOT_READ.into())
         }
     );
-    assert_eq!(state.start_restore(state.generation(), Ok(None)), None);
+    assert_eq!(
+        state.start_restore(state.generation(), Ok(None)),
+        Restore::Done
+    );
 }
 
 #[test]
@@ -174,7 +177,7 @@ fn an_unreadable_keychain_after_signing_in_is_not_a_warning() {
     assert_eq!(state.signed_in(session("new"), keychain.save()).1, Ok(()));
     assert_eq!(
         state.start_restore(state.generation(), Err("locked".into())),
-        None
+        Restore::Done
     );
     assert_eq!(
         state.view(),
@@ -214,7 +217,10 @@ fn a_keychain_read_that_outlasts_a_sign_in_and_out_is_dropped() {
     // While the Keychain read waits on a prompt, someone signs in and out again.
     let _ = state.signed_in(session("new"), keychain.save());
     state.sign_out(keychain.save()).unwrap();
-    assert_eq!(state.start_restore(before, Ok(Some(session("old")))), None);
+    assert_eq!(
+        state.start_restore(before, Ok(Some(session("old")))),
+        Restore::End(session("old"))
+    );
     assert_eq!(state.view(), AccountView::SignedOut { warning: None });
 }
 
@@ -256,4 +262,23 @@ fn a_newer_sign_in_replaces_the_waiting_one() {
     );
     assert!(!attempts.finish("a"));
     assert!(attempts.finish("b"));
+}
+
+#[test]
+fn a_dead_session_the_keychain_wont_let_go_still_signs_out_with_a_warning() {
+    let broken = Keychain {
+        broken: true,
+        ..Keychain::default()
+    };
+    let mut state = AccountState::default();
+    let g = restoring(&mut state, session("old"));
+    assert!(state
+        .finish_restore(g, Err(AuthError::Rejected("gone".into())), broken.save())
+        .is_err());
+    assert_eq!(
+        state.view(),
+        AccountView::SignedOut {
+            warning: Some(NOT_REMOVED.into())
+        }
+    );
 }

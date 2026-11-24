@@ -37,6 +37,10 @@ pub const CALLBACK_PATH: &str = "/auth/callback";
 pub const NOT_SAVED: &str =
     "Couldn't save your sign-in in the Keychain, so you may need to sign in again after Friends restarts.";
 
+/// Shown when the saved session turned out to have ended but the Keychain wouldn't let it go.
+pub const NOT_REMOVED: &str =
+    "Your sign-in ended, but Friends couldn't remove it from the Keychain. Sign in again.";
+
 /// Shown when the Keychain wouldn't say whether a session was saved.
 pub const NOT_READ: &str =
     "Couldn't read your sign-in from the Keychain. Restart Friends, or sign in again.";
@@ -370,6 +374,17 @@ fn parse_session(body: &str, now: i64) -> Option<Session> {
 /// started from an older state (a refresh at launch that finishes after the user signed in or out) can
 /// tell, and its result is dropped. Each change is saved with the given `save` function (the Keychain)
 /// together with the change in memory, so the two never disagree.
+/// What to do after [`AccountState::start_restore`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum Restore {
+    /// Nothing more.
+    Done,
+    /// Refresh this session, then pass the result to [`AccountState::finish_restore`].
+    Refresh { generation: u64, session: Session },
+    /// End this old session on the server.
+    End(Session),
+}
+
 #[derive(Debug, Default)]
 pub struct AccountState {
     generation: u64,
@@ -398,29 +413,34 @@ impl AccountState {
     }
 
     /// At launch, what the Keychain held, read after noting [`AccountState::generation`] as `before`.
-    /// Shows a saved session as signed in right away, and returns the generation to pass to
-    /// [`AccountState::finish_restore`] once its refresh is back; `None` when there is nothing to
-    /// refresh, or the account changed while the Keychain was read (a sign-in or a sign-out, which
-    /// what it held no longer speaks for).
+    /// Shows a saved session as signed in right away, to be refreshed. If the account changed while
+    /// the Keychain was read (a sign-in or a sign-out), what it held no longer speaks for it: a saved
+    /// session other than the current one is handed back to end on the server.
     pub fn start_restore(
         &mut self,
         before: u64,
         saved: Result<Option<Session>, String>,
-    ) -> Option<u64> {
+    ) -> Restore {
         if before != self.generation || self.session.is_some() {
-            return None;
+            return match saved {
+                Ok(Some(old)) if self.session.as_ref() != Some(&old) => Restore::End(old),
+                _ => Restore::Done,
+            };
         }
         match saved {
             Err(_) => {
                 self.warning = Some(NOT_READ.to_string());
                 self.generation += 1;
-                None
+                Restore::Done
             }
-            Ok(None) => None,
+            Ok(None) => Restore::Done,
             Ok(Some(session)) => {
-                self.session = Some(session);
+                self.session = Some(session.clone());
                 self.generation += 1;
-                Some(self.generation)
+                Restore::Refresh {
+                    generation: self.generation,
+                    session,
+                }
             }
         }
     }
@@ -441,7 +461,17 @@ impl AccountState {
         }
         match refreshed {
             Ok(fresh) => self.keep(Some(fresh), save).map(|_| None),
-            Err(e) if e.session_is_dead() => self.sign_out(save).map(|_| None),
+            // Signed out either way: a dead session can't do anything. If the Keychain keeps it, the
+            // next launch finds it dead again.
+            Err(e) if e.session_is_dead() => match self.sign_out(save) {
+                Ok(_) => Ok(None),
+                Err(e) => {
+                    self.session = None;
+                    self.warning = Some(NOT_REMOVED.to_string());
+                    self.generation += 1;
+                    Err(e)
+                }
+            },
             Err(_) => Ok(None),
         }
     }

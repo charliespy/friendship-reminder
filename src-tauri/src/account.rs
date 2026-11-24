@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use friends_account::{
     parse_callback, AccountState, AccountView, Attempts, Callback, Client, Config, HttpTransport,
-    Pkce, Session, Started,
+    Pkce, Restore, Session, Started,
 };
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -63,11 +63,15 @@ impl Account {
     }
 
     fn view(&self) -> AccountView {
+        self.view_of(&self.state())
+    }
+
+    fn view_of(&self, state: &AccountState) -> AccountView {
         match &self.config {
             Err(reason) => AccountView::Unavailable {
                 reason: reason.clone(),
             },
-            Ok(_) => self.state().view(),
+            Ok(_) => state.view(),
         }
     }
 
@@ -95,8 +99,12 @@ fn now() -> i64 {
     chrono::Utc::now().timestamp()
 }
 
+/// Sends the account to the windows. Sent while holding the state, so two changes at once can't send
+/// their views out of order.
 fn publish(app: &AppHandle) {
-    let _ = app.emit(ACCOUNT_CHANGED, app.state::<Account>().view());
+    let account = app.state::<Account>();
+    let state = account.state();
+    let _ = app.emit(ACCOUNT_CHANGED, account.view_of(&state));
 }
 
 /// errSecItemNotFound: the Keychain holds no such item.
@@ -157,11 +165,15 @@ pub fn restore(app: &AppHandle) {
     if let Err(e) = &saved {
         eprintln!("friends: couldn't read the saved sign-in: {e}");
     }
-    let to_refresh = saved.as_ref().ok().cloned().flatten();
-    let generation = account.state().start_restore(before, saved);
+    let restore = account.state().start_restore(before, saved);
     publish(app);
-    let (Some(generation), Some(saved)) = (generation, to_refresh) else {
-        return;
+    let (generation, saved) = match restore {
+        Restore::Refresh {
+            generation,
+            session,
+        } => (generation, session),
+        Restore::End(old) => return end_on_server(client, old),
+        Restore::Done => return,
     };
     let refreshed = client.refresh(&saved.refresh_token, now());
     if let Err(e) = &refreshed {
@@ -233,6 +245,10 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
     let waited = (|| {
         let redirect = format!("http://127.0.0.1:{port}{}", friends_account::CALLBACK_PATH);
         let pkce = Pkce::new()?;
+        // Cancelled already (Cancel clicked straight away)? Then don't open the browser at all.
+        if !account.waiting().is_waiting(attempt) {
+            return Ok(None);
+        }
         open_in_browser(&client.authorize_url("apple", &redirect, &pkce))?;
         let back = wait_for_browser(&server, || account.waiting().is_waiting(attempt))?;
         Ok(back.map(|(code, request)| (code, request, pkce.verifier)))
