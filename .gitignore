@@ -17,3 +17,7 @@ release-notes.md
 
 # Supabase CLI scratch files
 supabase/.temp/
+
+# Impeccable scratch: decision sketches and review captures
+.impeccable/mocks/
+.impeccable/review/

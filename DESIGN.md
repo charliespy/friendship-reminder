@@ -1,35 +1,29 @@
 ---
 name: Friends
-description: A quiet macOS menu bar reminder, printed in two inks on cool card stock.
+description: A macOS menu bar reminder that looks like it came with the Mac.
 colors:
-  stock: "#eef0f4"
-  sheet: "#ffffff"
-  well: "#e4e7ee"
-  sidebar: "#e6e9f0"
-  ink: "#1d2233"
-  ink-2: "#4f5568"
-  ink-3: "#5c6275"
-  rule: "rgb(29 34 51 / 11%)"
-  rule-strong: "rgb(29 34 51 / 20%)"
-  press: "#3346c4"
-  press-down: "#2a3aa6"
-  press-tint: "rgb(51 70 196 / 10%)"
-  on-press: "#ffffff"
-  sea: "#17705a"
-  sea-tint: "rgb(23 112 90 / 11%)"
-  on-sea: "#ffffff"
-  amber: "#96600c"
-  amber-tint: "rgb(150 96 12 / 11%)"
-  plum: "#7c4a86"
-  danger: "#b02a24"
-  danger-fill: "#b02a24"
-  danger-down: "#93231e"
-  focus: "rgb(51 70 196 / 42%)"
-  selection: "rgb(51 70 196 / 20%)"
-  disc-indigo: "#3346c4"
-  disc-green: "#1c7d66"
-  disc-slate: "#4d5a73"
-  disc-plum: "#7c4a86"
+  window: "#ececec"
+  sidebar: "#e3e3e3"
+  group: "#ffffff"
+  control: "#ffffff"
+  control-down: "#e3e3e3"
+  hover: "rgb(0 0 0 / 5%)"
+  label: "#1d1d1f"
+  label-2: "#636366"
+  label-3: "#6e6e73"
+  separator: "rgb(0 0 0 / 10%)"
+  separator-strong: "rgb(0 0 0 / 18%)"
+  accent: "#007aff"
+  on-accent: "#ffffff"
+  accent-tint: "rgb(0 122 255 / 12%)"
+  focus: "rgb(0 122 255 / 45%)"
+  selection: "rgb(0 122 255 / 22%)"
+  orange: "#b25000"
+  orange-tint: "rgb(255 149 0 / 16%)"
+  danger: "#d70015"
+  danger-fill: "#e0352b"
+  monogram-top: "#8e8e93"
+  monogram-bottom: "#6f6f74"
 typography:
   headline:
     fontFamily: "-apple-system, BlinkMacSystemFont, SF Pro Text, Helvetica Neue, sans-serif"
@@ -59,6 +53,11 @@ typography:
     fontSize: "13px"
     fontWeight: 600
     lineHeight: 1.38
+  button:
+    fontFamily: "-apple-system, BlinkMacSystemFont, SF Pro Text, Helvetica Neue, sans-serif"
+    fontSize: "13px"
+    fontWeight: 500
+    lineHeight: 1.38
   meta:
     fontFamily: "-apple-system, BlinkMacSystemFont, SF Pro Text, Helvetica Neue, sans-serif"
     fontSize: "12px"
@@ -84,97 +83,105 @@ spacing:
   "6": "32px"
 components:
   button-primary:
-    backgroundColor: "{colors.press}"
-    textColor: "{colors.on-press}"
-    typography: "{typography.body}"
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.on-accent}"
+    typography: "{typography.button}"
     rounded: "{rounded.sm}"
     padding: "0 12px"
     height: "26px"
-  button-primary-hover:
-    backgroundColor: "{colors.press-down}"
-  button-outline:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.ink}"
+  button-push:
+    backgroundColor: "{colors.control}"
+    textColor: "{colors.label}"
+    typography: "{typography.button}"
     rounded: "{rounded.sm}"
     padding: "0 12px"
     height: "26px"
-  button-outline-active:
-    backgroundColor: "{colors.well}"
+  button-push-active:
+    backgroundColor: "{colors.control-down}"
+  button-done:
+    backgroundColor: "{colors.control}"
+    textColor: "{colors.label}"
+    rounded: "{rounded.sm}"
+    padding: "0 8px"
+    height: "22px"
+  button-done-active:
+    backgroundColor: "{colors.control-down}"
   button-quiet:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-2}"
+    textColor: "{colors.label-2}"
+    typography: "{typography.button}"
     rounded: "{rounded.sm}"
     padding: "0 12px"
     height: "26px"
   button-quiet-hover:
-    backgroundColor: "{colors.press-tint}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.label}"
+  button-quiet-active:
+    backgroundColor: "{colors.control-down}"
   button-danger:
     backgroundColor: "{colors.danger-fill}"
-    textColor: "{colors.on-press}"
+    textColor: "#ffffff"
+    typography: "{typography.button}"
     rounded: "{rounded.sm}"
+    padding: "0 12px"
+    height: "26px"
+  button-sm:
     padding: "0 8px"
     height: "22px"
-  button-danger-hover:
-    backgroundColor: "{colors.danger-down}"
-  button-done:
-    backgroundColor: "{colors.sea-tint}"
-    textColor: "{colors.sea}"
-    typography: "{typography.body-strong}"
-    rounded: "{rounded.sm}"
-    padding: "0 8px"
-    height: "22px"
-  button-done-hover:
-    backgroundColor: "{colors.sea}"
-    textColor: "{colors.on-sea}"
+  group:
+    backgroundColor: "{colors.group}"
+    rounded: "{rounded.lg}"
   input:
-    backgroundColor: "{colors.sheet}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.group}"
+    textColor: "{colors.label}"
     rounded: "{rounded.sm}"
     padding: "0 8px"
     height: "26px"
-  card:
-    backgroundColor: "{colors.sheet}"
-    rounded: "{rounded.lg}"
-  list-row:
-    padding: "8px 12px"
-    height: "48px"
-  tab:
-    backgroundColor: "transparent"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.sm}"
-    padding: "0 8px"
-    height: "28px"
-  tab-selected:
-    backgroundColor: "{colors.press}"
-    textColor: "{colors.on-press}"
   tag-count:
-    backgroundColor: "{colors.press}"
-    textColor: "{colors.on-press}"
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.on-accent}"
     typography: "{typography.label}"
     rounded: "{rounded.pill}"
     padding: "0 6px"
     height: "17px"
   tag-due:
-    backgroundColor: "{colors.amber-tint}"
-    textColor: "{colors.amber}"
+    backgroundColor: "{colors.orange-tint}"
+    textColor: "{colors.orange}"
+    typography: "{typography.label}"
     rounded: "{rounded.pill}"
+    padding: "0 6px"
+    height: "17px"
+  sidebar-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.label}"
+    typography: "{typography.body}"
+    rounded: "{rounded.sm}"
+    padding: "0 8px"
+    height: "28px"
+  sidebar-row-selected:
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.on-accent}"
+  person-row:
+    padding: "8px 12px"
+    height: "48px"
   avatar:
     textColor: "#ffffff"
-    typography: "{typography.body-strong}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
     size: "28px"
   selection-bar:
-    backgroundColor: "{colors.press-tint}"
+    backgroundColor: "{colors.accent-tint}"
     rounded: "{rounded.lg}"
     padding: "8px 8px 8px 12px"
   banner:
-    backgroundColor: "{colors.amber-tint}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.orange-tint}"
+    textColor: "{colors.label}"
+    typography: "{typography.meta}"
     rounded: "{rounded.md}"
     padding: "8px 12px"
   caught-up:
-    backgroundColor: "{colors.sea-tint}"
-    textColor: "{colors.sea}"
+    backgroundColor: "{colors.group}"
+    textColor: "{colors.label-2}"
     rounded: "{rounded.lg}"
     padding: "12px"
 ---
@@ -183,157 +190,166 @@ components:
 
 ## Overview
 
-**Creative North Star: "Letterpress Stationery"**
+**Creative North Star: "Came With The Mac"**
 
-Friends is two inks printed on good card stock. Text is deep indigo ink rather than black, actions are one press-blue spot ink, "done" is sea green, and "missed" is amber. The ground is a cool fog stock (never cream), and content sits on white sheets laid on it. Colour is flat: no gradients, no glass, no glow.
+Friends looks like an app Apple shipped. It borrows System Settings: window grey, white inset groups, the system's label greys, and standard push buttons. Nothing is branded. A user should not be able to tell where macOS ends and Friends begins.
 
-It is a native Mac utility first. Type is the system face (SF Pro) at macOS control sizes, figures are tabular, and the layouts follow the Mac's own grammar: a menu bar dropdown that fills its window edge to edge, and a settings window with a source-list sidebar and inset grouped lists. Density is calm and fixed; one 48px row scale is shared by the dropdown and Preferences.
+There is one colour: the Mac's own accent, the one the user picked in System Settings > Appearance. It is blue unless they chose another. It marks the main action and what is selected. Orange marks a missed day. Red is kept for deleting and errors. Everything else is grey.
 
-The signature is the impression: push buttons press into the stock when clicked (an inset shadow and half a pixel down) instead of lighting up.
+The app is small and dense, at Mac control sizes. Type is the system face, 11 to 20px, with tabular figures. One 48px row and one 28px disc are shared by the dropdown and Preferences. Light and dark mode follow the Mac, with the same roles in both.
 
 **Key Characteristics:**
-- Cool fog stock, white sheets, indigo ink; dark mode keeps the same roles on charcoal stock.
-- One action ink (press blue); sea green only for done and caught up; amber for missed.
-- Flat colour, hairline (0.5px) dividers, one soft lift under sheets.
-- Buttons press in on click; nothing glows.
-- System type only, 11 to 20px, tabular figures everywhere.
+- Window grey, white groups with a hairline edge, label greys; dark mode keeps the same roles.
+- The Mac's accent is the only colour; orange for missed, red for delete and errors.
+- Push buttons darken when pressed, like the Mac's.
+- Contacts-style grey monogram discs, the same for everyone.
+- System type only, 11 to 20px, tabular figures.
 
 ## Colors
 
-Two working inks on a cool neutral stock, plus three small spot inks with fixed meanings. Every role has a dark-mode value in `src/styles.css`; components only use the role names.
+Neutral system greys, with the user's own accent as the one colour.
 
 ### Primary
-- **Press Blue** (press): the one action ink. Primary buttons, the selected sidebar tab, the count tag, checkbox and radio accents, the text caret, the focus ring and selection tint. **Press Blue Down** (press-down) is its hover and pressed state. **Press Tint** (press-tint) is the quiet hover wash and the selection bar ground.
+- **Mac Accent** (`-apple-system-control-accent`, fallback system blue): primary buttons, the selected sidebar row, the count tag, checkbox and radio fills, the caret, the focus ring and text selection. In WebKit it follows the Mac's accent setting, light and dark. Elsewhere it falls back to system blue (#007aff, dark #0a84ff).
+- **Accent Tint, Focus, Selection** (accent at 12%, 45% and 22%): the selection bar's fill, the 3px focus ring, and selected text. When `color-mix` is supported they are mixed from the live accent, so they follow the user's colour too.
+- **On Accent** (white): text on accent fills. On the selected sidebar row the count tag flips to white with accent text.
 
 ### Secondary
-- **Sea Green** (sea): done, and only done. The Done button (tint at rest, solid on hover and press) and the "You're all caught up" note. Done is sea green wherever it appears.
+- **Missed Orange** (light #b25000 / dark #ffa337): the meta line of an overdue person, and the text of the Due tag. Its tint (orange at 16-18%) fills the Due tag and the alert banner.
 
 ### Tertiary
-- **Amber** (amber): missed. The meta line of an overdue person, the Due tag on the People list, and (as amber-tint) the warning banner ground.
-- **Plum** (plum): a fourth ink, used only as an avatar tone.
+- **Delete Red** (text light #d70015 / dark #ff6961; fill light #e0352b / dark #d93a30): the delete button fill and error messages. Nothing else.
 
 ### Neutral
-- **Fog Stock** (stock): the ground of the dropdown and every Preferences pane.
-- **Sheet White** (sheet): grouped lists, form cards, inputs, outline buttons.
-- **Well** (well): the pressed state of outline and quiet buttons.
-- **Sidebar Fog** (sidebar): the Preferences source list, one step darker than the stock.
-- **Indigo Ink** (ink): all primary text.
-- **Secondary Ink** (ink-2): meta lines, descriptions, quiet buttons, field labels.
-- **Tertiary Ink** (ink-3): section labels, the sidebar wordmark, placeholders.
-- **Rule / Rule Strong** (rule, rule-strong): 0.5px row dividers; the stronger rule for the dropdown footer, sidebar edge, and input and outline-button strokes.
-
-### Avatar discs
-Four fixed tones (disc-indigo, disc-green, disc-slate, disc-plum), picked from a hash of the name so a person keeps their colour. White initial on top. These stay the same in light and dark mode.
-
-### Dark mode
-The same roles, re-inked: charcoal stock `#181a21`, sheet `#22252e`, well `#13151b`, sidebar `#1d2028`; ink `#e9ebf2` / `#b4b8c6` / `#9196a6`; press `#4a5bd4`; sea `#5fcbae` with dark `#0d2a23` text on it; amber `#e3b25c`; plum `#c99ad3`; danger `#ff6b61` for error text, with a darker `#c8322b` fill (hover `#ad2a24`) behind the white Delete label. Tints and rules switch to light-on-dark alpha. Full set in `src/styles.css` and the sidecar.
+- **Window Grey** (dark #1e1e1e): the ground of the dropdown and the Preferences pane.
+- **Sidebar Grey** (dark #282828): the Preferences source list.
+- **Group White** (dark #2a2a2a): inset groups, inputs and the caught-up note.
+- **Control White / Control Down** (dark #4a4a4c / #5c5c5f): push buttons at rest and pressed.
+- **Hover** (black 5% / white 7%): hover fill for quiet buttons.
+- **Label, Label 2, Label 3** (dark #e8e8ea / #a1a1a6 / #98989d): primary text; secondary text (meta lines, section labels, hints, quiet buttons); placeholders.
+- **Separator / Separator Strong** (black 10% / 18%; white in dark mode): hairlines between rows; the footer rule, sidebar edge, input stroke and scrollbar thumb.
+- **Monogram Grey** (gradient #8e8e93 to #6f6f74; dark #78787d to #5a5a5e): the avatar disc.
 
 ### Named Rules
-**The Missed Is Amber Rule.** A missed day is information, not failure: it is printed in amber, never red. Red (danger) is for destructive actions (Delete) and error messages only.
+**The One Colour Rule.** The accent is the only colour. It means "act here" or "selected". Do not add a brand colour or a second action colour.
 
-**The One Action Ink Rule.** Press blue is the only colour that means "act here" or "selected". Do not introduce a second action colour.
+**The Missed Is Orange Rule.** A missed day is shown in orange, never red. It is information, not failure.
 
-**The Done Is Sea Rule.** Sea green marks completion and nothing else; every Done button uses it.
+**The Red Means Delete Rule.** Red is only for deleting and for error messages.
+
+**The Follow The Mac Rule.** Colour comes from the Mac. Use the accent token, never a fixed blue, so the user's own accent shows through.
 
 ## Typography
 
-**Body Font:** the system face (`-apple-system`, SF Pro Text, with Helvetica Neue and sans-serif fallback). No web fonts; the app's security policy forbids them.
+**Display Font:** none
+**Body Font:** the system face (-apple-system, BlinkMacSystemFont, SF Pro Text, with Helvetica Neue)
 
-**Character:** Sharp, compact Mac UI type with tabular figures, so dates and counts line up. Hierarchy comes from weight and ink, not size jumps.
+**Character:** One face at Mac control sizes. Hierarchy comes from weight and grey, not from size jumps.
 
 ### Hierarchy
-- **Headline** (700, 20px, -0.015em): Preferences pane titles ("People", "Blocked dates", "Settings").
+- **Headline** (700, 20px, -0.015em): Preferences pane titles.
 - **Title** (600, 15px): the bold first line of an empty state.
-- **Wordmark** (700, 13px, -0.005em): "Friends" in the dropdown header. In the sidebar the same wordmark drops to 11px 600 in tertiary ink.
-- **Body** (400, 13px, line-height 1.38): the base size for everything, including buttons (500) and tabs. Pane descriptions cap at 60ch.
-- **Body Strong** (600, 13px): person names, the selection count, Done.
-- **Meta** (400, 12px): the line under a name, field labels (500), hints, choice descriptions, small buttons, errors.
-- **Label** (600, 11px, 0.01em, sentence case): section labels over lists ("Reach out now", "Coming up", "Reminders") and tags.
+- **Wordmark** (700, 13px, -0.005em): "Friends" in the dropdown header. In the sidebar it is 11px, 600, in Label 2.
+- **Body** (400, 13px, 1.38): base text, sidebar rows and footer buttons. Pane intros stop at 60ch.
+- **Body Strong** (600, 13px): person names, the selection count.
+- **Button** (500, 13px): push buttons, choice titles, the selected sidebar row.
+- **Meta** (400, 12px): meta lines, field labels (500), hints, errors, small buttons, the dropdown date.
+- **Label** (600, 11px, 0.01em, sentence case): section labels above groups, and tags.
 
 ### Named Rules
-**The Tabular Rule.** Figures are tabular across the whole app (`font-variant-numeric: tabular-nums` on the root).
+**The Tabular Rule.** Figures are tabular everywhere (`font-variant-numeric: tabular-nums` on the root).
+
+**The System Face Rule.** The system face is the only face. Load no web fonts.
 
 ## Layout
 
-Fixed native windows, no responsive breakpoints. The dropdown is 360 x 520pt and fills its window edge to edge: a header row (wordmark left, today's date right in secondary ink), a scrolling body, and a footer of menu-style text buttons on a strong hairline. Preferences is a two-column grid: a 168px sidebar and a scrolling pane padded 24px (32px at the bottom).
+A 4px base: 4, 8, 12, 16, 24 and 32px. The dropdown fills its window edge to edge, so the native window's corners and shadow are the only frame. Its header is 12px 16px 8px, its body 4px 12px 12px, with 16px between sections, and a footer of quiet text buttons above a strong hairline. "Reach out now" sits in a white group. "Coming up" is a plain list on the window grey.
 
-Spacing runs on a 4px base: 4, 8, 12, 16, 24, 32. Rows are 48px tall with 8px by 12px padding and a 12px gap between avatar, text and actions. Sections in the dropdown sit 16px apart; setting groups 32px apart; a pane header sits 24px above its content.
+Preferences is a two-column grid: a 168px source-list sidebar and a pane padded 24px (32px at the bottom). Pane headers sit 24px above the content. Groups are 24px apart; setting groups are 32px apart. Form cards are padded 16px.
 
+Every list row is at least 48px tall, padded 8px 12px, with a 12px gap and a 28px disc. Rows are split by 0.5px hairlines. Sidebar rows are 28px tall with 1px between them.
+
+### Named Rules
 **The One Row Rule.** Every list row in the dropdown and in Preferences uses the same 48px row, 28px disc and 12px gap.
 
 ## Elevation & Depth
 
-Mostly flat, with two shadows that both read as paper. Sheets get a hairline **lift** so they sit just above the stock. Push buttons get the **press-in** impression while held. Everything else (the "Coming up" list, the sidebar, tints) is printed directly on the stock with no shadow.
+Flat, like System Settings. Groups are not lifted. They are edged by a 0.5px hairline ring. Push buttons carry the Mac's small edge and drop. Nothing glows or floats.
 
 ### Shadow Vocabulary
-- **Lift** (`0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%)`; dark adds a 0.5px white hairline): cards, grouped lists, choice lists, primary, outline and danger buttons.
-- **Press-in** (`inset 0 1px 2px rgb(10 14 30 / 28%)`, with `translateY(0.5px)`): any push button while pressed.
-- **Field inset** (`inset 0 0 0 0.5px rule-strong, inset 0 1px 1px rgb(10 14 30 / 6%)`): text fields and selects at rest.
+- **Group Edge** (`box-shadow: 0 0 0 0.5px rgb(0 0 0 / 7%)`; dark `rgb(255 255 255 / 6%)`): the hairline around every inset group.
+- **Raise** (`box-shadow: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1px rgb(0 0 0 / 14%)`; dark `0 0 0 0.5px rgb(255 255 255 / 8%), 0 0.5px 1px rgb(0 0 0 / 40%)`): push buttons only.
+- **Focus** (`outline: 3px solid` focus, offset 1px; inputs use a 1px accent ring inside plus a 3px focus ring outside): every focusable control.
 
 ### Named Rules
-**The Impression Rule.** Buttons respond to a press by sinking into the stock, never by glowing, scaling up, or casting a bigger shadow.
+**The Darken On Press Rule.** Pressed buttons darken, as the Mac's do. Grey buttons switch to Control Down. Accent and red buttons use `filter: brightness(0.86)`. They do not sink, move, scale or glow.
 
 ## Shapes
 
-Gently rounded Mac corners: 6px on controls (buttons, inputs, tabs), 8px on the banner, 10px on sheets (cards, grouped lists, the selection bar, the caught-up note). Tags and scrollbar thumbs are full pills; avatars are full circles. Dividers are 0.5px hairlines. The dropdown itself has no radius: the native window supplies the square frame.
+Gently rounded Mac corners: 6px for buttons, inputs and sidebar rows; 8px for the banner; 10px for groups and the selection bar. Discs and tags are fully round (999px). Lines are 0.5px hairlines. Groups have no borders; their edge is the hairline ring.
 
 ## Components
 
 ### Buttons
-Mac push buttons that press into the stock.
-- **Shape:** 6px corners, 26px tall with 12px side padding; the small size is 22px tall, 8px padding, 12px text.
-- **Primary:** press blue with white text and the lift; press-down on hover and press.
-- **Outline:** white sheet with a 0.5px strong-rule stroke and the lift; the well colour when pressed.
-- **Quiet:** no ground, secondary ink; press-tint wash on hover, well when pressed. In the dropdown footer, quiet buttons use full ink at weight 400 to read like menu items.
-- **Danger:** red with white text, used only for the confirming Delete.
-- **Done:** sea-tint ground, sea text, weight 600; solid sea with on-sea text on hover and press.
-- **States:** pressed buttons get the press-in shadow and move down 0.5px (120ms, `cubic-bezier(0.16, 1, 0.3, 1)`); disabled is 40% opacity. Focus is the shared 3px focus ring.
+Standard macOS push buttons.
+- **Shape:** 6px corners, 26px tall, 12px sides; small buttons are 22px tall, 8px sides, 12px text.
+- **Primary:** accent fill, white text, with Raise. Pressed: brightness 0.86.
+- **Push (outline):** Control White, Label text, with Raise. Pressed: Control Down.
+- **Done:** a plain small push button. No colour of its own; it is the list's only action.
+- **Quiet:** no fill, Label 2 text. Hover: Hover fill and Label text. Pressed: Control Down. Used in the footer (Label, 400) and for cancel and edit.
+- **Danger:** red fill, white text, with Raise. Pressed: brightness 0.86. Only for deleting.
+- **Sign in with Apple:** black on light, white on dark, per Apple's rules.
+- **Disabled:** 40% opacity. State changes are instant, as on the Mac: no fades.
 
 ### Tags
-- **Count tag:** an 11px pill in press blue with white text (the due count on the People tab). Inverts to white with blue text on the selected tab.
-- **Due tag:** the same pill in amber-tint with amber text, after a person's name in the People list.
+- **Count:** pill, 17px line, 11px 600, accent fill with white text. Flips to white with accent text on the selected sidebar row.
+- **Due:** the same pill in Orange Tint with orange text, beside a person's name.
 
 ### Cards / Containers
 - **Corner Style:** 10px.
-- **Background:** sheet white on the stock.
-- **Shadow Strategy:** the lift only.
-- **Border:** none; rows inside are split by 0.5px rule hairlines.
-- **Internal Padding:** 16px for form cards; rows carry their own padding.
+- **Background:** Group White on the window grey.
+- **Shadow Strategy:** Group Edge only (see Elevation & Depth).
+- **Border:** none; rows inside are split by 0.5px separators.
+- **Internal Padding:** rows 8px 12px; form cards 16px; choices 12px 16px.
 
 ### Inputs / Fields
-- **Style:** 26px tall, sheet ground, 6px corners, field inset stroke; the label sits above in 12px secondary ink at weight 500. Placeholders in tertiary ink. Checkboxes and radios are native, tinted press blue.
-- **Focus:** a 1px press-blue inner stroke plus a 3px focus halo.
-- **Error:** a 12px danger-coloured line under the form or row.
+- **Style:** Group White, 26px tall, 6px corners, a 0.5px inset Separator Strong stroke. Placeholders in Label 3. Field labels sit 4px above in 12px 500 Label 2.
+- **Focus:** a 1px accent ring inside and a 3px focus ring outside.
+- **Checkboxes and radios:** native and untinted, so the Mac draws them in its own accent.
+- **Error:** 12px red text 4px below.
 
 ### Navigation
-The Preferences sidebar is a Mac source list on sidebar fog: 28px tabs with 6px corners in ink, a press-tint wash on hover, and solid press blue with white text (weight 500) when selected. The wordmark sits above it in small tertiary ink.
+The Preferences source list: Sidebar Grey, a strong hairline on its right edge. Rows are 28px, 13px Label, with no hover fill (like System Settings). Selected: accent fill, white text, 500.
 
 ### Person Row
-The core component: a 28px avatar disc, a name in body strong (ellipsised), a 12px meta line in secondary ink (amber when missed), and trailing small buttons. In the dropdown, "Reach out now" rows sit on a white sheet; "Coming up" rows are printed straight on the stock.
+A 48px row: grey disc, name in Body Strong with an ellipsis, a 12px meta line in Label 2 (orange when overdue), and a Done button.
+
+### Avatar
+A Contacts-style monogram: a 28px round disc in the Monogram gradient, the person's initial in white, 13px 500. The same grey for everyone.
 
 ### Selection Bar
-A press-tint strip with 10px corners above the People list: the count and the way out on the left, the destructive action alone at the far right. Delete is two steps: an outline "Delete selected…" first, then a red Delete beside Keep.
+An Accent Tint strip with 10px corners above the People list. The count and the way out sit on the left; delete sits alone at the far right.
 
 ### Status Notes
-- **Banner:** amber-tint ground with ink text and 8px corners, for a damaged data file.
-- **Caught up:** sea-tint ground with sea text, centred, 600 weight.
-- **Empty state:** centred secondary ink with a 15px title line, on the stock or in a card.
+- **Banner:** Orange Tint with Label text, 12px, 8px corners, for alerts.
+- **Caught up:** a plain group in Label 2, 500, centred, padded 12px.
+- **Empty state:** centred Label 2 text with a 15px 600 title in Label.
 
 ## Do's and Don'ts
 
 ### Do:
 - **Do** use the role tokens in `src/styles.css` for every colour, size, radius and gap, so light and dark mode both follow.
+- **Do** use the accent token for every primary action and selected state, so the user's Mac accent shows.
 - **Do** keep every list row at 48px with a 28px disc, in both windows.
-- **Do** use press blue for every primary action and selected state, and nothing else.
-- **Do** print Done in sea green wherever it appears.
-- **Do** show pressed buttons with the press-in shadow and a 0.5px drop.
-- **Do** use 0.5px hairlines between rows instead of borders around them.
-- **Do** keep the 3px focus ring visible on every control, and let reduced motion turn transitions off.
+- **Do** show pressed buttons by darkening them: Control Down for grey buttons, brightness 0.86 for accent and red.
+- **Do** edge groups with the 0.5px Group Edge, and split rows with 0.5px hairlines.
+- **Do** keep the 3px focus ring visible on every control, and keep state changes instant.
 
 ### Don't:
-- **Don't** use red for a missed day; missed is amber.
+- **Don't** add a brand colour or a second action colour beside the accent.
+- **Don't** hard-code a blue; use the accent token.
+- **Don't** use red for a missed day; missed is orange.
 - **Don't** use red for anything but deleting and error messages.
-- **Don't** add gradients, glass, blur or glows; colour is flat.
-- **Don't** use cream or warm paper for the stock; it is cool fog.
+- **Don't** give Done, avatars or the caught-up note a colour of their own.
+- **Don't** make buttons sink, move or glow when pressed.
 - **Don't** load web fonts; the system face is the only face.
-- **Don't** add a second action colour beside press blue.

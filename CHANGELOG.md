@@ -19,6 +19,8 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 
 - Friends now also has a Dock icon. Click it to open Preferences; the menu bar icon works as
   before.
+- A calmer look that matches the Mac's own apps, like System Settings: neutral greys, and one
+  colour, your Mac's accent colour (System Settings → Appearance). Missed days are still orange.
 
 ## [0.1.2] - 2026-11-21
 

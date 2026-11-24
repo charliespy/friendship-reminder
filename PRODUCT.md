@@ -62,6 +62,8 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 
 - The name is **Friends**. Plain, warm, short sentences ("Reach out now", "You're all caught up.").
 - No guilt or gamification: no streaks, scores, or red alarm states for a missed day.
+- Looks like it came with the Mac: System Settings' greys, groups and controls, with the Mac's own
+  accent colour as the only colour. No custom brand palette.
 
 ## Evidence on Hand
 
