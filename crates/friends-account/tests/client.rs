@@ -139,10 +139,9 @@ fn the_browser_comes_back_with_a_code_or_a_reason() {
         parse_callback("/auth/callback?error=server_error"),
         Callback::Failed("server_error".into())
     );
-    assert_eq!(
-        parse_callback("/auth/callback"),
-        Callback::Failed("no sign-in code came back".into())
-    );
+    // No answer at all (fetched ahead of time, a reload): ignored, so the real answer can still come.
+    assert_eq!(parse_callback("/auth/callback"), Callback::Other);
+    assert_eq!(parse_callback("/auth/callback?code="), Callback::Other);
     assert_eq!(parse_callback("/favicon.ico"), Callback::Other);
     // A stray % is kept, not an error.
     assert_eq!(

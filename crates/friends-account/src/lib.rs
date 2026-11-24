@@ -370,10 +370,6 @@ fn parse_session(body: &str, now: i64) -> Option<Session> {
     })
 }
 
-/// Who is signed in, and the rules for changing it. Every change bumps `generation`, so work that
-/// started from an older state (a refresh at launch that finishes after the user signed in or out) can
-/// tell, and its result is dropped. Each change is saved with the given `save` function (the Keychain)
-/// together with the change in memory, so the two never disagree.
 /// What to do after [`AccountState::start_restore`].
 #[derive(Debug, PartialEq, Eq)]
 pub enum Restore {
@@ -385,6 +381,10 @@ pub enum Restore {
     End(Session),
 }
 
+/// Who is signed in, and the rules for changing it. Every change bumps `generation`, so work that
+/// started from an older state (a refresh at launch that finishes after the user signed in or out) can
+/// tell, and its result is dropped. Each change is saved with the given `save` function (the Keychain)
+/// together with the change in memory, so the two never disagree.
 #[derive(Debug, Default)]
 pub struct AccountState {
     generation: u64,
@@ -632,8 +632,10 @@ pub fn parse_callback(target: &str) -> Callback {
     if let Some(code) = param("code").filter(|c| !c.is_empty()) {
         return Callback::Code(code);
     }
-    let reason = param("error_description")
-        .or_else(|| param("error"))
-        .unwrap_or_else(|| "no sign-in code came back".to_string());
-    Callback::Failed(reason)
+    // Only an answer that says it failed ends the sign-in; anything else (a browser fetching the page
+    // ahead of time, a reload without its query) is ignored, and the real answer can still come.
+    match param("error") {
+        Some(error) => Callback::Failed(param("error_description").unwrap_or(error)),
+        None => Callback::Other,
+    }
 }

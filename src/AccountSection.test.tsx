@@ -115,6 +115,15 @@ describe("AccountSection", () => {
     expect(screen.getByRole("alert").textContent).toBe("Friends isn't answering.");
   });
 
+  it("cancels a waiting sign-in when Preferences closes", async () => {
+    await open({ status: "signedOut", warning: null });
+    signInWithApple.mockReturnValue(new Promise(() => {}));
+    cancelSignIn.mockResolvedValue({ status: "signedOut", warning: null });
+    await act(async () => fireEvent.click(signInButton()));
+    cleanup();
+    expect(cancelSignIn).toHaveBeenCalledWith(signInWithApple.mock.calls[0]?.[0]);
+  });
+
   it("shows a warning about the sign-in", async () => {
     await open({ status: "signedIn", email: null, warning: "Couldn't save your sign-in in the Keychain." });
     expect(screen.getByText(/Couldn't save your sign-in/)).toBeTruthy();

@@ -19,6 +19,15 @@ export function AccountSection() {
   const action = useAction();
   // The sign-in waiting for the browser, where it happens; Cancel names it.
   const [attempt, setAttempt] = useState<string | null>(null);
+  // Closing Preferences cancels a sign-in still waiting: with the window gone there'd be no Cancel,
+  // and the sign-in could finish out of sight.
+  const waiting = useRef<string | null>(null);
+  useEffect(
+    () => () => {
+      if (waiting.current) api.cancelSignIn(waiting.current).catch(() => {});
+    },
+    [],
+  );
 
   useEffect(() => {
     const o = order.current;
@@ -47,11 +56,13 @@ export function AccountSection() {
 
   const signIn = async () => {
     const id = crypto.randomUUID();
+    waiting.current = id;
     setAttempt(id);
     setCancelError(null);
     try {
       await run(() => api.signInWithApple(id));
     } finally {
+      waiting.current = null;
       setAttempt(null);
     }
   };
