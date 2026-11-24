@@ -1157,6 +1157,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
+ "tiny_http",
 ]
 
 [[package]]

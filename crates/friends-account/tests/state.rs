@@ -82,13 +82,12 @@ fn a_sign_in_during_the_launch_refresh_wins() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
     let g = state.start_restore(Ok(Some(session("old")))).unwrap();
-    let (kept, saved) = state.signed_in(session("new"), true, keychain.save());
-    assert!(kept);
-    saved.unwrap();
-    // The launch refresh comes back late, either way: dropped.
-    state
-        .finish_restore(g, Ok(session("refreshed")), keychain.save())
-        .unwrap();
+    state.signed_in(session("new"), keychain.save()).unwrap();
+    // The launch refresh comes back late, either way: dropped, and a fresh one is handed back to end.
+    assert_eq!(
+        state.finish_restore(g, Ok(session("refreshed")), keychain.save()),
+        Ok(Some(session("refreshed")))
+    );
     state
         .finish_restore(g, Err(AuthError::Rejected("gone".into())), keychain.save())
         .unwrap();
@@ -102,19 +101,11 @@ fn a_sign_out_during_the_launch_refresh_wins() {
     let mut state = AccountState::default();
     let g = state.start_restore(Ok(Some(session("old")))).unwrap();
     assert_eq!(state.sign_out(keychain.save()), Ok(Some(session("old"))));
-    state
-        .finish_restore(g, Ok(session("refreshed")), keychain.save())
-        .unwrap();
-    assert_eq!(state.session(), None);
-    assert_eq!(*keychain.held.borrow(), None);
-}
-
-#[test]
-fn a_cancelled_sign_in_is_dropped() {
-    let keychain = Keychain::default();
-    let mut state = AccountState::default();
-    let (kept, _) = state.signed_in(session("new"), false, keychain.save());
-    assert!(!kept);
+    // The refresh replaced the tokens the sign-out ended the session with, so it comes back to end.
+    assert_eq!(
+        state.finish_restore(g, Ok(session("refreshed")), keychain.save()),
+        Ok(Some(session("refreshed")))
+    );
     assert_eq!(state.session(), None);
     assert_eq!(*keychain.held.borrow(), None);
 }
@@ -126,9 +117,7 @@ fn a_keychain_that_wont_save_keeps_the_sign_in_with_a_warning() {
         ..Keychain::default()
     };
     let mut state = AccountState::default();
-    let (kept, saved) = state.signed_in(session("new"), true, keychain.save());
-    assert!(kept);
-    assert!(saved.is_err());
+    assert!(state.signed_in(session("new"), keychain.save()).is_err());
     assert_eq!(
         state.view(),
         AccountView::SignedIn {
@@ -142,7 +131,7 @@ fn a_keychain_that_wont_save_keeps_the_sign_in_with_a_warning() {
 fn signing_out_only_happens_once_the_keychain_lets_go() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    let _ = state.signed_in(session("a"), true, keychain.save());
+    state.signed_in(session("a"), keychain.save()).unwrap();
     let broken = Keychain {
         broken: true,
         ..Keychain::default()
@@ -167,6 +156,21 @@ fn an_unreadable_keychain_says_so_instead_of_looking_signed_out() {
 }
 
 #[test]
+fn an_unreadable_keychain_after_signing_in_is_not_a_warning() {
+    let keychain = Keychain::default();
+    let mut state = AccountState::default();
+    state.signed_in(session("new"), keychain.save()).unwrap();
+    assert_eq!(state.start_restore(Err("locked".into())), None);
+    assert_eq!(
+        state.view(),
+        AccountView::SignedIn {
+            email: Some("ana@example.com".into()),
+            warning: None,
+        }
+    );
+}
+
+#[test]
 fn env_files_are_read_with_export_quotes_and_comments() {
     let text = "# settings\nexport FRIENDS_SUPABASE_URL='https://x.supabase.co' # dev\n\
                 FRIENDS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_1 # a comment\nOTHER=1\n";
@@ -180,4 +184,9 @@ fn env_files_are_read_with_export_quotes_and_comments() {
     );
     assert_eq!(env_file_value("KEY=\"a b\"", "KEY").as_deref(), Some("a b"));
     assert_eq!(Config::from_env_file("FRIENDS_SUPABASE_URL=\n"), None);
+    // The last one wins, as in the shell.
+    assert_eq!(
+        env_file_value("KEY=a\nKEY=b\n", "KEY").as_deref(),
+        Some("b")
+    );
 }

@@ -78,9 +78,10 @@ impl Config {
 }
 
 /// The value of `key` in a `.env` file: `KEY=value`, optionally after `export`, optionally quoted, with
-/// `#` comments on their own line or after an unquoted value.
+/// `#` comments on their own line or after an unquoted value. The last one wins, as when the shell
+/// reads the file (`. ./.env.local`).
 pub fn env_file_value(text: &str, key: &str) -> Option<String> {
-    text.lines().find_map(|line| {
+    text.lines().rev().find_map(|line| {
         let line = line.trim();
         let line = line.strip_prefix("export ").unwrap_or(line);
         let (k, v) = line.split_once('=')?;
@@ -399,13 +400,14 @@ impl AccountState {
     /// there is nothing to refresh.
     pub fn start_restore(&mut self, saved: Result<Option<Session>, String>) -> Option<u64> {
         match saved {
+            // Signed in meanwhile: what the Keychain held no longer matters.
+            _ if self.session.is_some() => None,
             Err(_) => {
                 self.warning = Some(NOT_READ.to_string());
                 self.generation += 1;
                 None
             }
             Ok(None) => None,
-            Ok(Some(_)) if self.session.is_some() => None,
             Ok(Some(session)) => {
                 self.session = Some(session);
                 self.generation += 1;
@@ -416,36 +418,33 @@ impl AccountState {
 
     /// The refresh started by [`AccountState::start_restore`] came back. A fresh session replaces the
     /// saved one; a dead one signs out; anything else (offline, a server error) keeps the saved one to
-    /// try again at the next launch. Dropped if the account changed meanwhile.
+    /// try again at the next launch. Dropped if the account changed meanwhile (a sign-in or a
+    /// sign-out); a fresh session dropped that way comes back as `Ok(Some(_))`, to end on the server,
+    /// since the refresh replaced the tokens a sign-out would have ended it with.
     pub fn finish_restore(
         &mut self,
         generation: u64,
         refreshed: Result<Session, AuthError>,
         save: impl FnOnce(Option<&Session>) -> Result<(), String>,
-    ) -> Result<(), String> {
+    ) -> Result<Option<Session>, String> {
         if generation != self.generation {
-            return Ok(());
+            return Ok(refreshed.ok());
         }
         match refreshed {
-            Ok(fresh) => self.keep(Some(fresh), save),
-            Err(e) if e.session_is_dead() => self.sign_out(save).map(|_| ()),
-            Err(_) => Ok(()),
+            Ok(fresh) => self.keep(Some(fresh), save).map(|_| None),
+            Err(e) if e.session_is_dead() => self.sign_out(save).map(|_| None),
+            Err(_) => Ok(None),
         }
     }
 
-    /// A sign-in finished. `still_wanted` is checked in the same step as the change, so a sign-in
-    /// cancelled at the last moment never sticks; returns `false` when it was dropped. If the Keychain
-    /// won't save it, the session is kept for now with a warning.
+    /// A sign-in finished. If the Keychain won't save it, the session is kept for now with a warning
+    /// (and the error comes back).
     pub fn signed_in(
         &mut self,
         session: Session,
-        still_wanted: bool,
         save: impl FnOnce(Option<&Session>) -> Result<(), String>,
-    ) -> (bool, Result<(), String>) {
-        if !still_wanted {
-            return (false, Ok(()));
-        }
-        (true, self.keep(Some(session), save))
+    ) -> Result<(), String> {
+        self.keep(Some(session), save)
     }
 
     /// Signs out, but only once the Keychain has let go of the session: one left behind would sign the

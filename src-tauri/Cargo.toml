@@ -16,6 +16,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 friends-core = { path = "../crates/friends-core" }
 friends-account = { path = "../crates/friends-account" }
+# The one-off address the browser comes back to after Sign in with Apple.
+tiny_http = "0.12"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 chrono = { workspace = true, features = ["clock"] }
 serde_json.workspace = true

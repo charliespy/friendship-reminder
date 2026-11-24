@@ -93,9 +93,9 @@ export const api = {
    * Opens Sign in with Apple in the browser and resolves once it comes back (or is cancelled, which
    * isn't an error: the account just stays signed out).
    */
-  signInWithApple: () => invoke<Account>("sign_in_with_apple"),
-  /** Stops a sign-in that is waiting for the browser. */
-  cancelSignIn: () => invoke<Account>("cancel_sign_in"),
+  signInWithApple: (attempt: string) => invoke<Account>("sign_in_with_apple", { attempt }),
+  /** Stops sign-in `attempt`, even one that hasn't started waiting for the browser yet. */
+  cancelSignIn: (attempt: string) => invoke<Account>("cancel_sign_in", { attempt }),
   signOut: () => invoke<Account>("sign_out"),
   onAccountChanged: (f: (a: Account) => void): Promise<UnlistenFn> =>
     listen<Account>(ACCOUNT_CHANGED, (e) => f(e.payload)),

@@ -7,8 +7,8 @@ export function AccountSection() {
   const [account, setAccount] = useState<Account | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const action = useAction();
-  // Waiting for the browser, where the sign-in happens.
-  const [inBrowser, setInBrowser] = useState(false);
+  // The sign-in waiting for the browser, where it happens; Cancel names it.
+  const [attempt, setAttempt] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -39,11 +39,12 @@ export function AccountSection() {
   const run = (f: () => Promise<Account>) => action.run(async () => setAccount(await f()));
 
   const signIn = async () => {
-    setInBrowser(true);
+    const id = crypto.randomUUID();
+    setAttempt(id);
     try {
-      await run(api.signInWithApple);
+      await run(() => api.signInWithApple(id));
     } finally {
-      setInBrowser(false);
+      setAttempt(null);
     }
   };
 
@@ -66,11 +67,11 @@ export function AccountSection() {
               Sign out
             </button>
           </div>
-        ) : inBrowser ? (
+        ) : attempt ? (
           <div className="account-row">
             <span className="choice-text">Finish signing in with Apple in your browser.</span>
             {/* Cancelling makes the waiting sign-in stop, which ends the busy state. */}
-            <button className="btn btn-outline" onClick={() => void api.cancelSignIn()}>
+            <button className="btn btn-outline" onClick={() => void api.cancelSignIn(attempt)}>
               Cancel
             </button>
           </div>

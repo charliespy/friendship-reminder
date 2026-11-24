@@ -3,18 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Account } from "./api";
 
 const getAccount = vi.fn<() => Promise<Account>>();
-const signInWithApple = vi.fn<() => Promise<Account>>();
+const signInWithApple = vi.fn<(attempt: string) => Promise<Account>>();
 const signOut = vi.fn<() => Promise<Account>>();
-const cancelSignIn = vi.fn<() => Promise<Account>>();
+const cancelSignIn = vi.fn<(attempt: string) => Promise<Account>>();
 let pushAccount: (a: Account) => void = () => {};
 
 vi.mock("./api", async (orig) => ({
   ...(await orig<typeof import("./api")>()),
   api: {
     getAccount: () => getAccount(),
-    signInWithApple: () => signInWithApple(),
+    signInWithApple: (attempt: string) => signInWithApple(attempt),
     signOut: () => signOut(),
-    cancelSignIn: () => cancelSignIn(),
+    cancelSignIn: (attempt: string) => cancelSignIn(attempt),
     onAccountChanged: (f: (a: Account) => void) => {
       pushAccount = f;
       return Promise.resolve(() => {});
@@ -59,7 +59,8 @@ describe("AccountSection", () => {
     await act(async () => fireEvent.click(signInButton()));
     expect(screen.getByText(/Finish signing in with Apple in your browser/)).toBeTruthy();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
-    expect(cancelSignIn).toHaveBeenCalled();
+    // Cancel names the sign-in it stops.
+    expect(cancelSignIn).toHaveBeenCalledWith(signInWithApple.mock.calls[0]?.[0]);
     expect((signInButton() as HTMLButtonElement).disabled).toBe(false);
   });
 
