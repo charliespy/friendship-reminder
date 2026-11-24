@@ -223,6 +223,14 @@ pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<AccountVi
     .await
 }
 
+/// Preferences closed: stops a sign-in still waiting for the browser, since its Cancel is gone and it
+/// would otherwise finish out of sight.
+pub fn cancel_waiting(app: &AppHandle) {
+    if let Some(server) = app.state::<Account>().waiting().cancel_all() {
+        server.unblock();
+    }
+}
+
 fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
     let account = app.state::<Account>();
     let client = account.client()?;
@@ -265,7 +273,11 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
     let session = match client.exchange_code(&code, &verifier, now()) {
         Ok(s) => s,
         Err(e) => {
-            account.waiting().finish(attempt);
+            // Cancelled meanwhile: the failure doesn't matter any more.
+            if !account.waiting().finish(attempt) {
+                answer(request, 200, CANCELLED_PAGE);
+                return Ok(account.view());
+            }
             answer(request, 200, FAILED_PAGE);
             return Err(e.to_string());
         }

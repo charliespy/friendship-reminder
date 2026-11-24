@@ -19,15 +19,6 @@ export function AccountSection() {
   const action = useAction();
   // The sign-in waiting for the browser, where it happens; Cancel names it.
   const [attempt, setAttempt] = useState<string | null>(null);
-  // Closing Preferences cancels a sign-in still waiting: with the window gone there'd be no Cancel,
-  // and the sign-in could finish out of sight.
-  const waiting = useRef<string | null>(null);
-  useEffect(
-    () => () => {
-      if (waiting.current) api.cancelSignIn(waiting.current).catch(() => {});
-    },
-    [],
-  );
 
   useEffect(() => {
     const o = order.current;
@@ -56,13 +47,11 @@ export function AccountSection() {
 
   const signIn = async () => {
     const id = crypto.randomUUID();
-    waiting.current = id;
     setAttempt(id);
     setCancelError(null);
     try {
       await run(() => api.signInWithApple(id));
     } finally {
-      waiting.current = null;
       setAttempt(null);
     }
   };
@@ -71,7 +60,18 @@ export function AccountSection() {
     <div className="setting-group">
       <h3 className="section-label">Account</h3>
       <div className="choice-list">
-        {account?.status === "signedIn" ? (
+        {attempt ? (
+          <div className="account-row">
+            <span className="choice-text">Finish signing in with Apple in your browser.</span>
+            {/* Cancelling makes the waiting sign-in stop, which ends the busy state. */}
+            <button
+              className="btn btn-outline"
+              onClick={() => api.cancelSignIn(attempt).catch((e) => setCancelError(errorMessage(e)))}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : account?.status === "signedIn" ? (
           <div className="account-row">
             <span>
               <span className="choice-title">Signed in with Apple</span>
@@ -84,17 +84,6 @@ export function AccountSection() {
             </span>
             <button className="btn btn-outline" disabled={action.busy} onClick={() => run(api.signOut)}>
               Sign out
-            </button>
-          </div>
-        ) : attempt ? (
-          <div className="account-row">
-            <span className="choice-text">Finish signing in with Apple in your browser.</span>
-            {/* Cancelling makes the waiting sign-in stop, which ends the busy state. */}
-            <button
-              className="btn btn-outline"
-              onClick={() => api.cancelSignIn(attempt).catch((e) => setCancelError(errorMessage(e)))}
-            >
-              Cancel
             </button>
           </div>
         ) : (

@@ -564,6 +564,12 @@ impl<T> Attempts<T> {
         None
     }
 
+    /// Cancels whichever attempt is waiting (Preferences, which has its Cancel, closed): returns how
+    /// to wake it.
+    pub fn cancel_all(&mut self) -> Option<T> {
+        self.current.take().map(|(_, w)| w)
+    }
+
     pub fn is_waiting(&self, attempt: &str) -> bool {
         self.current.as_ref().is_some_and(|(a, _)| a == attempt)
     }

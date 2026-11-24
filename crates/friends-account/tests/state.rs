@@ -282,3 +282,12 @@ fn a_dead_session_the_keychain_wont_let_go_still_signs_out_with_a_warning() {
         }
     );
 }
+
+#[test]
+fn closing_preferences_cancels_the_waiting_sign_in() {
+    let mut attempts = Attempts::default();
+    assert_eq!(attempts.cancel_all(), None);
+    attempts.start("a", 1);
+    assert_eq!(attempts.cancel_all(), Some(1));
+    assert!(!attempts.finish("a"));
+}

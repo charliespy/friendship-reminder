@@ -192,6 +192,12 @@ fn show_preferences(app: &AppHandle) -> tauri::Result<()> {
         .resizable(true)
         .center()
         .build()?;
+    let closing = app.clone();
+    w.on_window_event(move |e| {
+        if let WindowEvent::Destroyed = e {
+            account::cancel_waiting(&closing);
+        }
+    });
     w.set_focus()?;
     Ok(())
 }
