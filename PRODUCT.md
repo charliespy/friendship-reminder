@@ -28,8 +28,9 @@ attention.
 
 ## Positioning
 
-A personal reminder that lives in the menu bar, keeps everything on the Mac (no account, no sync,
-no tracking), and is open source. It is not a contacts manager or a CRM: there are no notes,
+A personal reminder that lives in the menu bar, keeps everything on the Mac with no tracking, and
+is open source. Signing in with Apple to a Friends account is optional, ready for a Friends app on
+iPhone; nothing syncs yet. It is not a contacts manager or a CRM: there are no notes,
 fields, pipelines or scores, only a name, a rhythm, and the last time you were in touch.
 
 ## Operating Context
@@ -37,7 +38,8 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 - The menu bar dropdown (360 x 520 pt, opens under the tray icon, closes when it loses focus or on
   Escape): who to reach out to now, with a Done button each, and the next few coming up.
 - The Preferences window: People (add, edit, mark done, select and delete), Blocked dates (add,
-  remove), Settings (which days count, notifications, open at login).
+  remove), Settings (which days count, notifications, open at login, and Account: sign in with
+  Apple, sign out).
 - macOS notifications on the reminder day; the menu bar shows the count of people due.
 - Light and dark mode both, following the system.
 
