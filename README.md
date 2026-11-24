@@ -30,8 +30,8 @@ The people in these screenshots are made up.
    only asks once whether you want to open an app downloaded from the internet. (Versions before
    0.1.2 weren't: macOS blocks their first launch until you click **Open Anyway** in
    **System Settings → Privacy & Security**.)
-4. Friends appears in the menu bar. Click it to see who's due; open **Preferences** to add
-   people.
+4. Friends appears in the menu bar and the Dock. Click the menu bar icon to see who's due;
+   click the Dock icon or open **Preferences** to add people.
 
 Requires macOS 13 (Ventura) or newer.
 

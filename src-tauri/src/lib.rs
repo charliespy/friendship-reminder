@@ -408,10 +408,6 @@ pub fn run() {
             let restoring = handle.clone();
             std::thread::spawn(move || account::restore(&restoring));
 
-            // A menu bar app: no Dock icon, no app menu. Switched after the data opens, so the alert
-            // above still comes to the front as a normal app's would.
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             app.manage(DropdownHiddenAt(Mutex::new(None)));
             app.manage(LastPublished(Mutex::new(None)));
 
@@ -468,9 +464,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the Friends app")
         .run(|app, event| {
-            // Opening Friends again from Finder or Spotlight while it runs doesn't start a second
-            // copy on macOS; the system sends the running one a "reopen". Show Preferences, so the
-            // app is reachable even when its menu bar icon is hidden (a full menu bar, the notch).
+            // Friends lives in both the menu bar and the Dock. Clicking its Dock icon, or opening it
+            // again from Finder or Spotlight while it runs (macOS doesn't start a second copy), sends
+            // the running one a "reopen". Show Preferences, so the app is reachable even when its
+            // menu bar icon is hidden (a full menu bar, the notch).
             if let tauri::RunEvent::Reopen { .. } = event {
                 let _ = show_preferences(app);
             }

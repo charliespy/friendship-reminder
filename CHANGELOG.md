@@ -14,6 +14,11 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 - You can sign in with Apple in Preferences → Settings, to set up a Friends account for syncing
   with a later iPhone app. Nothing syncs yet: your list stays on this Mac.
 
+### Changed
+
+- Friends now also has a Dock icon. Click it to open Preferences; the menu bar icon works as
+  before.
+
 ## [0.1.2] - 2026-11-21
 
 ### Changed
