@@ -1,7 +1,26 @@
 /** Preferences › Settings › Account: Sign in with Apple, and who is signed in. */
 import { useEffect, useRef, useState } from "react";
-import { api, errorMessage, type Account } from "./api";
+import { api, errorMessage, type Account, type SyncStatus } from "./api";
+import { timeAgo } from "./format";
 import { useAction } from "./useView";
+
+/** The line under the account about syncing. */
+function syncLine(sync: SyncStatus | null | undefined, now: number): string {
+  if (sync?.error) return sync.error;
+  if (sync?.lastSynced != null) return `Your list is synced with your account. Last synced ${timeAgo(sync.lastSynced, now)}.`;
+  if (sync?.syncing) return "Syncing your list with your account…";
+  return "Your list will sync with your account in a moment.";
+}
+
+/** The time now, updated every half minute, so "2 minutes ago" keeps up. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
 
 export function AccountSection() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -19,6 +38,7 @@ export function AccountSection() {
   const action = useAction();
   // The sign-in waiting for the browser, where it happens; Cancel names it.
   const [attempt, setAttempt] = useState<string | null>(null);
+  const now = useNow();
 
   useEffect(() => {
     const o = order.current;
@@ -93,7 +113,7 @@ export function AccountSection() {
         ) : (
           <div className="account-row">
             <span className="choice-text">
-              Sign in to set up your Friends account. Your list stays on this Mac for now.
+              Sign in to keep your list in your Friends account, ready for your other devices.
             </span>
             <button
               className="btn btn-apple"
@@ -107,6 +127,11 @@ export function AccountSection() {
           </div>
         )}
       </div>
+      {account?.status === "signedIn" && !attempt && (
+        <p className={account.sync?.error ? "error" : "hint"} data-testid="sync-status">
+          {syncLine(account.sync, now)}
+        </p>
+      )}
       {account?.status === "unavailable" && <p className="hint">{account.reason}</p>}
       {account?.status !== "unavailable" && account?.warning && <p className="hint">{account.warning}</p>}
       {loadError && <p className="error" role="alert">{loadError}</p>}

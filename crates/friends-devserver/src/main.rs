@@ -148,7 +148,17 @@ impl Dev {
 
     fn account(&self) -> Value {
         if self.signed_in {
-            json!({ "status": "signedIn", "email": "ana.torres@example.com", "warning": null })
+            // Synced two minutes ago, as the app shows it most of the time.
+            let two_minutes_ago = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as i64)
+                - 120_000;
+            json!({
+                "status": "signedIn",
+                "email": "ana.torres@example.com",
+                "warning": null,
+                "sync": { "syncing": false, "lastSynced": two_minutes_ago, "error": null }
+            })
         } else {
             json!({ "status": "signedOut", "warning": null })
         }

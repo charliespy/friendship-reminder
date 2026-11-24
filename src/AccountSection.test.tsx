@@ -142,4 +142,32 @@ describe("AccountSection", () => {
     act(() => pushAccount({ status: "signedOut", warning: null }));
     expect(signInButton()).toBeTruthy();
   });
+
+  it("says how syncing is going", async () => {
+    const minute = 60_000;
+    await open({
+      status: "signedIn",
+      email: null,
+      warning: null,
+      sync: { syncing: false, lastSynced: Date.now() - 5 * minute, error: null },
+    });
+    expect(screen.getByTestId("sync-status").textContent).toBe(
+      "Your list is synced with your account. Last synced 5 minutes ago.",
+    );
+    act(() =>
+      pushAccount({
+        status: "signedIn",
+        email: null,
+        warning: null,
+        sync: { syncing: false, lastSynced: null, error: "Couldn't reach your Friends account. Friends will try again." },
+      }),
+    );
+    expect(screen.getByTestId("sync-status").textContent).toMatch(/Couldn't reach/);
+    act(() =>
+      pushAccount({ status: "signedIn", email: null, warning: null, sync: { syncing: true, lastSynced: null, error: null } }),
+    );
+    expect(screen.getByTestId("sync-status").textContent).toBe("Syncing your list with your account…");
+    act(() => pushAccount({ status: "signedOut", warning: null }));
+    expect(screen.queryByTestId("sync-status")).toBeNull();
+  });
 });

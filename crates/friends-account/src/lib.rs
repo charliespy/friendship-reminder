@@ -20,6 +20,9 @@ use sha2::{Digest, Sha256};
 /// runs out on the way.
 const EXPIRY_MARGIN: i64 = 60;
 
+/// The largest answer the app reads, in bytes: a page of a long list fits easily.
+const MAX_BODY: u64 = 16 * 1024 * 1024;
+
 /// The longest the app waits for Supabase to answer.
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -201,9 +204,15 @@ pub struct Response {
     pub body: String,
 }
 
-/// Sends a POST. `Err` means no answer came back at all.
+/// Sends a request. `Err` means no answer came back at all.
 pub trait Transport {
     fn post(&self, url: &str, headers: &[(&str, &str)], body: &str) -> Result<Response, String>;
+
+    /// Sends a GET. Sign-in never needs one, so a transport for it alone may leave this out.
+    fn get(&self, url: &str, headers: &[(&str, &str)]) -> Result<Response, String> {
+        let _ = (url, headers);
+        Err("this transport can't send a GET".to_string())
+    }
 }
 
 /// The real transport, over HTTPS.
@@ -228,13 +237,29 @@ impl Transport for HttpTransport {
         for (k, v) in headers {
             req = req.header(*k, *v);
         }
-        let mut res = req.send(body).map_err(|e| e.to_string())?;
-        let status = res.status().as_u16();
-        // A body cut off halfway is a failed request, not an empty answer: a refresh that lost its
-        // answer must not look like one Supabase refused.
-        let body = res.body_mut().read_to_string().map_err(|e| e.to_string())?;
-        Ok(Response { status, body })
+        read(req.send(body).map_err(|e| e.to_string())?)
     }
+
+    fn get(&self, url: &str, headers: &[(&str, &str)]) -> Result<Response, String> {
+        let mut req = self.agent.get(url);
+        for (k, v) in headers {
+            req = req.header(*k, *v);
+        }
+        read(req.call().map_err(|e| e.to_string())?)
+    }
+}
+
+fn read(mut res: ureq::http::Response<ureq::Body>) -> Result<Response, String> {
+    let status = res.status().as_u16();
+    // A body cut off halfway is a failed request, not an empty answer: a refresh that lost its
+    // answer must not look like one Supabase refused.
+    let body = res
+        .body_mut()
+        .with_config()
+        .limit(MAX_BODY)
+        .read_to_string()
+        .map_err(|e| e.to_string())?;
+    Ok(Response { status, body })
 }
 
 /// Talks to Supabase Auth.

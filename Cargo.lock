@@ -1149,8 +1149,10 @@ dependencies = [
  "chrono",
  "friends-account",
  "friends-core",
+ "friends-sync",
  "rfd",
  "security-framework",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",
@@ -1181,6 +1183,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -1191,6 +1194,17 @@ dependencies = [
  "friends-core",
  "serde_json",
  "tiny_http",
+]
+
+[[package]]
+name = "friends-sync"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "friends-account",
+ "friends-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use crate::model::Data;
 
 /// The newest file format this version of the app understands.
-pub const CURRENT_VERSION: u32 = 1;
+/// 2 added what syncing needs (an id every device shares, and change times); a version 1 file is
+/// upgraded as it loads, and an older app refuses a version 2 file instead of dropping those.
+pub const CURRENT_VERSION: u32 = 2;
 
 #[derive(Debug, Clone)]
 pub struct Store {
@@ -72,6 +74,7 @@ impl Store {
         match serde_json::from_str::<Data>(&text) {
             Ok(mut data) if data.is_sane() => {
                 data.repair_ids();
+                data.fill_uids();
                 // Saved from now on in this version's format.
                 data.version = CURRENT_VERSION;
                 Ok(Loaded::Existing(data))
@@ -250,7 +253,7 @@ mod tests {
         let path = dir.join("friends.json");
         for text in [
             r#"{"version": 99}"#,
-            r#"{"version":2,"settings":{"dayToggle":"custom"}}"#,
+            r#"{"version":3,"settings":{"dayToggle":"custom"}}"#,
         ] {
             fs::write(&path, text).unwrap();
             assert!(Store::new(&path).load().is_err());

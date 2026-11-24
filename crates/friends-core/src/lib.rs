@@ -4,6 +4,7 @@ pub mod api;
 pub mod model;
 pub mod schedule;
 pub mod store;
+pub mod sync;
 
 /// The user's home folder, from `$HOME` (what macOS sets for every app).
 pub fn home_dir() -> Option<std::path::PathBuf> {

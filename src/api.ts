@@ -54,11 +54,21 @@ export function errorMessage(e: unknown): string {
   return "Something went wrong.";
 }
 
+/** How syncing with the account is going. */
+export interface SyncStatus {
+  /** A sync is running now. */
+  syncing: boolean;
+  /** When the last sync finished, in milliseconds since 1970. */
+  lastSynced: number | null;
+  /** Why the last sync failed, if it did. */
+  error: string | null;
+}
+
 /** The Friends account, as the Account section shows it. */
 export type Account =
   | { status: "unavailable"; reason: string }
   | { status: "signedOut"; warning: string | null }
-  | { status: "signedIn"; email: string | null; warning: string | null };
+  | { status: "signedIn"; email: string | null; warning: string | null; sync?: SyncStatus | null };
 
 /** Sent to every window after any change, with the new view. */
 export const VIEW_CHANGED = "view-changed";
