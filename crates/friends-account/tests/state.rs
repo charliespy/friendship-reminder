@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 
 use friends_account::{
-    env_file_value, AccountState, AccountView, AuthError, Config, Session, NOT_READ, NOT_SAVED,
+    env_file_value, AccountState, AccountView, Attempts, AuthError, Config, Session, Started,
+    NOT_READ, NOT_SAVED,
 };
 
 fn session(name: &str) -> Session {
@@ -37,7 +38,9 @@ impl Keychain {
 fn a_saved_session_shows_at_once_and_its_refresh_replaces_it() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    let generation = state.start_restore(Ok(Some(session("old")))).unwrap();
+    let generation = state
+        .start_restore(state.generation(), Ok(Some(session("old"))))
+        .unwrap();
     assert!(matches!(state.view(), AccountView::SignedIn { .. }));
     state
         .finish_restore(generation, Ok(session("new")), keychain.save())
@@ -51,7 +54,9 @@ fn a_dead_saved_session_signs_out_but_offline_keeps_it() {
     let keychain = Keychain::default();
     *keychain.held.borrow_mut() = Some(session("old"));
     let mut state = AccountState::default();
-    let g = state.start_restore(Ok(Some(session("old")))).unwrap();
+    let g = state
+        .start_restore(state.generation(), Ok(Some(session("old"))))
+        .unwrap();
     state
         .finish_restore(
             g,
@@ -81,8 +86,10 @@ fn a_dead_saved_session_signs_out_but_offline_keeps_it() {
 fn a_sign_in_during_the_launch_refresh_wins() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    let g = state.start_restore(Ok(Some(session("old")))).unwrap();
-    state.signed_in(session("new"), keychain.save()).unwrap();
+    let g = state
+        .start_restore(state.generation(), Ok(Some(session("old"))))
+        .unwrap();
+    assert_eq!(state.signed_in(session("new"), keychain.save()).1, Ok(()));
     // The launch refresh comes back late, either way: dropped, and a fresh one is handed back to end.
     assert_eq!(
         state.finish_restore(g, Ok(session("refreshed")), keychain.save()),
@@ -99,7 +106,9 @@ fn a_sign_in_during_the_launch_refresh_wins() {
 fn a_sign_out_during_the_launch_refresh_wins() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    let g = state.start_restore(Ok(Some(session("old")))).unwrap();
+    let g = state
+        .start_restore(state.generation(), Ok(Some(session("old"))))
+        .unwrap();
     assert_eq!(state.sign_out(keychain.save()), Ok(Some(session("old"))));
     // The refresh replaced the tokens the sign-out ended the session with, so it comes back to end.
     assert_eq!(
@@ -117,7 +126,7 @@ fn a_keychain_that_wont_save_keeps_the_sign_in_with_a_warning() {
         ..Keychain::default()
     };
     let mut state = AccountState::default();
-    assert!(state.signed_in(session("new"), keychain.save()).is_err());
+    assert!(state.signed_in(session("new"), keychain.save()).1.is_err());
     assert_eq!(
         state.view(),
         AccountView::SignedIn {
@@ -131,7 +140,7 @@ fn a_keychain_that_wont_save_keeps_the_sign_in_with_a_warning() {
 fn signing_out_only_happens_once_the_keychain_lets_go() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    state.signed_in(session("a"), keychain.save()).unwrap();
+    assert_eq!(state.signed_in(session("a"), keychain.save()).1, Ok(()));
     let broken = Keychain {
         broken: true,
         ..Keychain::default()
@@ -145,22 +154,28 @@ fn signing_out_only_happens_once_the_keychain_lets_go() {
 #[test]
 fn an_unreadable_keychain_says_so_instead_of_looking_signed_out() {
     let mut state = AccountState::default();
-    assert_eq!(state.start_restore(Err("locked".into())), None);
+    assert_eq!(
+        state.start_restore(state.generation(), Err("locked".into())),
+        None
+    );
     assert_eq!(
         state.view(),
         AccountView::SignedOut {
             warning: Some(NOT_READ.into())
         }
     );
-    assert_eq!(state.start_restore(Ok(None)), None);
+    assert_eq!(state.start_restore(state.generation(), Ok(None)), None);
 }
 
 #[test]
 fn an_unreadable_keychain_after_signing_in_is_not_a_warning() {
     let keychain = Keychain::default();
     let mut state = AccountState::default();
-    state.signed_in(session("new"), keychain.save()).unwrap();
-    assert_eq!(state.start_restore(Err("locked".into())), None);
+    assert_eq!(state.signed_in(session("new"), keychain.save()).1, Ok(()));
+    assert_eq!(
+        state.start_restore(state.generation(), Err("locked".into())),
+        None
+    );
     assert_eq!(
         state.view(),
         AccountView::SignedIn {
@@ -189,4 +204,56 @@ fn env_files_are_read_with_export_quotes_and_comments() {
         env_file_value("KEY=a\nKEY=b\n", "KEY").as_deref(),
         Some("b")
     );
+}
+
+#[test]
+fn a_keychain_read_that_outlasts_a_sign_in_and_out_is_dropped() {
+    let keychain = Keychain::default();
+    let mut state = AccountState::default();
+    let before = state.generation();
+    // While the Keychain read waits on a prompt, someone signs in and out again.
+    let _ = state.signed_in(session("new"), keychain.save());
+    state.sign_out(keychain.save()).unwrap();
+    assert_eq!(state.start_restore(before, Ok(Some(session("old")))), None);
+    assert_eq!(state.view(), AccountView::SignedOut { warning: None });
+}
+
+#[test]
+fn signing_in_over_a_restored_session_hands_it_back_to_end() {
+    let keychain = Keychain::default();
+    let mut state = AccountState::default();
+    state.start_restore(state.generation(), Ok(Some(session("old"))));
+    let (replaced, saved) = state.signed_in(session("new"), keychain.save());
+    assert_eq!(replaced, Some(session("old")));
+    assert_eq!(saved, Ok(()));
+}
+
+#[test]
+fn a_cancel_before_the_sign_in_starts_still_stops_it() {
+    let mut attempts = Attempts::default();
+    assert_eq!(attempts.cancel("a"), None);
+    assert_eq!(attempts.start("a", 1), Started::Cancelled);
+    // Remembered once: the next attempt starts.
+    assert_eq!(attempts.start("b", 2), Started::Waiting { replaced: None });
+}
+
+#[test]
+fn a_cancel_wakes_the_waiting_sign_in_and_it_is_not_kept() {
+    let mut attempts = Attempts::default();
+    attempts.start("a", 1);
+    assert_eq!(attempts.cancel("a"), Some(1));
+    assert!(!attempts.is_waiting("a"));
+    assert!(!attempts.finish("a"));
+}
+
+#[test]
+fn a_newer_sign_in_replaces_the_waiting_one() {
+    let mut attempts = Attempts::default();
+    attempts.start("a", 1);
+    assert_eq!(
+        attempts.start("b", 2),
+        Started::Waiting { replaced: Some(1) }
+    );
+    assert!(!attempts.finish("a"));
+    assert!(attempts.finish("b"));
 }

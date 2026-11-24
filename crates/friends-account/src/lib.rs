@@ -226,7 +226,9 @@ impl Transport for HttpTransport {
         }
         let mut res = req.send(body).map_err(|e| e.to_string())?;
         let status = res.status().as_u16();
-        let body = res.body_mut().read_to_string().unwrap_or_default();
+        // A body cut off halfway is a failed request, not an empty answer: a refresh that lost its
+        // answer must not look like one Supabase refused.
+        let body = res.body_mut().read_to_string().map_err(|e| e.to_string())?;
         Ok(Response { status, body })
     }
 }
@@ -395,13 +397,20 @@ impl AccountState {
         self.generation
     }
 
-    /// At launch, what the Keychain held. Shows a saved session as signed in right away, and returns
-    /// the generation to pass to [`AccountState::finish_restore`] once its refresh is back; `None` when
-    /// there is nothing to refresh.
-    pub fn start_restore(&mut self, saved: Result<Option<Session>, String>) -> Option<u64> {
+    /// At launch, what the Keychain held, read after noting [`AccountState::generation`] as `before`.
+    /// Shows a saved session as signed in right away, and returns the generation to pass to
+    /// [`AccountState::finish_restore`] once its refresh is back; `None` when there is nothing to
+    /// refresh, or the account changed while the Keychain was read (a sign-in or a sign-out, which
+    /// what it held no longer speaks for).
+    pub fn start_restore(
+        &mut self,
+        before: u64,
+        saved: Result<Option<Session>, String>,
+    ) -> Option<u64> {
+        if before != self.generation || self.session.is_some() {
+            return None;
+        }
         match saved {
-            // Signed in meanwhile: what the Keychain held no longer matters.
-            _ if self.session.is_some() => None,
             Err(_) => {
                 self.warning = Some(NOT_READ.to_string());
                 self.generation += 1;
@@ -437,14 +446,16 @@ impl AccountState {
         }
     }
 
-    /// A sign-in finished. If the Keychain won't save it, the session is kept for now with a warning
-    /// (and the error comes back).
+    /// A sign-in finished. If the Keychain won't save it, the session is kept for now with a warning.
+    /// Returns the session it replaced (the one restored at launch, say), to end on the server, and how
+    /// saving went.
     pub fn signed_in(
         &mut self,
         session: Session,
         save: impl FnOnce(Option<&Session>) -> Result<(), String>,
-    ) -> Result<(), String> {
-        self.keep(Some(session), save)
+    ) -> (Option<Session>, Result<(), String>) {
+        let replaced = self.session.take();
+        (replaced, self.keep(Some(session), save))
     }
 
     /// Signs out, but only once the Keychain has let go of the session: one left behind would sign the
@@ -470,6 +481,74 @@ impl AccountState {
         self.session = session;
         self.generation += 1;
         saved
+    }
+}
+
+/// The browser sign-ins: which one the browser may come back to. The window names each attempt, so a
+/// Cancel that arrives before its sign-in starts waiting still stops it, and starting another stops the
+/// one waiting. `T` is how to wake a waiting sign-in.
+#[derive(Debug)]
+pub struct Attempts<T> {
+    current: Option<(String, T)>,
+    /// An attempt cancelled before it started waiting.
+    cancelled: Option<String>,
+}
+
+impl<T> Default for Attempts<T> {
+    fn default() -> Self {
+        Attempts {
+            current: None,
+            cancelled: None,
+        }
+    }
+}
+
+/// What [`Attempts::start`] made of a sign-in.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Started<T> {
+    /// Cancelled before it began: don't open the browser.
+    Cancelled,
+    /// Now the one waiting; wake the one it replaced, if any, so it stops.
+    Waiting { replaced: Option<T> },
+}
+
+impl<T> Attempts<T> {
+    pub fn start(&mut self, attempt: &str, wake: T) -> Started<T> {
+        if self.cancelled.as_deref() == Some(attempt) {
+            self.cancelled = None;
+            return Started::Cancelled;
+        }
+        let replaced = self
+            .current
+            .replace((attempt.to_string(), wake))
+            .map(|(_, w)| w);
+        Started::Waiting { replaced }
+    }
+
+    /// Cancels `attempt`: returns how to wake it if it's waiting, or remembers it for when it starts.
+    pub fn cancel(&mut self, attempt: &str) -> Option<T> {
+        if self.is_waiting(attempt) {
+            return self.current.take().map(|(_, w)| w);
+        }
+        self.cancelled = Some(attempt.to_string());
+        None
+    }
+
+    pub fn is_waiting(&self, attempt: &str) -> bool {
+        self.current.as_ref().is_some_and(|(a, _)| a == attempt)
+    }
+
+    /// Ends `attempt`'s wait: `true` if it was still the one the user wants (not cancelled or
+    /// replaced), so its session should be kept; `false` means end that session instead.
+    pub fn finish(&mut self, attempt: &str) -> bool {
+        if self.cancelled.as_deref() == Some(attempt) {
+            self.cancelled = None;
+        }
+        let wanted = self.is_waiting(attempt);
+        if wanted {
+            self.current = None;
+        }
+        wanted
     }
 }
 

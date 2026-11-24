@@ -95,6 +95,26 @@ describe("AccountSection", () => {
     expect(signInButton()).toBeTruthy();
   });
 
+  it("keeps a newer change when a command answers late", async () => {
+    await open({ status: "signedOut", warning: null });
+    let answer: (a: Account) => void = () => {};
+    signInWithApple.mockReturnValue(new Promise((r) => (answer = r)));
+    await act(async () => fireEvent.click(signInButton()));
+    // An account change lands while the sign-in waits; the sign-in's older answer must not undo it.
+    act(() => pushAccount({ status: "signedOut", warning: null }));
+    await act(async () => answer({ status: "signedIn", email: "ana@example.com", warning: null }));
+    expect(signInButton()).toBeTruthy();
+  });
+
+  it("says when Cancel didn't work", async () => {
+    await open({ status: "signedOut", warning: null });
+    signInWithApple.mockReturnValue(new Promise(() => {}));
+    cancelSignIn.mockRejectedValue("Friends isn't answering.");
+    await act(async () => fireEvent.click(signInButton()));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
+    expect(screen.getByRole("alert").textContent).toBe("Friends isn't answering.");
+  });
+
   it("shows a warning about the sign-in", async () => {
     await open({ status: "signedIn", email: null, warning: "Couldn't save your sign-in in the Keychain." });
     expect(screen.getByText(/Couldn't save your sign-in/)).toBeTruthy();

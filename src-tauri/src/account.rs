@@ -15,8 +15,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use friends_account::{
-    parse_callback, AccountState, AccountView, Callback, Client, Config, HttpTransport, Pkce,
-    Session,
+    parse_callback, AccountState, AccountView, Attempts, Callback, Client, Config, HttpTransport,
+    Pkce, Session, Started,
 };
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -35,52 +35,8 @@ const SIGNED_IN_PAGE: &str = "You're signed in to Friends. You can close this ta
 const FAILED_PAGE: &str = "Signing in to Friends didn't work. Go back to Friends to try again.";
 const CANCELLED_PAGE: &str = "Signing in to Friends was cancelled. You can close this tab.";
 
-/// The sign-in a browser may come back to. Each sign-in is an attempt the window names, so a Cancel
-/// that arrives before its sign-in starts waiting still stops it.
-#[derive(Default)]
-struct Waiting {
-    /// The attempt waiting for the browser, and its sign-in address.
-    current: Option<(String, Arc<tiny_http::Server>)>,
-    /// An attempt cancelled before it started waiting.
-    cancelled: Option<String>,
-}
-
-impl Waiting {
-    /// Makes `attempt` the one waiting, stopping any earlier one. `false` if it was already cancelled.
-    fn start(&mut self, attempt: &str, server: Arc<tiny_http::Server>) -> bool {
-        if self.cancelled.as_deref() == Some(attempt) {
-            self.cancelled = None;
-            return false;
-        }
-        if let Some((_, old)) = self.current.replace((attempt.to_string(), server)) {
-            old.unblock();
-        }
-        true
-    }
-
-    fn cancel(&mut self, attempt: &str) {
-        if self.is(attempt) {
-            if let Some((_, server)) = self.current.take() {
-                server.unblock();
-            }
-        } else {
-            self.cancelled = Some(attempt.to_string());
-        }
-    }
-
-    fn is(&self, attempt: &str) -> bool {
-        self.current.as_ref().is_some_and(|(a, _)| a == attempt)
-    }
-
-    /// Ends `attempt`'s wait: `true` if it was still the one waiting (not cancelled or replaced).
-    fn finish(&mut self, attempt: &str) -> bool {
-        let current = self.is(attempt);
-        if current {
-            self.current = None;
-        }
-        current
-    }
-}
+/// The browser sign-ins, each with its sign-in address (unblocking it wakes the sign-in).
+type Waiting = Attempts<Arc<tiny_http::Server>>;
 
 pub struct Account {
     /// Why this build can't sign in, or the project to sign in to.
@@ -196,12 +152,13 @@ pub fn restore(app: &AppHandle) {
     let Ok(client) = account.client() else {
         return;
     };
+    let before = account.state().generation();
     let saved = load();
     if let Err(e) = &saved {
         eprintln!("friends: couldn't read the saved sign-in: {e}");
     }
     let to_refresh = saved.as_ref().ok().cloned().flatten();
-    let generation = account.state().start_restore(saved);
+    let generation = account.state().start_restore(before, saved);
     publish(app);
     let (Some(generation), Some(saved)) = (generation, to_refresh) else {
         return;
@@ -246,7 +203,9 @@ pub async fn sign_in_with_apple(app: AppHandle, attempt: String) -> Result<Accou
 pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<AccountView, String> {
     blocking(app, move |app| {
         let account = app.state::<Account>();
-        account.waiting().cancel(&attempt);
+        if let Some(server) = account.waiting().cancel(&attempt) {
+            server.unblock();
+        }
         Ok(account.view())
     })
     .await
@@ -263,14 +222,19 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
         .ok_or("The sign-in address has no port.")?
         .port();
     let server = Arc::new(server);
-    if !account.waiting().start(attempt, server.clone()) {
-        return Ok(account.view());
+    match account.waiting().start(attempt, server.clone()) {
+        Started::Cancelled => return Ok(account.view()),
+        Started::Waiting { replaced } => {
+            if let Some(old) = replaced {
+                old.unblock();
+            }
+        }
     }
     let waited = (|| {
         let redirect = format!("http://127.0.0.1:{port}{}", friends_account::CALLBACK_PATH);
         let pkce = Pkce::new()?;
         open_in_browser(&client.authorize_url("apple", &redirect, &pkce))?;
-        let back = wait_for_browser(&server, || account.waiting().is(attempt))?;
+        let back = wait_for_browser(&server, || account.waiting().is_waiting(attempt))?;
         Ok(back.map(|(code, request)| (code, request, pkce.verifier)))
     })();
     let (code, request, verifier) = match waited {
@@ -296,8 +260,12 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<AccountView, String> {
         end_on_server(client, session);
         return Ok(account.view());
     }
-    if let Err(e) = account.state().signed_in(session, save) {
+    let (replaced, saved) = account.state().signed_in(session, save);
+    if let Err(e) = saved {
         eprintln!("friends: couldn't save the sign-in in the Keychain: {e}");
+    }
+    if let Some(old) = replaced {
+        end_on_server(client, old);
     }
     answer(request, 200, SIGNED_IN_PAGE);
     publish(app);
@@ -454,33 +422,20 @@ mod tests {
     }
 
     #[test]
-    fn cancelling_stops_the_wait_even_before_it_starts() {
-        let mut waiting = Waiting::default();
+    fn a_cancel_wakes_the_sign_in_waiting_for_the_browser() {
         let (server, _) = server();
-        waiting.cancel("early");
-        assert!(!waiting.start("early", server.clone()));
-
         let waiting = Arc::new(Mutex::new(Waiting::default()));
-        assert!(waiting.lock().unwrap().start("a", server.clone()));
+        waiting.lock().unwrap().start("a", server.clone());
         let w = waiting.clone();
         let stop = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(50));
-            w.lock().unwrap().cancel("a");
+            if let Some(server) = w.lock().unwrap().cancel("a") {
+                server.unblock();
+            }
         });
-        let waited = wait_for_browser(&server, || waiting.lock().unwrap().is("a"));
+        let waited = wait_for_browser(&server, || waiting.lock().unwrap().is_waiting("a"));
         assert!(waited.unwrap().is_none());
         stop.join().unwrap();
-        assert!(!waiting.lock().unwrap().finish("a"));
-    }
-
-    #[test]
-    fn a_newer_sign_in_replaces_the_waiting_one() {
-        let mut waiting = Waiting::default();
-        let (server, _) = server();
-        assert!(waiting.start("a", server.clone()));
-        assert!(waiting.start("b", server));
-        assert!(!waiting.finish("a"));
-        assert!(waiting.finish("b"));
     }
 
     #[test]
