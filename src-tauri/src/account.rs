@@ -47,12 +47,12 @@ const CANCELLED: &str = "Signing in to Friends was cancelled. You can close this
 #[cfg(target_os = "macos")]
 type Waiting = Attempts<Arc<tiny_http::Server>>;
 /// The sign-ins in the sheet. The sheet has its own Cancel, so there's nothing to wake.
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "ios")]
 type Waiting = Attempts<()>;
 
 /// The address the iPhone's sign-in sheet comes back to: the app's own scheme, which only the sheet
 /// that opened the page listens for.
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "ios")]
 const PHONE_SCHEME: &str = "io.github.charliespy.friends";
 
 pub struct Account {
@@ -313,7 +313,7 @@ pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<Shown, St
         if let Some(server) = account.waiting().cancel(&attempt) {
             server.unblock();
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "ios")]
         account.waiting().cancel(&attempt);
         Ok(account.view())
     })
@@ -379,7 +379,7 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
     shown
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "ios")]
 fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
     use tauri_plugin_web_auth::WebAuthExt;
     let account = app.state::<Account>();

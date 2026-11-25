@@ -340,7 +340,9 @@ The same tokens and components, at iOS sizes (`:root.phone-app` in `src/styles.c
 - **Colours:** iOS's grouped background (`#f2f2f7`, black in dark mode) with white groups (`#1c1c1e` dark), no group edge, and buttons as flat grey fills (`rgb(118 118 128 / 12%)`) instead of raised push buttons. iOS has no user accent, so the accent is the system blue.
 - **Type:** 17px body, 15px secondary, 13px section labels, a 34px bold large title per tab.
 - **Rows:** 56px with a 36px disc, inset hairlines that start at the text. People rows leave the disc out to give names room.
-- **Touch:** 44px buttons and fields, 32px pill buttons in rows, 22px checkboxes and radios. Nothing typed into is under 16px, or iOS zooms in.
+- **Touch:** 44px buttons and fields, 32px pill buttons in rows. Nothing typed into is under 16px, or iOS zooms in. Fields show the accent edge when focused, with no Mac glow.
+- **iOS controls:** on/off settings are switches (white knob, accent track when on); a pick-one list shows an accent tick on the right of the chosen row; selecting people uses round circles that fill with the accent. The People header's Add is plain accent text at the top right, as in iOS.
+- **People rows:** the name with Done and Edit beside it, and the detail line underneath at full width.
 - **Tab bar:** four tabs at the bottom (Today, People, Blocked, Settings), 26px line symbols, the selected one in the accent, over a translucent blurred bar. Today carries an accent badge with the number due.
 
 ## Do's and Don'ts

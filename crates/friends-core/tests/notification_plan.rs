@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use chrono::NaiveDate;
-use friends_core::api::{reminder_text, App, MAX_PLANNED};
+use friends_core::api::{bookings, reminder_text, App, MAX_PLANNED, MORNING_HOUR};
 use friends_core::store::Store;
 use serde_json::json;
 
@@ -150,4 +150,31 @@ fn the_text_says_when_a_target_was_missed() {
         reminder_text(&person),
         "You meant to reach out to Ada — there's still time this round."
     );
+}
+
+fn at(d: NaiveDate, h: u32, m: u32) -> chrono::NaiveDateTime {
+    d.and_hms_opt(h, m, 0).unwrap()
+}
+
+#[test]
+fn each_reminder_comes_at_nine_in_the_morning_of_its_day() {
+    let mut app = app("morning");
+    add(&mut app, "Ada", 30, "2026-07-20"); // reminder today
+    add(&mut app, "Bea", 30, "2026-07-27"); // reminder next Wednesday
+    let plan = app.plan_notifications(today()).unwrap();
+    let booked = bookings(&plan, at(today(), 8, 30));
+    let got: Vec<_> = booked.iter().map(|b| b.at).collect();
+    assert_eq!(got, vec![at(today(), 9, 0), at(date(2026, 8, 26), 9, 0)]);
+    assert_eq!(booked[0].body, "It's time to reach out to Ada.");
+}
+
+#[test]
+fn todays_reminder_is_left_out_once_its_morning_has_passed() {
+    let mut app = app("passed");
+    add(&mut app, "Ada", 30, "2026-07-20");
+    add(&mut app, "Bea", 30, "2026-07-27");
+    let plan = app.plan_notifications(today()).unwrap();
+    let booked = bookings(&plan, at(today(), 9, 0));
+    assert_eq!(booked.len(), 1);
+    assert_eq!(booked[0].at, at(date(2026, 8, 26), MORNING_HOUR, 0));
 }

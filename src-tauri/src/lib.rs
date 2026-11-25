@@ -2,10 +2,13 @@
 //! account and sync. The rules and the data live in friends-core; this file only connects them to the
 //! windows. `desktop.rs` holds the Mac's menu bar app and `mobile.rs` the iPhone's.
 
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+compile_error!("Friends is a Mac and iPhone app: build it for macOS or iOS.");
+
 mod account;
-#[cfg(desktop)]
+#[cfg(target_os = "macos")]
 mod desktop;
-#[cfg(mobile)]
+#[cfg(target_os = "ios")]
 mod mobile;
 mod sync;
 
@@ -13,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
 use chrono::{Local, NaiveDate};
-use friends_core::api::{ApiError, App, View};
+use friends_core::api::{ApiError, App, ErrorKind, View};
 use friends_core::store::Store;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
@@ -21,6 +24,11 @@ use tauri::{AppHandle, Emitter, Manager};
 const VIEW_CHANGED: &str = "view-changed";
 
 struct State(Mutex<App>);
+
+/// Why the data couldn't be opened, on iPhone, where the app stays up to say so (every command
+/// answers with it, and the window shows it) instead of quitting without a word.
+#[cfg(target_os = "ios")]
+struct CannotOpen(String);
 
 /// The local calendar date. `FRIENDS_TODAY=YYYY-MM-DD` overrides it in debug builds, to try the app on
 /// a given day.
@@ -93,21 +101,28 @@ fn send(app: &AppHandle, view: &View, json: Option<String>) {
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = json;
     let _ = app.emit(VIEW_CHANGED, view);
-    #[cfg(desktop)]
+    #[cfg(target_os = "macos")]
     desktop::show_count(app, view.people.iter().filter(|p| p.due).count());
-    #[cfg(mobile)]
+    #[cfg(target_os = "ios")]
     mobile::views_changed(app);
 }
 
 /// The one command the UI calls: runs a friends-core command and tells every window the result.
 /// Async, so Tauri runs it off the main thread and a slow save never freezes the window.
 #[tauri::command]
-async fn call(
-    app: AppHandle,
-    state: tauri::State<'_, State>,
-    cmd: String,
-    args: Value,
-) -> Result<View, ApiError> {
+async fn call(app: AppHandle, cmd: String, args: Value) -> Result<View, ApiError> {
+    let Some(state) = app.try_state::<State>() else {
+        #[cfg(target_os = "ios")]
+        let reason = app
+            .try_state::<CannotOpen>()
+            .map_or_else(String::new, |c| c.0.clone());
+        #[cfg(not(target_os = "ios"))]
+        let reason = String::new();
+        return Err(ApiError::new(
+            ErrorKind::Storage,
+            format!("Friends can't open its data. {reason}"),
+        ));
+    };
     let mut core = lock(&state);
     let day = today();
     let result = core.call(&cmd, args, day);
@@ -128,22 +143,25 @@ async fn call(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
-    #[cfg(desktop)]
-    let builder = desktop::plugins(builder).invoke_handler(tauri::generate_handler![
-        call,
-        desktop::get_launch_at_login,
-        desktop::set_launch_at_login,
-        desktop::open_preferences,
-        desktop::hide_dropdown,
-        desktop::quit,
-        account::get_account,
-        account::sign_in_with_apple,
-        account::cancel_sign_in,
-        account::sign_out
-    ]);
-    #[cfg(mobile)]
-    let builder = builder
+    // The Mac's single-instance plugin has to come first.
+    #[cfg(target_os = "macos")]
+    let builder = desktop::plugins(tauri::Builder::default())
+        .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![
+            call,
+            desktop::get_launch_at_login,
+            desktop::set_launch_at_login,
+            desktop::open_preferences,
+            desktop::hide_dropdown,
+            desktop::quit,
+            account::get_account,
+            account::sign_in_with_apple,
+            account::cancel_sign_in,
+            account::sign_out
+        ]);
+    #[cfg(target_os = "ios")]
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_web_auth::init())
         .invoke_handler(tauri::generate_handler![
             call,
@@ -155,23 +173,26 @@ pub fn run() {
     builder
         .setup(|app| {
             let handle = app.handle().clone();
+            app.manage(LastPublished(Mutex::new(None)));
+            app.manage(account::Account::new());
+            app.manage(sync::Syncer::new());
             let core = match open_data(&handle) {
                 Ok(core) => core,
                 Err(e) => {
                     eprintln!("friends: {e}");
-                    #[cfg(desktop)]
+                    #[cfg(target_os = "macos")]
                     desktop::cannot_open(&e);
-                    #[cfg(mobile)]
-                    return Err(e.into());
+                    #[cfg(target_os = "ios")]
+                    {
+                        app.manage(CannotOpen(e));
+                        return Ok(());
+                    }
                 }
             };
             app.manage(State(Mutex::new(core)));
-            app.manage(LastPublished(Mutex::new(None)));
-            app.manage(account::Account::new());
-            app.manage(sync::Syncer::new());
-            #[cfg(desktop)]
+            #[cfg(target_os = "macos")]
             desktop::setup(app)?;
-            #[cfg(mobile)]
+            #[cfg(target_os = "ios")]
             mobile::setup(app)?;
             sync::start(&handle);
             Ok(())
@@ -179,9 +200,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the Friends app")
         .run(|app, event| {
-            #[cfg(desktop)]
+            #[cfg(target_os = "macos")]
             desktop::on_event(app, &event);
-            #[cfg(mobile)]
+            #[cfg(target_os = "ios")]
             mobile::on_event(app, &event);
         });
 }

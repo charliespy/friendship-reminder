@@ -7,7 +7,7 @@
 use std::io;
 use std::path::PathBuf;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -58,7 +58,7 @@ pub enum ErrorKind {
 }
 
 impl ApiError {
-    fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
+    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
         ApiError {
             kind,
             message: message.into(),
@@ -142,13 +142,39 @@ fn args<T: for<'de> Deserialize<'de>>(cmd: &str, value: Value) -> Result<T, ApiE
 pub const MAX_PLANNED: usize = 60;
 
 /// A reminder to hand to the system ahead of time, for the morning of `date`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Planned {
     /// The person's id.
     pub person: u64,
     pub date: NaiveDate,
     pub body: String,
+}
+
+/// The hour of the morning a booked reminder comes, on the device's clock.
+pub const MORNING_HOUR: u32 = 9;
+
+/// A reminder as booked: when it comes, on the device's clock (whatever its time zone), and what
+/// it says. A wall-clock time, never stored: the next booking works it out again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Booking {
+    pub person: u64,
+    pub at: NaiveDateTime,
+    pub body: String,
+}
+
+/// The plan's reminders at [`MORNING_HOUR`] on their day, leaving out any whose morning isn't after
+/// `now` (today's, once 9:00 has come: the person shows in the list instead).
+pub fn bookings(plan: &[Planned], now: NaiveDateTime) -> Vec<Booking> {
+    plan.iter()
+        .filter_map(|p| {
+            let at = p.date.and_hms_opt(MORNING_HOUR, 0, 0)?;
+            (at > now).then(|| Booking {
+                person: p.person,
+                at,
+                body: p.body.clone(),
+            })
+        })
+        .collect()
 }
 
 /// What a reminder about `person` says.

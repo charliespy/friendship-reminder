@@ -1,7 +1,7 @@
 /**
  * The iPhone app: the Mac's dropdown and Preferences panes as four tabs, with a tab bar at the bottom.
  */
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { BlockedPane } from "./BlockedPane";
 import { formatDay } from "./date";
 import { ReachOut } from "./Dropdown";
@@ -37,8 +37,10 @@ const ICONS: Record<Tab, ReactNode> = {
   ),
   settings: (
     <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6" />
+      {/* A gear: eight teeth (a dashed ring) around a ring, around the hole. */}
+      <circle cx="12" cy="12" r="8.6" strokeWidth="2.4" strokeDasharray="2.6 4.15" strokeLinecap="butt" />
+      <circle cx="12" cy="12" r="6.6" />
+      <circle cx="12" cy="12" r="2.5" />
     </>
   ),
 };
@@ -50,10 +52,34 @@ const TABS: { id: Tab; title: string }[] = [
   { id: "settings", title: "Settings" },
 ];
 
+/** What scrolls: the page, or the phone-sized frame in browser dev mode. */
+function scroller(): Element | null {
+  return document.documentElement.classList.contains("in-browser-phone")
+    ? document.getElementById("root")
+    : document.scrollingElement;
+}
+
 export function Phone() {
   const { view, loadError } = useView();
   const [tab, setTab] = useState<Tab>("today");
   const due = view?.people.filter((p) => p.due).length ?? 0;
+
+  // Each tab keeps its own place: the page scrolls as a whole, so leaving a tab saves how far down
+  // it was, and coming back puts it there again (the top, the first time).
+  const scrolled = useRef<Partial<Record<Tab, number>>>({});
+  useLayoutEffect(() => {
+    scroller()?.scrollTo?.(0, scrolled.current[tab] ?? 0);
+  }, [tab]);
+  const open = (next: Tab) => {
+    const page = scroller();
+    if (next === tab) {
+      // Tapping the open tab again goes back to its top, as in iOS apps.
+      page?.scrollTo?.({ top: 0, behavior: "smooth" });
+      return;
+    }
+    scrolled.current[tab] = page?.scrollTop ?? 0;
+    setTab(next);
+  };
 
   return (
     <div className="phone">
@@ -104,11 +130,7 @@ export function Phone() {
               aria-controls={`pane-${t.id}`}
               className="tabbar-item"
               aria-label={t.id === "today" && due > 0 ? `${t.title}, ${due} due` : undefined}
-              onClick={() => {
-                // Tapping the open tab again goes back to its top, as in iOS apps.
-                if (tab === t.id) window.scrollTo({ top: 0, behavior: "smooth" });
-                setTab(t.id);
-              }}
+              onClick={() => open(t.id)}
             >
               <span className="tabbar-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">{ICONS[t.id]}</svg>
