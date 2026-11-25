@@ -484,6 +484,11 @@ fn write_row<T: Clone>(
 impl Account {
     /// One sync of `data`, the way friends-sync runs it: upload, then download what changed.
     fn sync(&mut self, data: &mut Data) {
+        self.upload(data);
+        self.download(data);
+    }
+
+    fn upload(&mut self, data: &mut Data) {
         let sent = data.sync_start(OWNER);
         for r in &sent.people {
             let key = |r: &RemotePerson| (r.id.clone(), r.modified_at);
@@ -511,6 +516,9 @@ impl Account {
             }
         }
         data.sync_pushed(&sent);
+    }
+
+    fn download(&mut self, data: &mut Data) {
         let since = data.sync.cursor;
         let got = Changes {
             people: self
@@ -659,4 +667,62 @@ fn a_tied_day_setting_ends_the_same_everywhere() {
     assert_eq!(b.sync.settings_modified, c.sync.settings_modified);
     settle(&mut account, &mut devices);
     assert_eq!(devices[2].settings.day_toggle, DayToggle::WeekdaysOnly);
+}
+
+#[test]
+fn a_tie_with_a_change_made_during_the_download_keeps_the_change() {
+    // B deletes Bo and syncs. C uploads, then renames Bo while the download is on its way: the
+    // rename isn't lost, it goes up next and wins.
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    let (bo_b, bo_c) = (b.people[0].id, c.people[0].id);
+    change(b, 500, |d| {
+        d.delete_people(&[bo_b]);
+    });
+    account.sync(b);
+    account.upload(c);
+    change(c, 500, |d| {
+        d.update_person(bo_c, "Cleo", 30, day(2026, 7, 21), today())
+            .unwrap()
+    });
+    account.download(c);
+    assert_eq!(c.people[0].name, "Cleo");
+    assert!(c.has_unsynced());
+    settle(&mut account, &mut devices);
+    assert_eq!(devices[1].people[0].name, "Cleo");
+
+    // The other way round: B renames Bo and syncs; C deletes Bo during the download. The deletion
+    // stands, goes up next, and wins.
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    let (bo_b, bo_c) = (b.people[0].id, c.people[0].id);
+    change(b, 500, |d| {
+        d.update_person(bo_b, "Bea", 30, day(2026, 7, 21), today())
+            .unwrap()
+    });
+    account.sync(b);
+    account.upload(c);
+    change(c, 500, |d| {
+        d.delete_people(&[bo_c]);
+    });
+    account.download(c);
+    assert!(c.people.is_empty());
+    settle(&mut account, &mut devices);
+    assert!(devices[1].people.is_empty());
+
+    // The same for the day setting.
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    change(b, 500, |d| {
+        d.set_day_toggle(DayToggle::WeekdaysOnly, today())
+    });
+    account.sync(b);
+    account.upload(c);
+    change(c, 500, |d| {
+        d.set_day_toggle(DayToggle::WeekendsOnly, today())
+    });
+    account.download(c);
+    assert_eq!(c.settings.day_toggle, DayToggle::WeekendsOnly);
+    settle(&mut account, &mut devices);
+    assert_eq!(devices[1].settings.day_toggle, DayToggle::WeekendsOnly);
 }

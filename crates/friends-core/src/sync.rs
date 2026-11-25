@@ -8,10 +8,9 @@
 //! - `synced`, the `modified` the account has. A row whose `modified` is ahead waits to upload.
 //!
 //! When two devices change the same row, the later change wins. When both changes carry the same time,
-//! the account's copy wins: a sync uploads before it downloads, so a row that comes down with the same
-//! time as the one here is the account's newest, and taking it lets every device end up with the same
-//! list. A deleted row leaves a [`Tombstone`] until the account has heard about it, so other devices
-//! delete it too instead of bringing it back.
+//! the account's copy wins (see [`account_wins`]), so every device ends up with the same list. A
+//! deleted row leaves a [`Tombstone`] until the account has heard about it, so other devices delete it
+//! too instead of bringing it back.
 //!
 //! Only what the user typed is synced: names, how often, the last time in touch, blocked ranges and
 //! the day setting. Each device works out targets and reminder days itself (they depend on today),
@@ -132,6 +131,15 @@ fn blocked_fields(b: &Blocked) -> (NaiveDate, NaiveDate, &str) {
 /// on this Mac, even if the clock went back.
 fn later(now: i64, previous: i64) -> i64 {
     now.max(previous + 1)
+}
+
+/// Whether the account's copy of a row, changed at `remote`, replaces the one here, changed at
+/// `modified` and uploaded up to `synced`. A later change wins. On a tie the account's copy wins: a
+/// sync uploads before it downloads, so it is the account's newest. Unless the copy here changed after
+/// that upload (while the download was on its way): then it is kept, and goes up next. The account
+/// keeps the last write on a tie, so it takes it, and the other devices take it from there.
+fn account_wins(remote: i64, modified: i64, synced: i64) -> bool {
+    remote > modified || (remote == modified && synced >= modified)
 }
 
 impl Data {
@@ -377,12 +385,11 @@ impl Data {
             }
         }
         if let Some(s) = &got.settings {
-            if s.modified_at >= self.sync.settings_modified {
+            let (modified, synced) = (self.sync.settings_modified, self.sync.settings_synced);
+            if account_wins(s.modified_at, modified, synced) {
                 schedules_changed |= self.settings.day_toggle != s.day_toggle;
                 self.settings.day_toggle = s.day_toggle;
                 self.sync.settings_modified = s.modified_at;
-            }
-            if s.modified_at == self.sync.settings_modified {
                 self.sync.settings_synced = s.modified_at;
             }
         }
@@ -419,10 +426,7 @@ impl Data {
         let ranges = self.ranges();
         if let Some(i) = self.people.iter().position(|p| p.uid == r.id) {
             let p = &mut self.people[i];
-            if r.modified_at == p.modified {
-                p.synced = p.modified;
-            }
-            if r.modified_at < p.modified {
+            if !account_wins(r.modified_at, p.modified, p.synced) {
                 return Ok(());
             }
             let Some((name, freq, last)) = fields? else {
@@ -440,12 +444,13 @@ impl Data {
             }
             return Ok(());
         }
-        // Deleted here: the deletion stands unless the other device changed the row after it.
+        // Deleted here (not uploaded yet): the deletion stands unless the other device changed the row
+        // after it. On a tie it goes up next, as an edit here would (see [`account_wins`]).
         if let Some(t) = self.tombstone(Kind::Person, &r.id) {
             if r.deleted {
                 self.drop_tombstone(Kind::Person, &r.id);
             }
-            if r.deleted || r.modified_at < t.modified {
+            if r.deleted || r.modified_at <= t.modified {
                 return Ok(());
             }
         }
@@ -492,10 +497,7 @@ impl Data {
         };
         if let Some(i) = self.blocked.iter().position(|b| b.uid == r.id) {
             let b = &mut self.blocked[i];
-            if r.modified_at == b.modified {
-                b.synced = b.modified;
-            }
-            if r.modified_at < b.modified {
+            if !account_wins(r.modified_at, b.modified, b.synced) {
                 return Ok(false);
             }
             let Some((start, end, label)) = fields? else {
@@ -514,7 +516,7 @@ impl Data {
             if r.deleted {
                 self.drop_tombstone(Kind::Blocked, &r.id);
             }
-            if r.deleted || r.modified_at < t.modified {
+            if r.deleted || r.modified_at <= t.modified {
                 return Ok(false);
             }
         }
