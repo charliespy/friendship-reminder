@@ -133,7 +133,7 @@ fn marking_done_counts_the_next_target_from_today() {
     let id = data
         .add_person("Ada", 90, date(2026, 5, 1), today())
         .unwrap();
-    data.mark_done(id, today()).unwrap();
+    data.mark_done(id, None, today()).unwrap();
     let p = data.person(id).unwrap();
     assert_eq!(p.last_connected, today());
     assert_eq!(p.next_target, date(2026, 11, 21)); // Aug 19 + 90 = Tue Nov 17 -> Saturday Nov 21
@@ -278,7 +278,7 @@ fn editing_the_frequency_reschedules() {
 #[test]
 fn unknown_ids_are_reported_or_skipped() {
     let mut data = Data::default();
-    assert!(data.mark_done(42, today()).is_err());
+    assert!(data.mark_done(42, None, today()).is_err());
     assert!(data.update_person(42, "Ada", 30, today(), today()).is_err());
     assert_eq!(data.delete_people(&[42]), 0);
     assert!(!data.delete_blocked(42, today()));
@@ -346,9 +346,9 @@ fn a_weekday_target_stays_up_through_that_working_week() {
 }
 
 #[test]
-fn decades_of_missed_days_catch_up_fully_under_all_days() {
+fn decades_of_missed_days_catch_up_fully_under_custom_all_days() {
     let mut data = Data::default();
-    data.set_day_toggle(DayToggle::AllDays, today());
+    data.set_day_toggle(DayToggle::Custom, today());
     let id = data
         .add_person("Ada", 30, date(1950, 1, 1), today())
         .unwrap();

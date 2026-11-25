@@ -298,6 +298,10 @@ Standard macOS push buttons.
 - **Done:** a plain small push button. No colour of its own; it is the list's only action.
 - **Quiet:** no fill, Label 2 text. Hover: Hover fill and Label text. Pressed: Control Down. Used in the footer (Label, 400) and for cancel and edit.
 - **Danger:** red fill, white text, with Raise. Pressed: brightness 0.86. Only for deleting.
+- **Day buttons** (Custom day): seven 26px circles, M to S, Control White with Raise; a picked day fills with the accent and white text.
+
+### Done's question
+Done first asks "When were you in touch with …?" in a sheet over the window: the Window grey box (10px corners, a soft drop shadow, a dim backdrop), the answers as a grouped list (title, then the date in Label 2), and a quiet Cancel. The answers are the day suggested (once it has come), Today, and Another day…, which opens a date field and a primary Done.
 - **Sign in with Apple:** black on light, white on dark, per Apple's rules.
 - **Disabled:** 40% opacity. State changes are instant, as on the Mac: no fades.
 
@@ -343,6 +347,8 @@ The same tokens and components, at iOS sizes (`:root.phone-app` in `src/styles.c
 - **Touch:** 44px buttons and fields, 32px pill buttons in rows. Nothing typed into is under 16px, or iOS zooms in. Fields show the accent edge when focused, with no Mac glow.
 - **iOS controls:** on/off settings are switches (white knob, accent track when on); a pick-one list shows an accent tick on the right of the chosen row; selecting people uses round circles that fill with the accent. The People header's Add is plain accent text at the top right, as in iOS.
 - **People rows:** the name with Done and Edit beside it, and the detail line underneath at full width.
+- **Done's question:** an iOS action sheet at the bottom: the question in small grey type on top of one rounded group of answers in accent text, and a separate bold Cancel under it.
+- **Day buttons:** 38px circles spread across the row under Custom day's text.
 - **Tab bar:** four tabs at the bottom (Today, People, Blocked, Settings), 26px line symbols, the selected one in the accent, over a translucent blurred bar. Today carries an accent badge with the number due.
 
 ## Do's and Don'ts

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
+import { DoneButton } from "./DoneButton";
 import { aimDay, formatDay, relativeDay } from "./date";
 import { FREQUENCIES, frequencyLabel } from "./format";
 import { useAction } from "./useView";
@@ -124,7 +125,6 @@ function PersonRow({
   doneRef: (el: HTMLButtonElement | null) => void;
   editRef: (el: HTMLButtonElement | null) => void;
 }) {
-  const { run, busy, error } = useAction();
   const when = person.due
     ? person.overdue
       ? `Missed last time · aim for ${aimDay(person.nextTarget, today)}`
@@ -148,20 +148,8 @@ function PersonRow({
         <div className="person-meta">
           {frequencyLabel(person.frequencyDays)} · {when}
         </div>
-        {error && <p className="error" role="alert">{error}</p>}
       </div>
-      <button
-        ref={doneRef}
-        className="btn btn-done btn-sm"
-        disabled={busy}
-        onClick={async () => {
-          onDoneStart();
-          onDoneEnd(await run(() => api.markDone(person.id)));
-        }}
-        aria-label={`Mark ${person.name} as done`}
-      >
-        Done
-      </button>
+      <DoneButton person={person} today={today} buttonRef={doneRef} onStart={onDoneStart} onEnd={onDoneEnd} />
       <button ref={editRef} className="btn btn-quiet btn-sm" onClick={onEdit} aria-label={`Edit ${person.name}`}>
         Edit
       </button>

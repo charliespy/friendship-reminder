@@ -20,7 +20,7 @@ function view(today: string, blocked: Blocked[] = []): View {
     today,
     people: [],
     blocked,
-    settings: { dayToggle: "weekendsOnly", notifications: true },
+    settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
     unreadableFile: null,
   };
 }

@@ -20,6 +20,7 @@ const { Phone } = await import("./Phone");
 
 function person(p: Partial<Person>): Person {
   return {
+    suggestedDay: null,
     id: 1,
     name: "Maya Chen",
     frequencyDays: 30,
@@ -37,7 +38,7 @@ function view(people: Person[]): View {
     today: "2026-11-18",
     people,
     blocked: [],
-    settings: { dayToggle: "weekendsOnly", notifications: true },
+    settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
     unreadableFile: null,
   };
 }

@@ -1,5 +1,5 @@
 import { devices, expect, test } from "@playwright/test";
-import { SAMPLE, seed } from "./helpers";
+import { SAMPLE, answerDone, seed } from "./helpers";
 
 // The iPhone app's page, at an iPhone's size.
 test.use({ viewport: devices["iPhone 15 Pro"].viewport, hasTouch: true });
@@ -11,6 +11,7 @@ test("Today lists who's due, and Done there moves them on", async ({ page, reque
   await expect(page.getByRole("tab", { name: "Today, 3 due" })).toBeVisible();
   await expect(page.getByTestId("due-person")).toHaveCount(3);
   await page.getByRole("button", { name: "Mark Maya Chen as done" }).click();
+  await answerDone(page, "Today");
   await expect(page.getByTestId("due-person")).toHaveCount(2);
   await expect(page.getByRole("tab", { name: "Today, 2 due" })).toBeVisible();
 });

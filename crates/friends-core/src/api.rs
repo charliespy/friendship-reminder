@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::model::{Blocked, Data, Person, Settings};
-use crate::schedule::DayToggle;
+use crate::schedule::{DaySet, DayToggle};
 use crate::store::{Loaded, Store};
 use crate::sync::Changes;
 
@@ -36,6 +36,9 @@ pub struct PersonView {
     pub person: Person,
     /// The reminder is showing now.
     pub due: bool,
+    /// The day the app suggested, once it has come (see `Person::suggested_day`): what Done offers
+    /// as "the day suggested".
+    pub suggested_day: Option<NaiveDate>,
 }
 
 /// Why a command failed, with a message fit to show the user.
@@ -118,6 +121,21 @@ struct BlockedArgs {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ToggleArgs {
     day_toggle: DayToggle,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DoneArgs {
+    id: u64,
+    /// The day you were in touch; today when left out.
+    #[serde(default)]
+    on: Option<NaiveDate>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DaysArgs {
+    days: DaySet,
 }
 
 #[derive(Deserialize)]
@@ -230,6 +248,7 @@ impl App {
             .map(|p| PersonView {
                 person: p.clone(),
                 due: p.is_due(today),
+                suggested_day: p.suggested_day(today),
             })
             .collect();
         people.sort_by_cached_key(|p| {
@@ -306,8 +325,8 @@ impl App {
                 d.delete_people(&p.ids);
             }
             "mark_done" => {
-                let p: IdArgs = args(cmd, a)?;
-                d.mark_done(p.id, today).map_err(invalid)?;
+                let p: DoneArgs = args(cmd, a)?;
+                d.mark_done(p.id, p.on, today).map_err(invalid)?;
             }
             "add_blocked" => {
                 let p: BlockedArgs = args(cmd, a)?;
@@ -321,6 +340,10 @@ impl App {
             "set_day_toggle" => {
                 let p: ToggleArgs = args(cmd, a)?;
                 d.set_day_toggle(p.day_toggle, today);
+            }
+            "set_custom_days" => {
+                let p: DaysArgs = args(cmd, a)?;
+                d.set_custom_days(p.days, today).map_err(invalid)?;
             }
             "set_notifications" => {
                 let p: OnArgs = args(cmd, a)?;

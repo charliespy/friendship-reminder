@@ -15,6 +15,24 @@ test("switching to weekdays reschedules everyone", async ({ page, request }) => 
   await expect(page.getByTestId("person-row")).toContainText("Reminder in 4 weeks, Fri, Dec 18");
 });
 
+test("Custom day aims only for the days picked", async ({ page, request }) => {
+  await seed(request, { people: [ANA] });
+  await openPreferences(page, "Settings");
+  await page.getByLabel(/Custom day/).click();
+  await expect(page.getByLabel(/Custom day/)).toBeChecked();
+  const days = page.getByRole("group", { name: "Days you're free" });
+  // All seven at first: Nov 18 + 30 = Fri Dec 18 stays.
+  await expect(days.getByRole("button", { pressed: true })).toHaveCount(7);
+  await page.getByRole("tab", { name: "People" }).click();
+  await expect(page.getByTestId("person-row")).toContainText("Reminder in 4 weeks, Fri, Dec 18");
+  // Not free on Fridays: Saturday Dec 19 instead, with the Monday heads-up.
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await days.getByRole("button", { name: "Friday" }).click();
+  await expect(days.getByRole("button", { name: "Friday" })).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("tab", { name: "People" }).click();
+  await expect(page.getByTestId("person-row")).toContainText("Reminder in 4 weeks, Mon, Dec 14");
+});
+
 test("notifications and open at login can be switched off and on", async ({ page, request }) => {
   await seed(request);
   await openPreferences(page, "Settings");

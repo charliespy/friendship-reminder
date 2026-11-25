@@ -3,15 +3,64 @@
  * iPhone (`phone`) there's no launch at login, and due people show in the Today tab.
  */
 import { useEffect, useRef, useState } from "react";
-import { api, errorMessage, type DayToggle, type View } from "./api";
+import { api, errorMessage, type DayToggle, type View, type Weekday } from "./api";
 import { AccountSection } from "./AccountSection";
 import { useAction } from "./useView";
 
 const TOGGLES: { value: DayToggle; title: string; text: string }[] = [
   { value: "weekendsOnly", title: "Weekends only", text: "Aim for a Saturday or Sunday. The reminder comes on the Monday before, so there's time to plan." },
   { value: "weekdaysOnly", title: "Weekdays only", text: "Aim for Monday to Friday, like a lunch or a call." },
-  { value: "allDays", title: "Custom day", text: "Aim for whatever day comes up. Weekend days still get a Monday heads-up." },
+  { value: "custom", title: "Custom day", text: "Aim only for the days you're free. A missed day moves to the next one you picked. Weekend days still get a Monday heads-up." },
 ];
+
+const WEEK: { day: Weekday; short: string; name: string }[] = [
+  { day: "mon", short: "M", name: "Monday" },
+  { day: "tue", short: "T", name: "Tuesday" },
+  { day: "wed", short: "W", name: "Wednesday" },
+  { day: "thu", short: "T", name: "Thursday" },
+  { day: "fri", short: "F", name: "Friday" },
+  { day: "sat", short: "S", name: "Saturday" },
+  { day: "sun", short: "S", name: "Sunday" },
+];
+
+/** The days picked under "Custom day": one button per day, on while picked. */
+function DayPicker({ view }: { view: View }) {
+  const pick = useAction();
+  const picked = new Set(view.settings.customDays);
+  const flip = (day: Weekday) => {
+    const next = WEEK.map((w) => w.day).filter((d) => (d === day ? !picked.has(d) : picked.has(d)));
+    void pick.run(() => api.setCustomDays(next));
+  };
+  return (
+    <div className="day-picker-row">
+      <div className="day-picker" role="group" aria-label="Days you're free">
+        {WEEK.map((w) => {
+          const on = picked.has(w.day);
+          return (
+            <button
+              key={w.day}
+              type="button"
+              className="day-chip"
+              aria-pressed={on}
+              aria-label={w.name}
+              title={w.name}
+              // The last day picked stays: at least one is needed.
+              disabled={pick.busy || (on && picked.size === 1)}
+              onClick={() => flip(w.day)}
+            >
+              {w.short}
+            </button>
+          );
+        })}
+      </div>
+      {pick.error && (
+        <p className="error" role="alert">
+          {pick.error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function SettingsPane({ view, phone = false }: { view: View; phone?: boolean }) {
   const toggle = useAction();
@@ -82,7 +131,7 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
       <fieldset className="setting-group plain-fieldset">
         <legend className="section-label">Days to aim for</legend>
         <div className="choice-list">
-          {TOGGLES.map((t) => (
+          {TOGGLES.map((t) => [
             <label className="choice" key={t.value}>
               <input
                 type="radio"
@@ -97,8 +146,11 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
                 <br />
                 <span className="choice-text">{t.text}</span>
               </span>
-            </label>
-          ))}
+            </label>,
+            t.value === "custom" && view.settings.dayToggle === "custom" && (
+              <DayPicker key="days" view={view} />
+            ),
+          ])}
         </div>
         <p className="hint">
           Changing this reschedules everyone from the last time you were in touch.

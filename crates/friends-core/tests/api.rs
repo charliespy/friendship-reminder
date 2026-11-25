@@ -159,7 +159,7 @@ fn every_command_works_end_to_end() {
     assert!(view.blocked.is_empty());
     assert_eq!(ada_target(&view), date(2026, 11, 21));
     let view = app
-        .call("set_day_toggle", json!({"dayToggle": "allDays"}), today())
+        .call("set_day_toggle", json!({"dayToggle": "custom"}), today())
         .unwrap();
     assert_eq!(ada_target(&view), date(2026, 11, 17));
     // Aug 1 + 90 = Fri Oct 30: Bo moves too, off the Saturday after it.

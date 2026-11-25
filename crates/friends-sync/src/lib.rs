@@ -131,7 +131,7 @@ impl<T: Transport> Server<T> {
         )?;
         // One row per account, so one request.
         let url = format!(
-            "{}/rest/v1/{SETTINGS}?select=day_toggle,modified_at,updated_ms&updated_ms=gt.{since}",
+            "{}/rest/v1/{SETTINGS}?select=day_toggle,custom_days,modified_at,updated_ms&updated_ms=gt.{since}",
             self.config.url
         );
         let settings: Vec<RemoteSettings> = self.get(token, &url)?;

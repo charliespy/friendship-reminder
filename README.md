@@ -124,14 +124,16 @@ commit. They all have to pass before anything reaches `main`; CONTRIBUTING.md ex
 ## How the reminders work
 
 - Each person has a frequency. The next day to aim for is their last contact plus that many
-  days, moved forward past blocked dates and to an allowed day.
+  days, moved forward past blocked dates and to an allowed day: weekends only, weekdays only,
+  or the days of the week you picked under **Custom day**.
 - When the day to aim for is a Saturday or Sunday, the reminder comes on the Monday before, so
   there's time to plan. A weekday is reminded on the day itself.
-- Mark someone **Done** from the menu bar when you've been in touch; their next day is
-  scheduled from today.
+- Mark someone **Done** from the menu bar when you've been in touch. Friends asks when: on the
+  day it suggested (once that day has come), today, or another day from a calendar. Their next
+  day is scheduled from that day.
 - If the day passes without **Done**, Friends keeps them in the list. It counts the day as
   missed only once the rest of that weekend (under weekends only) or that week (under weekdays
-  only) is over too; with every day allowed, just that day. Then it aims for the next run of
+  only) is over too; under Custom day, just that day. Then it aims for the next run of
   allowed days, past any blocked dates.
 
 ## Contributing

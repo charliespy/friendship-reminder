@@ -2,8 +2,9 @@
 import { useEffect, useRef } from "react";
 import { api, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
+import { DoneButton } from "./DoneButton";
 import { aimDay, formatDay, relativeDay } from "./date";
-import { useAction, useView } from "./useView";
+import { useView } from "./useView";
 
 /** How many upcoming people the dropdown lists. */
 const UPCOMING = 5;
@@ -26,27 +27,22 @@ function DueRow({
   onDoneStart: () => void;
   onDoneFailed: () => void;
 }) {
-  const { run, busy, error } = useAction();
   return (
     <li className="person-row" data-testid="due-person" data-overdue={person.overdue}>
       <Avatar name={person.name} />
       <div className="person-text">
         <div className="person-name">{person.name}</div>
         <div className="person-meta">{dueLine(person, today)}</div>
-        {error && <p className="error" role="alert">{error}</p>}
       </div>
-      <button
-        ref={doneRef}
-        className="btn btn-done btn-sm"
-        disabled={busy}
-        onClick={async () => {
-          onDoneStart();
-          if (!(await run(() => api.markDone(person.id)))) onDoneFailed();
+      <DoneButton
+        person={person}
+        today={today}
+        buttonRef={doneRef}
+        onStart={onDoneStart}
+        onEnd={(ok) => {
+          if (!ok) onDoneFailed();
         }}
-        aria-label={`Mark ${person.name} as done`}
-      >
-        Done
-      </button>
+      />
     </li>
   );
 }
@@ -170,7 +166,8 @@ export function Dropdown() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") api.hideDropdown();
+      // Escape in the Done question closes just the question.
+      if (e.key === "Escape" && !document.querySelector("dialog[open]")) api.hideDropdown();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

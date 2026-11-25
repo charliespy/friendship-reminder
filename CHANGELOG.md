@@ -18,6 +18,11 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
   Settings as tabs. Reminders come as notifications at 9 in the morning on the day. Sign in with
   Apple on both to keep the Mac and iPhone in sync. (Built from source for now; not in the App
   Store yet.)
+- **Custom day** replaces "Any day" in Settings: pick the days of the week you're free (any of
+  Monday to Sunday), and Friends only aims for those. All seven start picked, which works the way
+  "Any day" did.
+- **Done** now asks when you were in touch: on the day Friends suggested, today, or another day
+  from a calendar. The next reminder counts from that day.
 
 ### Changed
 

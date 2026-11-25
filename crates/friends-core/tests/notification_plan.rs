@@ -24,7 +24,7 @@ fn app(name: &str) -> App {
     fs::create_dir_all(&dir).unwrap();
     let path: PathBuf = dir.join("friends.json");
     let mut app = App::open(Store::new(path)).unwrap();
-    app.call("set_day_toggle", json!({"dayToggle": "allDays"}), today())
+    app.call("set_day_toggle", json!({"dayToggle": "custom"}), today())
         .unwrap();
     app
 }
