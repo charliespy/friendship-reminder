@@ -63,7 +63,7 @@ describe("DoneButton", () => {
   it("marks today when answered Today", async () => {
     const d = await ask(person());
     await click(d.getByRole("button", { name: /^Today/ }));
-    expect(markDone).toHaveBeenCalledWith(7, undefined);
+    expect(markDone).toHaveBeenCalledWith(7, TODAY);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 

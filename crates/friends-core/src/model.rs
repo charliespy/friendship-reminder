@@ -544,15 +544,13 @@ impl Data {
             // A new plan can't make anyone "missed": a target the old plan never aimed for may already
             // be over (a blocked range removed after the fact). Someone already missed stays missed
             // while their new target is still behind them.
-            let (was_overdue, was_missed) = (person.overdue, person.missed_target);
+            let was_overdue = person.overdue;
             let behind = Self::reschedule(person, rule, &ranges, today);
             person.overdue = was_overdue && behind;
-            // Still missed: the day they were reminded about stays the one they missed.
-            person.missed_target = if person.overdue {
-                was_missed.or(person.missed_target)
-            } else {
-                None
-            };
+            // Still missed: the day missed is the new plan's, the same on every device.
+            if !person.overdue {
+                person.missed_target = None;
+            }
         }
     }
 

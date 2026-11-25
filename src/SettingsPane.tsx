@@ -79,7 +79,8 @@ function DaySetting({ view }: { view: View }) {
     toggle !== saved.dayToggle || (toggle === "custom" && !sameDays(days, saved.customDays));
   // Once the saved setting matches the draft (saved, or changed back by hand), the draft is done.
   // Set while rendering, as React suggests for state that follows props.
-  if (draft && !changed) setDraft(null);
+  // (The whole draft must match: days edited under Custom day stay while another choice is tried.)
+  if (draft && draft.toggle === saved.dayToggle && sameDays(draft.days, saved.customDays)) setDraft(null);
   const discard = () => {
     setDraft(null);
     setJustSaved(false);

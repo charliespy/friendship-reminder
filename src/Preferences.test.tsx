@@ -179,6 +179,16 @@ describe("Preferences", () => {
     expect((screen.getByLabelText(/Weekdays only/) as HTMLInputElement).checked).toBe(true);
   });
 
+  it("keeps days picked under Custom day while another choice is tried", async () => {
+    await open(view([MAYA]));
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Custom day/)));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Monday" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Weekends only/)));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Custom day/)));
+    expect(screen.getByRole("button", { name: "Monday" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("puts the saved setting back on Discard", async () => {
     setDayToggle.mockReset();
     await open(view([MAYA]));

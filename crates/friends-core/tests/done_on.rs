@@ -169,7 +169,7 @@ fn done_today_works_when_the_last_time_is_tomorrow_after_a_time_zone_change() {
 }
 
 #[test]
-fn a_new_plan_keeps_the_day_someone_actually_missed() {
+fn a_new_plan_works_out_the_day_missed_the_same_way_everywhere() {
     let mut data = Data::default();
     let id = data
         .add_person("Ada", 30, date(2026, 7, 22), today())

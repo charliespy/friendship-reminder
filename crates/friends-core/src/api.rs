@@ -246,11 +246,12 @@ impl App {
             .data
             .people
             .iter()
-            .map(|p| PersonView {
+            .map(|p| (p, p.suggested_day(today)))
+            .map(|(p, suggested)| PersonView {
                 person: p.clone(),
                 due: p.is_due(today),
-                suggested_earlier: p.suggested_day(today).filter(|d| *d < today),
-                suggested_today: p.suggested_day(today) == Some(today),
+                suggested_earlier: suggested.filter(|d| *d < today),
+                suggested_today: suggested == Some(today),
                 earliest_done: p.earliest_done(today),
             })
             .collect();

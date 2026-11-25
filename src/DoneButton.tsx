@@ -81,7 +81,8 @@ export function DoneButton({
   const done = async (on: IsoDate) => {
     onStart?.(on);
     const ok = await run(() =>
-      api.markDone(person.id, on === today ? undefined : on),
+      // Always the day shown: the app's own today may have moved on past midnight.
+      api.markDone(person.id, on),
     );
     if (ok) close();
     onEnd?.(ok);
