@@ -10,7 +10,7 @@ import { useAction } from "./useView";
 const TOGGLES: { value: DayToggle; title: string; text: string }[] = [
   { value: "weekendsOnly", title: "Weekends only", text: "Aim for a Saturday or Sunday. The reminder comes on the Monday before, so there's time to plan." },
   { value: "weekdaysOnly", title: "Weekdays only", text: "Aim for Monday to Friday, like a lunch or a call." },
-  { value: "allDays", title: "Any day", text: "Aim for whatever day comes up. Weekend days still get a Monday heads-up." },
+  { value: "allDays", title: "Custom day", text: "Aim for whatever day comes up. Weekend days still get a Monday heads-up." },
 ];
 
 export function SettingsPane({ view, phone = false }: { view: View; phone?: boolean }) {
