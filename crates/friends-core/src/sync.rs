@@ -7,8 +7,11 @@
 //! - `modified`, when they last changed (on any device), and
 //! - `synced`, the `modified` the account has. A row whose `modified` is ahead waits to upload.
 //!
-//! When two devices change the same row, the later change wins. A deleted row leaves a [`Tombstone`]
-//! until the account has heard about it, so other devices delete it too instead of bringing it back.
+//! When two devices change the same row, the later change wins. When both changes carry the same time,
+//! the account's copy wins: a sync uploads before it downloads, so a row that comes down with the same
+//! time as the one here is the account's newest, and taking it lets every device end up with the same
+//! list. A deleted row leaves a [`Tombstone`] until the account has heard about it, so other devices
+//! delete it too instead of bringing it back.
 //!
 //! Only what the user typed is synced: names, how often, the last time in touch, blocked ranges and
 //! the day setting. Each device works out targets and reminder days itself (they depend on today),
@@ -374,7 +377,7 @@ impl Data {
             }
         }
         if let Some(s) = &got.settings {
-            if s.modified_at > self.sync.settings_modified {
+            if s.modified_at >= self.sync.settings_modified {
                 schedules_changed |= self.settings.day_toggle != s.day_toggle;
                 self.settings.day_toggle = s.day_toggle;
                 self.sync.settings_modified = s.modified_at;
@@ -419,7 +422,7 @@ impl Data {
             if r.modified_at == p.modified {
                 p.synced = p.modified;
             }
-            if r.modified_at <= p.modified {
+            if r.modified_at < p.modified {
                 return Ok(());
             }
             let Some((name, freq, last)) = fields? else {
@@ -442,7 +445,7 @@ impl Data {
             if r.deleted {
                 self.drop_tombstone(Kind::Person, &r.id);
             }
-            if r.deleted || r.modified_at <= t.modified {
+            if r.deleted || r.modified_at < t.modified {
                 return Ok(());
             }
         }
@@ -492,7 +495,7 @@ impl Data {
             if r.modified_at == b.modified {
                 b.synced = b.modified;
             }
-            if r.modified_at <= b.modified {
+            if r.modified_at < b.modified {
                 return Ok(false);
             }
             let Some((start, end, label)) = fields? else {
@@ -511,7 +514,7 @@ impl Data {
             if r.deleted {
                 self.drop_tombstone(Kind::Blocked, &r.id);
             }
-            if r.deleted || r.modified_at <= t.modified {
+            if r.deleted || r.modified_at < t.modified {
                 return Ok(false);
             }
         }
