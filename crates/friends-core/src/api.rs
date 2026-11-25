@@ -137,6 +137,32 @@ fn args<T: for<'de> Deserialize<'de>>(cmd: &str, value: Value) -> Result<T, ApiE
         .map_err(|e| ApiError::new(ErrorKind::BadCall, format!("{cmd}: {e}")))
 }
 
+/// The most reminders [`App::plan_notifications`] books at once. iOS keeps 64 scheduled
+/// notifications per app; this leaves room under that.
+pub const MAX_PLANNED: usize = 60;
+
+/// A reminder to hand to the system ahead of time, for the morning of `date`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Planned {
+    /// The person's id.
+    pub person: u64,
+    pub date: NaiveDate,
+    pub body: String,
+}
+
+/// What a reminder about `person` says.
+pub fn reminder_text(person: &Person) -> String {
+    if person.overdue {
+        format!(
+            "You meant to reach out to {} — there's still time this round.",
+            person.name
+        )
+    } else {
+        format!("It's time to reach out to {}.", person.name)
+    }
+}
+
 /// The app's data and where it is saved.
 pub struct App {
     store: Store,
@@ -338,6 +364,44 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    /// The regular check for a device that books reminders ahead instead of sending them as they
+    /// come up (the iPhone app, which is stopped when it isn't on screen): push missed targets
+    /// forward, and return the reminders to book, soonest first and at most [`MAX_PLANNED`] (none
+    /// when notifications are off). The shell replaces everything it booked before with these.
+    ///
+    /// Reminders from earlier days count as sent: they were booked back then, or the person just
+    /// shows in the list. Today's reminder is in the plan unless it was sent already; the shell
+    /// leaves it out once its hour has passed. Saves when anything changed.
+    pub fn plan_notifications(&mut self, today: NaiveDate) -> io::Result<Vec<Planned>> {
+        let before = self.data.clone();
+        self.data.catch_up(today);
+        for person in &mut self.data.people {
+            if person.notification_date < today {
+                person.notified_for = Some(person.notification_date);
+            }
+        }
+        self.save_or_undo(before)?;
+        if !self.data.settings.notifications {
+            return Ok(Vec::new());
+        }
+        let mut people: Vec<&Person> = self
+            .data
+            .people
+            .iter()
+            .filter(|p| p.notified_for != Some(p.notification_date))
+            .collect();
+        people.sort_by_cached_key(|p| (p.notification_date, p.name.to_lowercase(), p.id));
+        Ok(people
+            .into_iter()
+            .take(MAX_PLANNED)
+            .map(|p| Planned {
+                person: p.id,
+                date: p.notification_date,
+                body: reminder_text(p),
+            })
+            .collect())
     }
 
     /// The regular check (on launch, on wake and every hour): push missed targets forward, and return

@@ -1,6 +1,6 @@
 ---
 name: Friends
-description: A macOS menu bar reminder that looks like it came with the Mac.
+description: A macOS menu bar reminder, and its iPhone app, that look like they came with the Mac and the iPhone.
 colors:
   window: "#ececec"
   sidebar: "#e3e3e3"
@@ -335,12 +335,20 @@ An Accent Tint strip with 10px corners above the People list. The count and the 
 - **Caught up:** a plain group in Label 2, 500, centred, padded 12px.
 - **Empty state:** centred Label 2 text with a 15px 600 title in Label.
 
+### iPhone
+The same tokens and components, at iOS sizes (`:root.phone-app` in `src/styles.css`), so it looks like it came with the iPhone:
+- **Colours:** iOS's grouped background (`#f2f2f7`, black in dark mode) with white groups (`#1c1c1e` dark), no group edge, and buttons as flat grey fills (`rgb(118 118 128 / 12%)`) instead of raised push buttons. iOS has no user accent, so the accent is the system blue.
+- **Type:** 17px body, 15px secondary, 13px section labels, a 34px bold large title per tab.
+- **Rows:** 56px with a 36px disc, inset hairlines that start at the text. People rows leave the disc out to give names room.
+- **Touch:** 44px buttons and fields, 32px pill buttons in rows, 22px checkboxes and radios. Nothing typed into is under 16px, or iOS zooms in.
+- **Tab bar:** four tabs at the bottom (Today, People, Blocked, Settings), 26px line symbols, the selected one in the accent, over a translucent blurred bar. Today carries an accent badge with the number due.
+
 ## Do's and Don'ts
 
 ### Do:
 - **Do** use the role tokens in `src/styles.css` for every colour, size, radius and gap, so light and dark mode both follow.
 - **Do** use the accent token for every primary action and selected state, so the user's Mac accent shows.
-- **Do** keep every list row at 48px with a 28px disc, in both windows.
+- **Do** keep every list row at 48px with a 28px disc, in both Mac windows (56px and 36px on iPhone).
 - **Do** show pressed buttons by darkening them: Control Down for grey buttons, brightness 0.86 for accent and red.
 - **Do** edge groups with the 0.5px Group Edge, and split rows with 0.5px hairlines.
 - **Do** keep the 3px focus ring visible on every control, and keep state changes instant.

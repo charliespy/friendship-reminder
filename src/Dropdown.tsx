@@ -65,7 +65,11 @@ function UpcomingRow({ person, today }: { person: Person; today: string }) {
   );
 }
 
-export function DropdownContent({ view }: { view: View }) {
+/**
+ * Who to reach out to now and who's coming up: the dropdown's list, and the iPhone's Today tab.
+ * `addHint` says where to add people.
+ */
+export function ReachOut({ view, addHint }: { view: View; addHint: string }) {
   const due = view.people.filter((p) => p.due);
   const upcoming = view.people.filter((p) => !p.due).slice(0, UPCOMING);
 
@@ -86,63 +90,69 @@ export function DropdownContent({ view }: { view: View }) {
   });
 
   return (
-    <>
-      <div className="dropdown-body">
-        {view.unreadableFile && (
-          <p className="banner" role="alert">
-            Your saved list couldn't be read, so Friends started fresh. The old file is at {view.unreadableFile}.
-          </p>
-        )}
-        {view.people.length === 0 ? (
-          <div className="empty">
-            <strong>Nobody here yet</strong>
-            Add the people you want to keep up with in Preferences.
-          </div>
-        ) : (
-          <>
-            <section className="dropdown-section" aria-labelledby="due-label">
-              <h2 className="section-label" id="due-label">
-                Reach out now
-              </h2>
-              {due.length === 0 ? (
-                <p className="caught-up" ref={caughtUp} tabIndex={-1}>
-                  You're all caught up.
-                </p>
-              ) : (
-                <ul className="list due-list">
-                  {due.map((p, index) => (
-                    <DueRow
-                      key={p.id}
-                      person={p}
-                      today={view.today}
-                      doneRef={(el) => {
-                        if (el) doneButtons.current.set(p.id, el);
-                        else doneButtons.current.delete(p.id);
-                      }}
-                      onDoneStart={() => (doneAt.current = { id: p.id, index })}
-                      onDoneFailed={() => {
-                        if (doneAt.current?.id === p.id) doneAt.current = null;
-                      }}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
-            {upcoming.length > 0 && (
-              <section className="dropdown-section" aria-labelledby="upcoming-label">
-                <h2 className="section-label" id="upcoming-label">
-                  Coming up
-                </h2>
-                <ul className="list">
-                  {upcoming.map((p) => (
-                    <UpcomingRow key={p.id} person={p} today={view.today} />
-                  ))}
-                </ul>
-              </section>
+    <div className="dropdown-body">
+      {view.unreadableFile && (
+        <p className="banner" role="alert">
+          Your saved list couldn't be read, so Friends started fresh. The old file is at {view.unreadableFile}.
+        </p>
+      )}
+      {view.people.length === 0 ? (
+        <div className="empty">
+          <strong>Nobody here yet</strong>
+          {addHint}
+        </div>
+      ) : (
+        <>
+          <section className="dropdown-section" aria-labelledby="due-label">
+            <h2 className="section-label" id="due-label">
+              Reach out now
+            </h2>
+            {due.length === 0 ? (
+              <p className="caught-up" ref={caughtUp} tabIndex={-1}>
+                You're all caught up.
+              </p>
+            ) : (
+              <ul className="list due-list">
+                {due.map((p, index) => (
+                  <DueRow
+                    key={p.id}
+                    person={p}
+                    today={view.today}
+                    doneRef={(el) => {
+                      if (el) doneButtons.current.set(p.id, el);
+                      else doneButtons.current.delete(p.id);
+                    }}
+                    onDoneStart={() => (doneAt.current = { id: p.id, index })}
+                    onDoneFailed={() => {
+                      if (doneAt.current?.id === p.id) doneAt.current = null;
+                    }}
+                  />
+                ))}
+              </ul>
             )}
-          </>
-        )}
-      </div>
+          </section>
+          {upcoming.length > 0 && (
+            <section className="dropdown-section" aria-labelledby="upcoming-label">
+              <h2 className="section-label" id="upcoming-label">
+                Coming up
+              </h2>
+              <ul className="list">
+                {upcoming.map((p) => (
+                  <UpcomingRow key={p.id} person={p} today={view.today} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function DropdownContent({ view }: { view: View }) {
+  return (
+    <>
+      <ReachOut view={view} addHint="Add the people you want to keep up with in Preferences." />
       <footer className="dropdown-footer">
         <button className="btn btn-quiet btn-sm" onClick={() => api.openPreferences()}>
           Preferences…

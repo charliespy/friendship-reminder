@@ -1,6 +1,6 @@
 # Friends
 
-A small macOS menu bar app that reminds you to stay in touch with people.
+A small macOS menu bar app, and an iPhone app, that remind you to stay in touch with people.
 
 Add the people you want to see, say how often (every month, three months, six months or
 year), and Friends picks a day to aim for and reminds you before it. It skips the dates you've
@@ -8,8 +8,8 @@ blocked (trips, busy weeks), can aim only for weekends or only for weekdays, and
 aim for goes by without you reaching out, it keeps them on your list and aims for the next good
 days.
 
-No tracking. Your list stays on your Mac unless you sign in with Apple: then it syncs with your
-Friends account, ready for a Friends app on iPhone.
+No tracking. Your list stays on your device unless you sign in with Apple: then it syncs with your
+Friends account, so your Mac and iPhone show the same list.
 
 <p>
   <img src="docs/screenshots/dropdown-light.png" width="300" alt="The Friends menu bar dropdown: three people to reach out to now, each with a Done button, and three coming up">
@@ -17,6 +17,11 @@ Friends account, ready for a Friends app on iPhone.
 </p>
 <p>
   <img src="docs/screenshots/preferences-people.png" width="600" alt="Preferences, People: everyone you keep up with, how often, and when their next reminder comes">
+</p>
+
+<p>
+  <img src="docs/screenshots/iphone-today.png" width="260" alt="The iPhone app's Today tab: three people to reach out to now, three coming up, and a tab bar with Today, People, Blocked and Settings">
+  <img src="docs/screenshots/iphone-people-dark.png" width="260" alt="The iPhone app's People tab in dark mode">
 </p>
 
 The people in these screenshots are made up.
@@ -77,10 +82,39 @@ are in `crates/friends-core/src/sync.rs`, the requests in `crates/friends-sync`.
 The Supabase project needs the Apple provider on (with a Services ID and its secret key) and
 `http://127.0.0.1:*/auth/callback` in its allowed redirect URLs.
 
+### iPhone
+
+The iPhone app is the same app built for iOS: the same rules and data (`crates/`), the same screens
+laid out as four tabs (`src/Phone.tsx`), the same colours. Its shell differs from the Mac's only
+where the phone does:
+
+- **Reminders are booked ahead.** iOS stops the app soon after it leaves the screen, so it can't
+  check every minute like the Mac app. Whenever the list changes, it hands iOS the coming
+  reminders (up to 60), each for 9:00 in the morning of its day. Reminders from earlier days count
+  as sent: the person shows in Today instead.
+- **Sign in with Apple opens in a sheet over the app** (`ASWebAuthenticationSession`, in
+  `src-tauri/plugins/web-auth`), which comes back to `io.github.charliespy.friends:/auth/callback`.
+  Add that address to the Supabase project's allowed redirect URLs too.
+- No menu bar, Dock icon or open at login.
+
+To build it you also need Xcode (with the iOS simulator), [rustup](https://rustup.rs/)'s Rust
+with the iOS targets, CocoaPods and XcodeGen:
+
+```sh
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+brew install cocoapods xcodegen
+npm run tauri ios dev                                      # run it in the simulator
+npm run tauri ios build -- --debug --target aarch64-sim    # or build a simulator app
+```
+
+Running it on a real iPhone needs an Apple Developer team (`APPLE_DEVELOPMENT_TEAM`) and a
+provisioning profile; there's no App Store or TestFlight build yet.
+
 ## Test
 
 ```sh
 npm run check            # types, lint, unit tests, Rust checks
+npm run check:ios        # the iPhone shell compiles (needs the iOS Rust targets)
 npm run e2e              # end-to-end tests (Playwright, WebKit)
 ```
 

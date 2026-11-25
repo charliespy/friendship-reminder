@@ -22,7 +22,8 @@ function useNow(): number {
   return now;
 }
 
-export function AccountSection() {
+/** `phone`: signing in happens in a sheet over the app, not the browser. */
+export function AccountSection({ phone = false }: { phone?: boolean }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -82,7 +83,9 @@ export function AccountSection() {
       <div className="choice-list">
         {attempt ? (
           <div className="account-row">
-            <span className="choice-text">Finish signing in with Apple in your browser.</span>
+            <span className="choice-text">
+              {phone ? "Finish signing in with Apple." : "Finish signing in with Apple in your browser."}
+            </span>
             {/* Cancelling makes the waiting sign-in stop, which ends the busy state. */}
             <button
               className="btn btn-outline"

@@ -1,4 +1,7 @@
-/** Preferences › Settings: which days count, notifications, launch at login, and the account. */
+/**
+ * Preferences › Settings: which days count, notifications, launch at login, and the account. On the
+ * iPhone (`phone`) there's no launch at login, and due people show in the Today tab.
+ */
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DayToggle, type View } from "./api";
 import { AccountSection } from "./AccountSection";
@@ -10,7 +13,7 @@ const TOGGLES: { value: DayToggle; title: string; text: string }[] = [
   { value: "allDays", title: "Any day", text: "Aim for whatever day comes up. Weekend days still get a Monday heads-up." },
 ];
 
-export function SettingsPane({ view }: { view: View }) {
+export function SettingsPane({ view, phone = false }: { view: View; phone?: boolean }) {
   const toggle = useAction();
   const notify = useAction();
   const [login, setLogin] = useState<boolean | null>(null);
@@ -23,6 +26,7 @@ export function SettingsPane({ view }: { view: View }) {
   // Read on mount, and again whenever the window comes back: the pane stays mounted while
   // Preferences is hidden, and the setting can change in System Settings meanwhile.
   useEffect(() => {
+    if (phone) return;
     const load = () => {
       const seq = ++loginSeq.current;
       api.getLaunchAtLogin().then(
@@ -46,7 +50,7 @@ export function SettingsPane({ view }: { view: View }) {
       window.removeEventListener("focus", load);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [phone]);
 
   // One change at a time, so the box always shows the answer to the last click.
   const changeLogin = async (on: boolean) => {
@@ -116,29 +120,33 @@ export function SettingsPane({ view }: { view: View }) {
               <span className="choice-title">Send a notification</span>
               <br />
               <span className="choice-text">
-                When someone's reminder comes up. They also show in the menu bar either way.
+                {phone
+                  ? "On the morning someone's reminder comes up. They also show in Today either way."
+                  : "When someone's reminder comes up. They also show in the menu bar either way."}
               </span>
             </span>
           </label>
-          <label className="choice">
-            <input
-              type="checkbox"
-              checked={login ?? false}
-              disabled={loginBusy || (login === null && !loginError)}
-              onChange={(e) => changeLogin(e.target.checked)}
-            />
-            <span>
-              <span className="choice-title">Open at login</span>
-              <br />
-              <span className="choice-text">Friends starts in the menu bar when you log in.</span>
-            </span>
-          </label>
+          {!phone && (
+            <label className="choice">
+              <input
+                type="checkbox"
+                checked={login ?? false}
+                disabled={loginBusy || (login === null && !loginError)}
+                onChange={(e) => changeLogin(e.target.checked)}
+              />
+              <span>
+                <span className="choice-title">Open at login</span>
+                <br />
+                <span className="choice-text">Friends starts in the menu bar when you log in.</span>
+              </span>
+            </label>
+          )}
         </div>
         {notify.error && <p className="error" role="alert">{notify.error}</p>}
         {loginError && <p className="error" role="alert">{loginError}</p>}
       </div>
 
-      <AccountSection />
+      <AccountSection phone={phone} />
     </section>
   );
 }
