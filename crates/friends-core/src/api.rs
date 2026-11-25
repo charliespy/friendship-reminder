@@ -39,6 +39,8 @@ pub struct PersonView {
     /// The day the app suggested, once it has come (see `Person::suggested_day`): what Done offers
     /// as "the day suggested".
     pub suggested_day: Option<NaiveDate>,
+    /// The earliest day Done takes (see `Person::earliest_done`).
+    pub earliest_done: NaiveDate,
 }
 
 /// Why a command failed, with a message fit to show the user.
@@ -246,6 +248,7 @@ impl App {
                 person: p.clone(),
                 due: p.is_due(today),
                 suggested_day: p.suggested_day(today),
+                earliest_done: p.earliest_done(today),
             })
             .collect();
         people.sort_by_cached_key(|p| {

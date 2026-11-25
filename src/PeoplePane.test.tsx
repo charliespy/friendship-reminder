@@ -24,6 +24,7 @@ const TODAY = "2026-11-18";
 function person(p: Partial<Person>): Person {
   return {
     suggestedDay: null,
+    earliestDone: "2026-01-01",
     id: 1,
     name: "Maya Chen",
     frequencyDays: 30,

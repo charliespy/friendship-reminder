@@ -83,9 +83,13 @@ export function DoneButton({
         aria-labelledby={titleId}
         // Escape closes it too.
         onClose={() => setShown(false)}
+        // Not while the answer is being saved: an error would have nowhere to show.
+        onCancel={(e) => {
+          if (busy) e.preventDefault();
+        }}
         onClick={(e) => {
           // A click on the dimmed backdrop (the dialog itself, outside its box) cancels.
-          if (e.target === e.currentTarget) close();
+          if (e.target === e.currentTarget && !busy) close();
         }}
       >
         {shown && (
@@ -133,8 +137,7 @@ export function DoneButton({
                       id={dayId}
                       type="date"
                       value={day}
-                      // A stored day can be "tomorrow" after a time zone change.
-                      min={person.lastConnected < today ? person.lastConnected : today}
+                      min={person.earliestDone}
                       max={today}
                       required
                       autoFocus

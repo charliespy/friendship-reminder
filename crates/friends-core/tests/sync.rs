@@ -93,7 +93,7 @@ fn a_first_sync_uploads_everything_once() {
     assert!(!data.has_unsynced());
     // Once chosen, it goes up.
     change(&mut data, 200, |d| {
-        d.set_day_toggle(DayToggle::Custom, today())
+        d.set_day_setting(DayToggle::Custom, None, today()).unwrap()
     });
     assert!(data.has_unsynced());
     let sent = data.sync_start(OWNER);
@@ -348,7 +348,8 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
     assert_eq!(data.people[0].next_target, day(2026, 8, 31));
     // An older day setting from another device loses to one changed here later.
     change(&mut data, 900, |d| {
-        d.set_day_toggle(DayToggle::WeekdaysOnly, today())
+        d.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+            .unwrap()
     });
     let older = Changes {
         settings: Some(RemoteSettings {
@@ -367,7 +368,7 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
 fn another_accounts_list_isnt_uploaded_into_this_one() {
     let (mut data, _) = synced_with_ada();
     change(&mut data, 200, |d| {
-        d.set_day_toggle(DayToggle::Custom, today())
+        d.set_day_setting(DayToggle::Custom, None, today()).unwrap()
     });
     let id = data.people[0].id;
     change(&mut data, 300, |d| {

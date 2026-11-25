@@ -24,6 +24,7 @@ function person(p: Partial<Person> = {}): Person {
     overdue: false,
     due: true,
     suggestedDay: null,
+    earliestDone: "2026-10-20",
     ...p,
   };
 }
@@ -115,8 +116,8 @@ describe("DoneButton", () => {
     expect(within(screen.getByRole("dialog")).queryByRole("alert")).toBeNull();
   });
 
-  it("lets today be picked when the last time in touch is stored as tomorrow", async () => {
-    const d = await ask(person({ lastConnected: "2026-11-26" }));
+  it("offers days from the earliest one the app takes", async () => {
+    const d = await ask(person({ lastConnected: "2026-11-26", earliestDone: TODAY }));
     await click(d.getByRole("button", { name: /^Another day/ }));
     expect((d.getByLabelText("Another day") as HTMLInputElement).min).toBe(TODAY);
   });

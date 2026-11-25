@@ -26,6 +26,8 @@ export interface Person {
   due: boolean;
   /** The day the app suggested, once it has come (the missed day, for someone overdue). */
   suggestedDay: IsoDate | null;
+  /** The earliest day Done takes. */
+  earliestDone: IsoDate;
 }
 
 export interface Blocked {

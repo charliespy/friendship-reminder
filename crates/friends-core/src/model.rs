@@ -60,6 +60,12 @@ impl Person {
         self.overdue || self.notification_date <= today
     }
 
+    /// The earliest day Done can say you were in touch: the last time, or today when the stored day
+    /// is "tomorrow" after a time zone change.
+    pub fn earliest_done(&self, today: NaiveDate) -> NaiveDate {
+        self.last_connected.min(today)
+    }
+
     /// The day the app suggested, once it has come: the target that went by for someone overdue, or
     /// the target itself from its day on. `None` while the target is still ahead.
     pub fn suggested_day(&self, today: NaiveDate) -> Option<NaiveDate> {
@@ -301,13 +307,14 @@ impl Data {
         }
     }
 
-    /// A fresh schedule for one person from their last time in touch, caught up to `today`.
+    /// A fresh schedule for one person from their last time in touch, caught up to `today`. Returns
+    /// whether its first target was already over (then they're missed).
     pub(crate) fn reschedule(
         person: &mut Person,
         rule: DayRule,
         ranges: &[BlockedRange],
         today: NaiveDate,
-    ) {
+    ) -> bool {
         person.apply(compute_schedule(
             person.last_connected,
             person.frequency_days,
@@ -316,7 +323,10 @@ impl Data {
         ));
         person.overdue = false;
         person.missed_target = None;
-        Self::catch_up_person(person, rule, ranges, today);
+        // Behind already (someone added long out of touch, or a Done on a day more than a round
+        // ago): caught up to today, and missed. Every device makes the same plan from the same data,
+        // whichever way the last time in touch changed.
+        Self::catch_up_person(person, rule, ranges, today)
     }
 
     /// Pushes a target that went by without being done to the next allowed days, again and again
@@ -423,8 +433,7 @@ impl Data {
         check_last_connected(on, today)?;
         let (rule, ranges) = (self.settings.rule(), self.ranges());
         let person = self.person_mut(id)?;
-        // A stored day can be "tomorrow" after a time zone change; today is always allowed then.
-        if on < person.last_connected.min(today) {
+        if on < person.earliest_done(today) {
             return invalid(format!(
                 "You were last in touch on {}. Pick that day or later.",
                 person.last_connected.format("%a, %b %-d, %Y")
@@ -432,10 +441,6 @@ impl Data {
         }
         person.last_connected = on;
         Self::reschedule(person, rule, &ranges, today);
-        // Just marked done, so not missed: from an earlier day, the new plan's first target may
-        // already be over, but nobody was reminded about it. It still moves to today or later.
-        person.overdue = false;
-        person.missed_target = None;
         Ok(())
     }
 
@@ -484,11 +489,6 @@ impl Data {
         removed
     }
 
-    /// The day setting, keeping the days picked for "Custom day".
-    pub fn set_day_toggle(&mut self, toggle: DayToggle, today: NaiveDate) {
-        let _ = self.set_day_setting(toggle, None, today);
-    }
-
     /// The day setting and, when given, the days picked for "Custom day", as one change: everyone is
     /// rescheduled once. Nothing changes when the days are refused.
     pub fn set_day_setting(
@@ -524,8 +524,8 @@ impl Data {
             // be over (a blocked range removed after the fact). Someone already missed stays missed
             // while their new target is still behind them.
             let (was_overdue, was_missed) = (person.overdue, person.missed_target);
-            Self::reschedule(person, rule, &ranges, today);
-            person.overdue &= was_overdue;
+            let behind = Self::reschedule(person, rule, &ranges, today);
+            person.overdue = was_overdue && behind;
             // Still missed: the day they were reminded about stays the one they missed.
             person.missed_target = if person.overdue {
                 was_missed.or(person.missed_target)

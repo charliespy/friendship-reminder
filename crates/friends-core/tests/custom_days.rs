@@ -84,7 +84,8 @@ fn picking_days_reschedules_everyone_only_while_custom_is_on() {
     data.set_day_setting(DayToggle::WeekendsOnly, Some(tue_thu), today())
         .unwrap();
     assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 22));
-    data.set_day_toggle(DayToggle::Custom, today());
+    data.set_day_setting(DayToggle::Custom, None, today())
+        .unwrap();
     assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 25));
     data.set_day_setting(
         DayToggle::Custom,

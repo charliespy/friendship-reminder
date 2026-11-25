@@ -142,13 +142,11 @@ impl DayRule {
     pub const ANY: DayRule = DayRule::Custom(DaySet::ALL);
 
     pub fn new(toggle: DayToggle, custom_days: DaySet) -> DayRule {
-        match toggle {
-            DayToggle::WeekdaysOnly => DayRule::WeekdaysOnly,
-            DayToggle::WeekendsOnly => DayRule::WeekendsOnly,
-            // An empty set would allow no day at all; it can't be saved, but just in case.
-            DayToggle::AllDays => DayRule::ANY,
-            DayToggle::Custom if custom_days.is_empty() => DayRule::ANY,
-            DayToggle::Custom => DayRule::Custom(custom_days),
+        // Settings are kept upgraded; this only makes sure, so no day is ever impossible.
+        match upgrade_day_setting(toggle, custom_days) {
+            (DayToggle::WeekdaysOnly, _) => DayRule::WeekdaysOnly,
+            (DayToggle::WeekendsOnly, _) => DayRule::WeekendsOnly,
+            (_, days) => DayRule::Custom(days),
         }
     }
 }

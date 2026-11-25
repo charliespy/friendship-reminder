@@ -26,6 +26,7 @@ const { Dropdown, DropdownContent } = await import("./Dropdown");
 function person(p: Partial<Person>): Person {
   return {
     suggestedDay: null,
+    earliestDone: "2026-01-01",
     id: 1,
     name: "Ada",
     frequencyDays: 30,

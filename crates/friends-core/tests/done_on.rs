@@ -120,7 +120,7 @@ fn the_view_gives_the_day_suggested_and_done_takes_a_day() {
 }
 
 #[test]
-fn done_on_an_earlier_day_never_leaves_someone_missed() {
+fn done_on_a_day_more_than_a_round_ago_is_still_behind_on_every_device() {
     let mut data = Data::default(); // weekends only
                                     // Jul 22 + 30 -> Sat Aug 22, missed; today is Mon Sep 28.
     let id = data
@@ -128,14 +128,24 @@ fn done_on_an_earlier_day_never_leaves_someone_missed() {
         .unwrap();
     let monday = date(2026, 9, 28);
     data.catch_up(monday);
-    assert!(data.person(id).unwrap().overdue);
-    // Done on Aug 22: Aug 22 + 30 -> Sat Sep 26, already over, so on to the next weekend, but
-    // nobody was reminded about Sep 26: not missed.
+    // In touch on Aug 22: monthly, so the next was due by Sat Sep 26, which went by too. Ada is
+    // behind again, truthfully, aiming for the next weekend.
     data.mark_done(id, Some(date(2026, 8, 22)), monday).unwrap();
-    let p = data.person(id).unwrap();
-    assert!(!p.overdue);
-    assert_eq!(p.missed_target, None);
-    assert!(p.next_target >= monday);
+    let mac = data.person(id).unwrap().clone();
+    assert_eq!(mac.last_connected, date(2026, 8, 22));
+    assert!(mac.overdue);
+    assert_eq!(mac.missed_target, Some(date(2026, 9, 26)));
+    assert_eq!(mac.next_target, date(2026, 10, 3));
+    // Another device that only learns the new last time in touch makes the same plan.
+    let mut phone = Data::default();
+    let other = phone
+        .add_person("Ada", 30, date(2026, 8, 22), monday)
+        .unwrap();
+    let p = phone.person(other).unwrap();
+    assert_eq!(
+        (p.next_target, p.overdue, p.missed_target),
+        (mac.next_target, mac.overdue, mac.missed_target)
+    );
 }
 
 #[test]
