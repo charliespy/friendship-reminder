@@ -31,6 +31,7 @@ fn build_in_account_settings() {
 /// `NAME=value` from a .env file, without quotes; the last line for a name wins.
 fn setting(text: &str, name: &str) -> Option<String> {
     text.lines()
+        .rev()
         .filter_map(|line| {
             let line = line.trim();
             let line = line.strip_prefix("export ").unwrap_or(line);
@@ -45,6 +46,5 @@ fn setting(text: &str, name: &str) -> Option<String> {
                     .to_string()
             })
         })
-        .filter(|value| !value.is_empty())
-        .last()
+        .find(|value| !value.is_empty())
 }
