@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use crate::model::{
     clean_name, sane_date, sane_target, squeeze, Blocked, Data, Person, FREQUENCIES, MAX_NAME_CHARS,
 };
-use crate::schedule::{DaySet, DayToggle};
+use crate::schedule::{upgrade_day_setting, DaySet, DayToggle};
 
 /// A fresh random id for a new row.
 pub fn new_uid() -> String {
@@ -381,12 +381,13 @@ impl Data {
             }
         }
         if let Some(s) = &got.settings {
-            // No day picked can't be used; the account's rules refuse it anyway.
-            if s.modified_at > self.sync.settings_modified && !s.custom_days.is_empty() {
-                schedules_changed |= (self.settings.day_toggle, self.settings.custom_days)
-                    != (s.day_toggle, s.custom_days);
-                self.settings.day_toggle = s.day_toggle;
-                self.settings.custom_days = s.custom_days;
+            if s.modified_at > self.sync.settings_modified {
+                // "Any day" from an older build comes with whatever days the row last held.
+                let (toggle, days) = upgrade_day_setting(s.day_toggle, s.custom_days);
+                schedules_changed |=
+                    (self.settings.day_toggle, self.settings.custom_days) != (toggle, days);
+                self.settings.day_toggle = toggle;
+                self.settings.custom_days = days;
                 self.sync.settings_modified = s.modified_at;
             }
             if s.modified_at == self.sync.settings_modified {

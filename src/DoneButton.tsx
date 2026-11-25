@@ -19,11 +19,11 @@ export function DoneButton({
   today: IsoDate;
   buttonRef?: Ref<HTMLButtonElement>;
   /** Called just before the change is sent. */
-  onStart?: () => void;
+  onStart?: (on: IsoDate) => void;
   /** Called once it has finished, with whether it worked. */
   onEnd?: (ok: boolean) => void;
 }) {
-  const { run, busy, error } = useAction();
+  const { run, busy, error, setError } = useAction();
   const dialog = useRef<HTMLDialogElement>(null);
   // The question is drawn only while open, so closed ones add nothing to each row.
   const [shown, setShown] = useState(false);
@@ -38,6 +38,7 @@ export function DoneButton({
     suggested !== null && suggested < today ? suggested : null;
 
   const open = () => {
+    setError(null);
     setPicking(false);
     setDay(today);
     setShown(true);
@@ -57,7 +58,7 @@ export function DoneButton({
   };
 
   const done = async (on: IsoDate) => {
-    onStart?.();
+    onStart?.(on);
     const ok = await run(() =>
       api.markDone(person.id, on === today ? undefined : on),
     );
@@ -132,7 +133,8 @@ export function DoneButton({
                       id={dayId}
                       type="date"
                       value={day}
-                      min={person.lastConnected}
+                      // A stored day can be "tomorrow" after a time zone change.
+                      min={person.lastConnected < today ? person.lastConnected : today}
                       max={today}
                       required
                       autoFocus

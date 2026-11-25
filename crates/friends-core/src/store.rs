@@ -74,6 +74,7 @@ impl Store {
         match serde_json::from_str::<Data>(&text) {
             Ok(mut data) if data.is_sane() => {
                 data.repair_ids();
+                data.settings.upgrade();
                 data.fill_uids();
                 // A day setting chosen before syncing existed counts as a change, so it goes up to
                 // the account instead of losing to another device's default.

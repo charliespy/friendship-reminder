@@ -105,4 +105,19 @@ describe("DoneButton", () => {
     await click(d.getByRole("button", { name: /^Today/ }));
     expect(d.getByRole("alert").textContent).toBe("Pick that day or later.");
   });
+
+  it("forgets an old error when asked again", async () => {
+    markDone.mockRejectedValue({ kind: "invalid", message: "Pick that day or later." });
+    const d = await ask(person());
+    await click(d.getByRole("button", { name: /^Today/ }));
+    await click(d.getByRole("button", { name: "Cancel" }));
+    await click(screen.getByRole("button", { name: "Mark Maya Chen as done" }));
+    expect(within(screen.getByRole("dialog")).queryByRole("alert")).toBeNull();
+  });
+
+  it("lets today be picked when the last time in touch is stored as tomorrow", async () => {
+    const d = await ask(person({ lastConnected: "2026-11-26" }));
+    await click(d.getByRole("button", { name: /^Another day/ }));
+    expect((d.getByLabelText("Another day") as HTMLInputElement).min).toBe(TODAY);
+  });
 });

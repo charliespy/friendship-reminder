@@ -166,6 +166,17 @@ describe("Preferences", () => {
     expect(setDayToggle).toHaveBeenCalledWith("custom", ["mon", "tue", "wed", "thu", "sat", "sun"]);
   });
 
+  it("keeps showing the choice just saved until the new view arrives", async () => {
+    setDayToggle.mockReset();
+    setDayToggle.mockResolvedValue(view([]));
+    await open(view([MAYA]));
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Weekdays only/)));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    // The command returned; the view with the new setting hasn't come yet.
+    expect((screen.getByLabelText(/Weekdays only/) as HTMLInputElement).checked).toBe(true);
+  });
+
   it("puts the saved setting back on Discard", async () => {
     setDayToggle.mockReset();
     await open(view([MAYA]));

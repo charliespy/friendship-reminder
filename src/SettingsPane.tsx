@@ -77,16 +77,22 @@ function DaySetting({ view }: { view: View }) {
   const days = draft?.days ?? saved.customDays;
   const changed =
     toggle !== saved.dayToggle || (toggle === "custom" && !sameDays(days, saved.customDays));
+  // Once the saved setting matches the draft (saved, or changed back by hand), the draft is done.
+  // Set while rendering, as React suggests for state that follows props.
+  if (draft && !changed) setDraft(null);
+  const discard = () => {
+    setDraft(null);
+    setJustSaved(false);
+  };
   const edit = (next: { toggle?: DayToggle; days?: Weekday[] }) => {
     setJustSaved(false);
     setDraft({ toggle: next.toggle ?? toggle, days: next.days ?? days });
   };
   const onSave = async () => {
     const ok = await save.run(() => api.setDayToggle(toggle, toggle === "custom" ? days : undefined));
-    if (ok) {
-      setDraft(null);
-      setJustSaved(true);
-    }
+    // The draft stays until the new view shows it saved (the view can come after the command
+    // returns), so the choice never flicks back to the old one meanwhile.
+    if (ok) setJustSaved(true);
   };
 
   return (
@@ -125,7 +131,7 @@ function DaySetting({ view }: { view: View }) {
           {changed ? "Not saved yet." : justSaved ? "Saved." : ""}
         </p>
         {changed && (
-          <button type="button" className="btn btn-quiet" disabled={save.busy} onClick={() => setDraft(null)}>
+          <button type="button" className="btn btn-quiet" disabled={save.busy} onClick={discard}>
             Discard
           </button>
         )}

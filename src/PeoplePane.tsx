@@ -1,6 +1,6 @@
 /** Preferences › People: add, edit, mark done and delete the people Friends reminds you about. */
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { api, type Person, type View } from "./api";
+import { api, type IsoDate, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
 import { DoneButton } from "./DoneButton";
 import { aimDay, formatDay, relativeDay } from "./date";
@@ -118,7 +118,7 @@ function PersonRow({
   onSelect: (on: boolean) => void;
   onEdit: () => void;
   /** Called when Done is pressed, before the command runs. */
-  onDoneStart: () => void;
+  onDoneStart: (on: IsoDate) => void;
   /** Called when the Done command has finished, with whether it worked. */
   onDoneEnd: (ok: boolean) => void;
   selectRef: (el: HTMLInputElement | null) => void;
@@ -184,7 +184,7 @@ export function PeoplePane({ view }: { view: View }) {
     | "add"
     | number
     | { deleted: number[]; next: number | null }
-    | { done: number; before: View; finished: boolean }
+    | { done: number; on: IsoDate; before: View; finished: boolean }
     | { deselected: number }
     | null
   >(null);
@@ -196,13 +196,13 @@ export function PeoplePane({ view }: { view: View }) {
     // The new view can arrive after the command returns: wait until it no longer shows the deleted
     // people. After a Done, the new view can come before or after the command returns (the macOS
     // app sends it first): wait for both, so the Done button is enabled again, and for a newer view
-    // than the one Done was pressed in that shows the person as done today, is gone, or is a new day
+    // than the one Done was pressed in that shows the person as done on the day picked, is gone, or is a new day
     // (then the target is used up either way, so it can't take focus later).
     if (typeof target === "object" && "deleted" in target && target.deleted.some((id) => present.has(id))) return;
     if (typeof target === "object" && "done" in target) {
       const person = view.people.find((p) => p.id === target.done);
       const newDay = view.today !== target.before.today;
-      if (!target.finished || view === target.before || (person && person.lastConnected !== view.today && !newDay)) {
+      if (!target.finished || view === target.before || (person && person.lastConnected !== target.on && !newDay)) {
         return;
       }
     }
@@ -352,7 +352,7 @@ export function PeoplePane({ view }: { view: View }) {
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}
               // `view` here is the one Done was pressed in.
-              onDoneStart={() => (returnFocus.current = { done: p.id, before: view, finished: false })}
+              onDoneStart={(on) => (returnFocus.current = { done: p.id, on, before: view, finished: false })}
               onDoneEnd={(ok) => {
                 const target = returnFocus.current;
                 if (typeof target !== "object" || target === null || !("done" in target) || target.done !== p.id) return;

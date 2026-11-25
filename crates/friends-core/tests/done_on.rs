@@ -118,3 +118,52 @@ fn the_view_gives_the_day_suggested_and_done_takes_a_day() {
     let json = serde_json::to_value(&view).unwrap();
     assert_eq!(json["people"][0]["suggestedDay"], serde_json::Value::Null);
 }
+
+#[test]
+fn done_on_an_earlier_day_never_leaves_someone_missed() {
+    let mut data = Data::default(); // weekends only
+                                    // Jul 22 + 30 -> Sat Aug 22, missed; today is Mon Sep 28.
+    let id = data
+        .add_person("Ada", 30, date(2026, 7, 22), today())
+        .unwrap();
+    let monday = date(2026, 9, 28);
+    data.catch_up(monday);
+    assert!(data.person(id).unwrap().overdue);
+    // Done on Aug 22: Aug 22 + 30 -> Sat Sep 26, already over, so on to the next weekend, but
+    // nobody was reminded about Sep 26: not missed.
+    data.mark_done(id, Some(date(2026, 8, 22)), monday).unwrap();
+    let p = data.person(id).unwrap();
+    assert!(!p.overdue);
+    assert_eq!(p.missed_target, None);
+    assert!(p.next_target >= monday);
+}
+
+#[test]
+fn done_today_works_when_the_last_time_is_tomorrow_after_a_time_zone_change() {
+    let mut data = Data::default();
+    let id = data.add_person("Ada", 30, today(), today()).unwrap();
+    // Recorded on a device a day ahead.
+    let yesterday = date(2026, 8, 18);
+    data.mark_done(id, None, yesterday).unwrap();
+    assert_eq!(data.person(id).unwrap().last_connected, yesterday);
+}
+
+#[test]
+fn a_new_plan_keeps_the_day_someone_actually_missed() {
+    let mut data = Data::default();
+    let id = data
+        .add_person("Ada", 30, date(2026, 7, 22), today())
+        .unwrap();
+    let monday = date(2026, 8, 31);
+    data.catch_up(monday);
+    assert_eq!(
+        data.person(id).unwrap().missed_target,
+        Some(date(2026, 8, 22))
+    );
+    // A blocked range changes the plan; Ada is still missed, and still missed Aug 22.
+    data.add_blocked(date(2026, 9, 5), date(2026, 9, 6), "Away", monday)
+        .unwrap();
+    let p = data.person(id).unwrap();
+    assert!(p.overdue);
+    assert_eq!(p.missed_target, Some(date(2026, 8, 22)));
+}

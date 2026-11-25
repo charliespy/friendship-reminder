@@ -167,6 +167,20 @@ describe("PeoplePane", () => {
     expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
   });
 
+  it("after Done on another day, focuses the Done button once the view shows that day", async () => {
+    const { rerender } = render(<PeoplePane view={view([MAYA, THEO, LENA])} />);
+    button("Mark Maya Chen as done").focus();
+    await click(button("Mark Maya Chen as done"));
+    const question = within(screen.getByRole("dialog"));
+    await click(question.getByRole("button", { name: /^Another day/ }));
+    fireEvent.change(question.getByLabelText("Another day"), { target: { value: "2026-11-14" } });
+    await click(question.getByRole("button", { name: "Done" }));
+    expect(markDone).toHaveBeenCalledWith(1);
+    const done = { ...MAYA, lastConnected: "2026-11-14", due: false, nextTarget: "2026-12-19", notificationDate: "2026-12-14" };
+    rerender(<PeoplePane view={view([THEO, LENA, done])} />);
+    expect(document.activeElement).toBe(button("Mark Maya Chen as done"));
+  });
+
   it("after Done, focuses the Done button when the new view arrives before the command returns", async () => {
     // The macOS app sends the new view first, while the command is still running.
     let finish!: (v: View) => void;

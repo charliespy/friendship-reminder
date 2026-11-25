@@ -31,9 +31,21 @@ pub enum DayToggle {
     WeekdaysOnly,
     #[default]
     WeekendsOnly,
-    /// "Any day" before custom days existed: the same as all seven days picked.
-    #[serde(alias = "allDays")]
     Custom,
+    /// "Any day", from before custom days: only ever read (from an older file, or an account row an
+    /// older build wrote), and turned into `Custom` with all seven days by [`upgrade_day_setting`].
+    AllDays,
+}
+
+/// The day setting as this version keeps it: "Any day" becomes Custom with all seven days (whatever
+/// days were stored with it, which an older build didn't know about), and no days picked, which can't
+/// be used, becomes all seven.
+pub fn upgrade_day_setting(toggle: DayToggle, days: DaySet) -> (DayToggle, DaySet) {
+    match toggle {
+        DayToggle::AllDays => (DayToggle::Custom, DaySet::ALL),
+        _ if days.is_empty() => (toggle, DaySet::ALL),
+        _ => (toggle, days),
+    }
 }
 
 /// Some days of the week. Stored as a list of short names, Monday first: `["mon", "sat"]`.
@@ -134,6 +146,7 @@ impl DayRule {
             DayToggle::WeekdaysOnly => DayRule::WeekdaysOnly,
             DayToggle::WeekendsOnly => DayRule::WeekendsOnly,
             // An empty set would allow no day at all; it can't be saved, but just in case.
+            DayToggle::AllDays => DayRule::ANY,
             DayToggle::Custom if custom_days.is_empty() => DayRule::ANY,
             DayToggle::Custom => DayRule::Custom(custom_days),
         }

@@ -137,12 +137,6 @@ struct DoneArgs {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DaysArgs {
-    days: DaySet,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct OnArgs {
     on: bool,
 }
@@ -344,10 +338,6 @@ impl App {
                 let p: ToggleArgs = args(cmd, a)?;
                 d.set_day_setting(p.day_toggle, p.custom_days, today)
                     .map_err(invalid)?;
-            }
-            "set_custom_days" => {
-                let p: DaysArgs = args(cmd, a)?;
-                d.set_custom_days(p.days, today).map_err(invalid)?;
             }
             "set_notifications" => {
                 let p: OnArgs = args(cmd, a)?;

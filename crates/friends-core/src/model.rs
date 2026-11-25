@@ -5,8 +5,8 @@ use chrono::{Datelike, Days, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::schedule::{
-    compute_schedule, last_day_of_run, push_missed_schedule, BlockedRange, DayRule, DaySet,
-    DayToggle, ScheduleResult,
+    compute_schedule, last_day_of_run, push_missed_schedule, upgrade_day_setting, BlockedRange,
+    DayRule, DaySet, DayToggle, ScheduleResult,
 };
 
 /// The frequencies the app offers, in days.
@@ -112,6 +112,12 @@ impl Settings {
     /// The day setting as the scheduling rules use it.
     pub fn rule(&self) -> DayRule {
         DayRule::new(self.day_toggle, self.custom_days)
+    }
+
+    /// Brings a setting saved by an older version up to date (see [`upgrade_day_setting`]).
+    pub fn upgrade(&mut self) {
+        (self.day_toggle, self.custom_days) =
+            upgrade_day_setting(self.day_toggle, self.custom_days);
     }
 }
 
@@ -250,8 +256,7 @@ impl Data {
         ids.dedup();
         let ids_ok =
             ids.len() == count && self.last_id < MAX_ID && ids.last().is_none_or(|&id| id < MAX_ID);
-        let days_ok = !self.settings.custom_days.is_empty();
-        people_ok && blocked_ok && ids_ok && days_ok && self.uids_ok()
+        people_ok && blocked_ok && ids_ok && self.uids_ok()
     }
 
     fn ids(&self) -> impl Iterator<Item = u64> + '_ {
@@ -418,7 +423,8 @@ impl Data {
         check_last_connected(on, today)?;
         let (rule, ranges) = (self.settings.rule(), self.ranges());
         let person = self.person_mut(id)?;
-        if on < person.last_connected {
+        // A stored day can be "tomorrow" after a time zone change; today is always allowed then.
+        if on < person.last_connected.min(today) {
             return invalid(format!(
                 "You were last in touch on {}. Pick that day or later.",
                 person.last_connected.format("%a, %b %-d, %Y")
@@ -426,6 +432,10 @@ impl Data {
         }
         person.last_connected = on;
         Self::reschedule(person, rule, &ranges, today);
+        // Just marked done, so not missed: from an earlier day, the new plan's first target may
+        // already be over, but nobody was reminded about it. It still moves to today or later.
+        person.overdue = false;
+        person.missed_target = None;
         Ok(())
     }
 
@@ -474,11 +484,9 @@ impl Data {
         removed
     }
 
+    /// The day setting, keeping the days picked for "Custom day".
     pub fn set_day_toggle(&mut self, toggle: DayToggle, today: NaiveDate) {
-        if self.settings.day_toggle != toggle {
-            self.settings.day_toggle = toggle;
-            self.recompute_all(today);
-        }
+        let _ = self.set_day_setting(toggle, None, today);
     }
 
     /// The day setting and, when given, the days picked for "Custom day", as one change: everyone is
@@ -496,22 +504,9 @@ impl Data {
         let before = self.settings.rule();
         self.settings.day_toggle = toggle;
         self.settings.custom_days = days;
+        self.settings.upgrade();
         if self.settings.rule() != before {
             self.recompute_all(today);
-        }
-        Ok(())
-    }
-
-    /// The days to aim for under "Custom day". At least one.
-    pub fn set_custom_days(&mut self, days: DaySet, today: NaiveDate) -> Result<(), Invalid> {
-        if days.is_empty() {
-            return invalid("Pick at least one day.");
-        }
-        if self.settings.custom_days != days {
-            self.settings.custom_days = days;
-            if self.settings.day_toggle == DayToggle::Custom {
-                self.recompute_all(today);
-            }
         }
         Ok(())
     }
@@ -528,12 +523,15 @@ impl Data {
             // A new plan can't make anyone "missed": a target the old plan never aimed for may already
             // be over (a blocked range removed after the fact). Someone already missed stays missed
             // while their new target is still behind them.
-            let was_overdue = person.overdue;
+            let (was_overdue, was_missed) = (person.overdue, person.missed_target);
             Self::reschedule(person, rule, &ranges, today);
             person.overdue &= was_overdue;
-            if !person.overdue {
-                person.missed_target = None;
-            }
+            // Still missed: the day they were reminded about stays the one they missed.
+            person.missed_target = if person.overdue {
+                was_missed.or(person.missed_target)
+            } else {
+                None
+            };
         }
     }
 

@@ -187,8 +187,8 @@ fn downloads_read_what_changed_since_the_cursor() {
     assert_eq!(
         changes.settings,
         Some(RemoteSettings {
-            // "Any day", from before custom days: all seven days picked.
-            day_toggle: DayToggle::Custom,
+            // "Any day", from an older build: read as it is (the sync rules turn it into custom).
+            day_toggle: DayToggle::AllDays,
             custom_days: DaySet::ALL,
             modified_at: 3,
             updated_ms: 80_000,
