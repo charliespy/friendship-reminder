@@ -3,7 +3,7 @@
 //! windows. `desktop.rs` holds the Mac's menu bar app and `mobile.rs` the iPhone's.
 
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-compile_error!("Friends is a Mac and iPhone app: build it for macOS or iOS.");
+compile_error!("Friendship Reminder is a Mac and iPhone app: build it for macOS or iOS.");
 
 mod account;
 #[cfg(target_os = "macos")]
@@ -120,7 +120,7 @@ async fn call(app: AppHandle, cmd: String, args: Value) -> Result<View, ApiError
         let reason = String::new();
         return Err(ApiError::new(
             ErrorKind::Storage,
-            format!("Friends can't open its data. {reason}"),
+            format!("Friendship Reminder can't open its data. {reason}"),
         ));
     };
     let mut core = lock(&state);
@@ -198,7 +198,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building the Friends app")
+        .expect("error while building the Friendship Reminder app")
         .run(|app, event| {
             #[cfg(target_os = "macos")]
             desktop::on_event(app, &event);

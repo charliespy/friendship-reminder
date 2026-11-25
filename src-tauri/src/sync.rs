@@ -1,4 +1,4 @@
-//! Keeps the list in sync with the Friends account while signed in, on a thread of its own: at launch,
+//! Keeps the list in sync with the Friendship Reminder account while signed in, on a thread of its own: at launch,
 //! right after signing in, a few seconds after each change, and every few minutes (to pick up changes
 //! from other devices). Offline, it tries again a minute later. The rules live in friends-core
 //! (`sync`) and the requests in friends-sync; this file only decides when to run.

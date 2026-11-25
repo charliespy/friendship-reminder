@@ -205,7 +205,7 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
       <header className="pane-header">
         <div>
           <h2 id="settings-title">Settings</h2>
-          <p>Which days count for meeting up, and how Friends reminds you.</p>
+          <p>Which days count for meeting up, and how Friendship Reminder reminds you.</p>
         </div>
       </header>
 
@@ -242,7 +242,7 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
               <span>
                 <span className="choice-title">Open at login</span>
                 <br />
-                <span className="choice-text">Friends starts in the menu bar when you log in.</span>
+                <span className="choice-text">Friendship Reminder starts in the menu bar when you log in.</span>
               </span>
             </label>
           )}

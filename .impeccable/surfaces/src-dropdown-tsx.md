@@ -5,7 +5,7 @@ primary_target: "src/Dropdown.tsx"
 related_targets: ["src/Preferences.tsx","src/PeoplePane.tsx","src/BlockedPane.tsx","src/SettingsPane.tsx","src/styles.css"]
 ---
 
-# Friends: menu bar dropdown and Preferences
+# Friendship Reminder: menu bar dropdown and Preferences
 
 Scope: the dropdown (src/Dropdown.tsx) and the Preferences window (src/Preferences.tsx and the three
 panes). Mode: Operate. Audience and job: see PRODUCT.md (a glance from the menu bar, Done in one
@@ -18,7 +18,7 @@ Settings. Code-led (Operate surface).
 
 ## Direction contract
 
-THESIS: Friends looks like an app Apple shipped: System Settings' greys, groups and controls, with
+THESIS: Friendship Reminder looks like an app Apple shipped: System Settings' greys, groups and controls, with
 the Mac's own accent as the only colour. Refuses a custom palette of spot inks.
 
 OWN-WORLD: Window grey #ececec (dark #1e1e1e), white inset groups with a hairline edge, the system
@@ -29,7 +29,7 @@ sidebar row, count tag, checkboxes and focus. Orange for missed only, red for de
 STORY: Open the menu bar, see who to reach out to now and who's next, press Done. Preferences reads
 as one more System Settings window.
 
-FIRST VIEWPORT: Dropdown edge to edge: "Friends" left, date right; "Reach out now" in a white group,
+FIRST VIEWPORT: Dropdown edge to edge: "Friendship Reminder" left, date right; "Reach out now" in a white group,
 48px rows (grey disc, name, meta line, plain Done push button); "Coming up" as a plain list on the
 window grey; footer of menu-style text buttons. Preferences: 168px source list with an accent-filled
 selected row, pane with a 20pt title and inset groups.

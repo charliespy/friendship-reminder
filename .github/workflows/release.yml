@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.2.0 to build Friends for macOS and publish it on GitHub Releases, with that
+# Push a tag like v0.2.0 to build Friendship Reminder for macOS and publish it on GitHub Releases, with that
 # version's section of CHANGELOG.md as the release description (docs/RELEASING.md has the steps).
 # Signing and notarization switch on by themselves once these repository secrets exist:
 #   APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
@@ -216,7 +216,7 @@ jobs:
       # The .dmg: the publish job takes it from here.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ env.PUBLISH == 'true' && 'Friends' || 'Friends-dry-run' }}
+          name: ${{ env.PUBLISH == 'true' && 'Friendship-Reminder' || 'Friendship-Reminder-dry-run' }}
           path: dist-release/
           if-no-files-found: error
           overwrite: true
@@ -231,7 +231,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: Friends
+          name: Friendship-Reminder
           path: dist-release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -246,4 +246,4 @@ jobs:
           [ -s release-notes/release-notes.md ] || { echo "::error::no release notes"; exit 1; }
           [ "$(ls dist-release/*.dmg | wc -l)" -eq 1 ] || { echo "::error::expected exactly one .dmg"; exit 1; }
           gh release create "$GITHUB_REF_NAME" dist-release/*.dmg --repo "$GITHUB_REPOSITORY" \
-            --title "Friends $GITHUB_REF_NAME" --notes-file release-notes/release-notes.md --verify-tag
+            --title "Friendship Reminder $GITHUB_REF_NAME" --notes-file release-notes/release-notes.md --verify-tag

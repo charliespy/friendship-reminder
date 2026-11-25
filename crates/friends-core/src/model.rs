@@ -170,7 +170,7 @@ pub struct Data {
     /// The last id handed out, so a deleted id is never reused.
     #[serde(default)]
     pub last_id: u64,
-    /// What syncing with the Friends account needs to remember.
+    /// What syncing with the Friendship Reminder account needs to remember.
     #[serde(default)]
     pub sync: crate::sync::SyncState,
 }
@@ -294,7 +294,7 @@ impl Data {
     /// A new id, refused at MAX_ID so the saved file stays one the app will load.
     pub(crate) fn next_id(&mut self) -> Result<u64, Invalid> {
         if self.last_id + 1 >= MAX_ID {
-            return invalid("Friends has run out of ids.");
+            return invalid("Friendship Reminder has run out of ids.");
         }
         self.last_id += 1;
         Ok(self.last_id)

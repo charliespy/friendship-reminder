@@ -128,7 +128,7 @@ describe("release.mjs", { timeout: 60_000 }, () => {
     commit("chore(release): v0.1.0 (#9)");
     sh("git", ["-c", "tag.gpgsign=false", "tag", "v0.1.0"]);
     const body = release("notes", "0.1.0").out;
-    const dmg = { name: "Friends_0.1.0_universal.dmg", size: 9_000_000 };
+    const dmg = { name: "Friendship.Reminder_0.1.0_universal.dmg", size: 9_000_000 };
     const gh = (o) => writeFileSync(join(dir, "gh.json"), JSON.stringify({ tagName: "v0.1.0", isDraft: false, url: "u", body, assets: [dmg], ...o }));
     gh({ body: body.replace(/\n/g, "\r\n") });
     expect(release("verify", "v0.1.0")).toMatchObject({ code: 0, err: "" });
@@ -138,7 +138,7 @@ describe("release.mjs", { timeout: 60_000 }, () => {
     const r = release("verify", "v0.1.0").err;
     expect(r).toMatch(/draft/);
     expect(r).toMatch(/exactly one \.dmg, found 0/);
-    gh({ assets: [{ name: "Friends_0.0.9_universal.dmg", size: 10 }] });
+    gh({ assets: [{ name: "Friendship.Reminder_0.0.9_universal.dmg", size: 10 }] });
     expect(release("verify", "v0.1.0").err).toMatch(/not named for 0\.1\.0[\s\S]*only 10 bytes/);
   });
   it("bumps from the last tag, and refuses a version that doesn't go up", () => {

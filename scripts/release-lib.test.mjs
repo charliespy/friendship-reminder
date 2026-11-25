@@ -194,7 +194,7 @@ describe("draftNotes", () => {
         "",
         "- Open Preferences faster.",
         "- **Breaking:** New data file format.",
-        "- Updated the libraries Friends is built on.",
+        "- Updated the libraries Friendship Reminder is built on.",
       ].join("\n"),
     );
     // Build and test tools alone don't change the app.
@@ -222,7 +222,7 @@ describe("draftNotes", () => {
     expect(bullet.split("\n").slice(1).every((l) => l.startsWith("  ") && !l.startsWith("   "))).toBe(true);
     expect(UNSIGNED_NOTE).toContain("**Open Anyway**");
     expect(UNSIGNED_NOTE.replace(/\s+/g, " ")).toContain(
-      "On macOS 13 or 14, Control-click Friends in Applications and choose **Open** instead.",
+      "On macOS 13 or 14, Control-click Friendship Reminder in Applications and choose **Open** instead.",
     );
     // A note rewrapped by hand, with "Open Anyway" split across lines, isn't added again.
     const rewrapped = "### Good to know\n- Unsigned: click **Open\n  Anyway** in Privacy & Security.\n";

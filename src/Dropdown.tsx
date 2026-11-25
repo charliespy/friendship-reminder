@@ -89,7 +89,7 @@ export function ReachOut({ view, addHint }: { view: View; addHint: string }) {
     <div className="dropdown-body">
       {view.unreadableFile && (
         <p className="banner" role="alert">
-          Your saved list couldn't be read, so Friends started fresh. The old file is at {view.unreadableFile}.
+          Your saved list couldn't be read, so Friendship Reminder started fresh. The old file is at {view.unreadableFile}.
         </p>
       )}
       {view.people.length === 0 ? (
@@ -154,7 +154,7 @@ export function DropdownContent({ view }: { view: View }) {
           Preferences…
         </button>
         <button className="btn btn-quiet btn-sm" onClick={() => api.quit()}>
-          Quit Friends
+          Quit Friendship Reminder
         </button>
       </footer>
     </>
@@ -176,7 +176,7 @@ export function Dropdown() {
   return (
     <main className="dropdown">
       <header className="dropdown-header">
-        <h1 className="wordmark">Friends</h1>
+        <h1 className="wordmark">Friendship Reminder</h1>
         {view && <span className="muted">{formatDay(view.today, view.today)}</span>}
       </header>
       {view ? (

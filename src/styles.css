@@ -1,5 +1,5 @@
 /*
- * Friends: looks like it came with the Mac, modelled on System Settings. Window grey, white grouped
+ * Friendship Reminder: looks like it came with the Mac, modelled on System Settings. Window grey, white grouped
  * lists, the system's label greys, and one colour: the Mac's own accent (System Settings >
  * Appearance), blue unless the user picked another. Orange marks missed (never red); red is kept
  * for deleting and errors. Every colour, size and radius is a token here; components use only the

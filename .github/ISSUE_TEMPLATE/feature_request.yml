@@ -6,7 +6,7 @@ body:
     id: problem
     attributes:
       label: What would it help with
-      description: The situation where Friends falls short today.
+      description: The situation where Friendship Reminder falls short today.
     validations:
       required: true
   - type: textarea

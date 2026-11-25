@@ -161,7 +161,7 @@ fn book(app: &AppHandle, booked: &mut Option<Booked>) {
         let result = notification
             .builder()
             .id(id)
-            .title("Friends")
+            .title("Friendship Reminder")
             .body(&body)
             .schedule(Schedule::At {
                 date,

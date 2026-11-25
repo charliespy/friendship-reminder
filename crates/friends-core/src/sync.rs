@@ -1,4 +1,4 @@
-//! Syncing with the Friends account: the rules for what to upload and how to take in what other
+//! Syncing with the Friendship Reminder account: the rules for what to upload and how to take in what other
 //! devices changed. No network here; friends-sync talks to the server.
 //!
 //! The account holds the real list; each device keeps a copy, so the app works offline. Every person,

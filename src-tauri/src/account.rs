@@ -1,4 +1,4 @@
-//! The Friends account: Sign in with Apple, traded for a Supabase session that is kept in the Keychain.
+//! The Friendship Reminder account: Sign in with Apple, traded for a Supabase session that is kept in the Keychain.
 //! The rules live in friends-account; this file only opens the sign-in page, waits for it to come back,
 //! and connects the Keychain and the windows.
 //!
@@ -39,9 +39,10 @@ const KEYCHAIN_ACCOUNT: &str = "account-session";
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// What the browser shows once it's back (the iPhone's sheet just closes).
-const SIGNED_IN: &str = "You're signed in to Friends. You can close this tab.";
-const FAILED: &str = "Signing in to Friends didn't work. Go back to Friends to try again.";
-const CANCELLED: &str = "Signing in to Friends was cancelled. You can close this tab.";
+const SIGNED_IN: &str = "You're signed in to Friendship Reminder. You can close this tab.";
+const FAILED: &str =
+    "Signing in to Friendship Reminder didn't work. Go back to Friendship Reminder to try again.";
+const CANCELLED: &str = "Signing in to Friendship Reminder was cancelled. You can close this tab.";
 
 /// The browser sign-ins, each with its sign-in address (unblocking it wakes the sign-in).
 #[cfg(target_os = "macos")]
@@ -127,7 +128,9 @@ fn available() -> Result<Config, String> {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../.env.local");
         Config::from_env_file(&std::fs::read_to_string(path).ok()?)
     });
-    built_in.ok_or_else(|| "This copy of Friends was built without an account server.".to_string())
+    built_in.ok_or_else(|| {
+        "This copy of Friendship Reminder was built without an account server.".to_string()
+    })
 }
 
 fn now() -> i64 {
@@ -373,7 +376,7 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
         answer(request, 200, page)
     });
     if matches!(&shown, Ok(s) if matches!(s.account, AccountView::SignedIn { .. })) {
-        // Back from the browser to Friends.
+        // Back from the browser to Friendship Reminder.
         let _ = crate::desktop::show_preferences(app);
     }
     shown
@@ -510,7 +513,7 @@ fn open_in_browser(url: &str) -> Result<(), String> {
 /// Answers the browser with a short page.
 fn answer(request: tiny_http::Request, status: u16, text: &str) {
     let body = format!(
-        "<!doctype html><meta charset=utf-8><title>Friends</title>\
+        "<!doctype html><meta charset=utf-8><title>Friendship Reminder</title>\
          <body style=\"font:15px -apple-system,sans-serif;margin:4em auto;max-width:32em;text-align:center\">\
          <p>{text}</p></body>"
     );
@@ -597,7 +600,7 @@ mod tests {
         answer(request, 200, SIGNED_IN);
         let page = page.join().unwrap();
         assert!(page.starts_with("HTTP/1.1 200"));
-        assert!(page.contains("You're signed in to Friends"));
+        assert!(page.contains("You're signed in to Friendship Reminder"));
     }
 
     #[test]

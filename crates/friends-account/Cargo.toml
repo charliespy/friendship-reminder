@@ -1,7 +1,7 @@
 [package]
 name = "friends-account"
 version = "0.1.0"
-description = "Signing in to a Friends account (Supabase Auth), with no UI or OS code"
+description = "Signing in to a Friendship Reminder account (Supabase Auth), with no UI or OS code"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

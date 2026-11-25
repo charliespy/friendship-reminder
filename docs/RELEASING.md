@@ -1,4 +1,4 @@
-# Releasing Friends
+# Releasing Friendship Reminder
 
 The step-by-step for a maintainer (or a coding agent) cutting a release. The rule for the version
 number is in [CONTRIBUTING.md](../CONTRIBUTING.md#releases); `scripts/release.mjs` does the
@@ -72,7 +72,7 @@ on `main` until then.
    chore/release-vX.Y.Z`), and start again from step 1: `plan` reads the new change and may give
    a different version (your notes are still in the closed PR's description). One exception:
    when it was only Dependabot updating libraries (`chore(deps): …`, which merge by themselves),
-   the version doesn't change: if the notes lack "Updated the libraries Friends is built on.", add
+   the version doesn't change: if the notes lack "Updated the libraries Friendship Reminder is built on.", add
    it under `### Changed` in the release's `CHANGELOG.md` section on the release branch (and in the
    PR description), push, and carry on.
 
@@ -82,7 +82,7 @@ on `main` until then.
    ```sh
    git switch main && git pull
    git log --first-parent --format='%H %s' | grep -m1 ' chore(release): vX.Y.Z (#'
-   git tag -a vX.Y.Z <the hash it printed> -m "Friends vX.Y.Z"
+   git tag -a vX.Y.Z <the hash it printed> -m "Friendship Reminder vX.Y.Z"
    git push origin vX.Y.Z
    ```
 
@@ -107,7 +107,7 @@ on `main` until then.
 
    It checks that the release isn't a draft, has exactly one `.dmg` for that version, and shows
    the same description as `CHANGELOG.md`. Then download the `.dmg`, open it, and check that
-   Friends starts.
+   Friendship Reminder starts.
 
 ## How the script reads the history
 

@@ -119,7 +119,7 @@ export function Phone() {
           ))
         )}
       </main>
-      <nav className="tabbar" aria-label="Friends">
+      <nav className="tabbar" aria-label="Friendship Reminder">
         <div role="tablist">
           {TABS.map((t) => (
             <button

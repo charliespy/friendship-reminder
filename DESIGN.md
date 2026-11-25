@@ -1,5 +1,5 @@
 ---
-name: Friends
+name: Friendship Reminder
 description: A macOS menu bar reminder, and its iPhone app, that look like they came with the Mac and the iPhone.
 colors:
   window: "#ececec"
@@ -186,13 +186,13 @@ components:
     padding: "12px"
 ---
 
-# Design System: Friends
+# Design System: Friendship Reminder
 
 ## Overview
 
 **Creative North Star: "Came With The Mac"**
 
-Friends looks like an app Apple shipped. It borrows System Settings: window grey, white inset groups, the system's label greys, and standard push buttons. Nothing is branded. A user should not be able to tell where macOS ends and Friends begins.
+Friendship Reminder looks like an app Apple shipped. It borrows System Settings: window grey, white inset groups, the system's label greys, and standard push buttons. Nothing is branded. A user should not be able to tell where macOS ends and Friendship Reminder begins.
 
 There is one colour: the Mac's own accent, the one the user picked in System Settings > Appearance. It is blue unless they chose another. It marks the main action and what is selected. Orange marks a missed day. Red is kept for deleting and errors. Everything else is grey.
 
@@ -249,7 +249,7 @@ Neutral system greys, with the user's own accent as the one colour.
 ### Hierarchy
 - **Headline** (700, 20px, -0.015em): Preferences pane titles.
 - **Title** (600, 15px): the bold first line of an empty state.
-- **Wordmark** (700, 13px, -0.005em): "Friends" in the dropdown header. In the sidebar it is 11px, 600, in Label 2.
+- **Wordmark** (700, 13px, -0.005em): "Friendship Reminder" in the dropdown header. In the sidebar it is 11px, 600, in Label 2.
 - **Body** (400, 13px, 1.38): base text, sidebar rows and footer buttons. Pane intros stop at 60ch.
 - **Body Strong** (600, 13px): person names, the selection count.
 - **Button** (500, 13px): push buttons, choice titles, the selected sidebar row.

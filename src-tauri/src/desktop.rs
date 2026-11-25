@@ -35,10 +35,43 @@ pub fn plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry
             // Opening the app again (from Finder or Spotlight) opens Preferences instead of a second copy.
             let _ = show_preferences(app);
         }))
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            None,
-        ))
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .macos_launcher(MacosLauncher::LaunchAgent)
+                // The login item's file keeps the name it had when the app was called Friends
+                // (`~/Library/LaunchAgents/Friends.plist`), so "Open at login" stays on after the rename.
+                .app_name(LOGIN_ITEM)
+                .build(),
+        )
+}
+
+/// The name of the login item's file, from when the app was called Friends. Debug builds share it:
+/// turning "Open at login" on or off in one changes the installed app's login item too.
+const LOGIN_ITEM: &str = "Friends";
+
+/// A login item made before the rename still opens the old `Friends.app`. Once, point it at this
+/// copy, and only when this copy is the one in Applications (not a .dmg or a moved download that
+/// will soon be gone, and not a build of the code). Nothing is written when the login item is off
+/// or already opens this app.
+fn move_login_item_from_old_app(app: &AppHandle) {
+    let Some(home) = std::env::var_os("HOME") else {
+        return;
+    };
+    let file = std::path::Path::new(&home)
+        .join("Library/LaunchAgents")
+        .join(format!("{LOGIN_ITEM}.plist"));
+    let Ok(item) = std::fs::read_to_string(&file) else {
+        return; // Open at login is off.
+    };
+    let from_old_app = item.contains("/Friends.app/Contents/MacOS/");
+    let in_applications = std::env::current_exe()
+        .map(|exe| exe.starts_with("/Applications"))
+        .unwrap_or(false);
+    if from_old_app && in_applications {
+        if let Err(e) = app.autolaunch().enable() {
+            eprintln!("friends: couldn't move Open at login over from Friends.app: {e}");
+        }
+    }
 }
 
 /// The data folder can't be read: a menu bar app that quits at launch would vanish without a word, so
@@ -46,9 +79,9 @@ pub fn plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry
 pub fn cannot_open(e: &str) -> ! {
     rfd::MessageDialog::new()
         .set_level(rfd::MessageLevel::Error)
-        .set_title("Friends can't open its data")
+        .set_title("Friendship Reminder can't open its data")
         .set_description(format!(
-            "{e}\n\nCheck that you can read and write this folder, then open Friends again."
+            "{e}\n\nCheck that you can read and write this folder, then open Friendship Reminder again."
         ))
         .set_buttons(rfd::MessageButtons::Ok)
         .show();
@@ -61,9 +94,9 @@ pub fn show_count(app: &AppHandle, due: usize) {
         let title = if due > 0 { Some(due.to_string()) } else { None };
         let _ = tray.set_title(title);
         let tooltip = match due {
-            0 => "Friends: nobody to reach out to right now".to_string(),
-            1 => "Friends: 1 person to reach out to".to_string(),
-            n => format!("Friends: {n} people to reach out to"),
+            0 => "Friendship Reminder: nobody to reach out to right now".to_string(),
+            1 => "Friendship Reminder: 1 person to reach out to".to_string(),
+            n => format!("Friendship Reminder: {n} people to reach out to"),
         };
         let _ = tray.set_tooltip(Some(tooltip));
     }
@@ -112,7 +145,7 @@ pub fn show_preferences(app: &AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     let w = WebviewWindowBuilder::new(app, PREFERENCES, WebviewUrl::App("preferences.html".into()))
-        .title("Friends")
+        .title("Friendship Reminder")
         .inner_size(720.0, 520.0)
         .min_inner_size(600.0, 440.0)
         .resizable(true)
@@ -278,7 +311,7 @@ fn tick(app: &AppHandle) {
         if let Err(e) = app
             .notification()
             .builder()
-            .title("Friends")
+            .title("Friendship Reminder")
             .body(body)
             .show()
         {
@@ -291,12 +324,13 @@ fn tick(app: &AppHandle) {
 pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
     app.manage(DropdownHiddenAt(Mutex::new(None)));
+    move_login_item_from_old_app(&handle);
 
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .icon_as_template(true)
-        .tooltip("Friends")
+        .tooltip("Friendship Reminder")
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
@@ -343,7 +377,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Friends lives in both the menu bar and the Dock. Clicking its Dock icon, or opening it again from
+/// Friendship Reminder lives in both the menu bar and the Dock. Clicking its Dock icon, or opening it again from
 /// Finder or Spotlight while it runs (macOS doesn't start a second copy), sends the running one a
 /// "reopen". Show Preferences, so the app is reachable even when its menu bar icon is hidden (a full
 /// menu bar, the notch).

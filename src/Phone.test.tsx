@@ -62,7 +62,7 @@ describe("Phone", () => {
     expect(screen.getAllByTestId("due-person")).toHaveLength(2);
     expect(screen.getAllByTestId("upcoming-person")).toHaveLength(1);
     // The Mac dropdown's footer (Preferences, Quit) isn't on the phone.
-    expect(screen.queryByRole("button", { name: "Quit Friends" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Quit Friendship Reminder" })).toBeNull();
   });
 
   it("points to the People tab when nobody is added yet", async () => {

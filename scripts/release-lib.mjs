@@ -29,10 +29,10 @@ const HEADING_ALIASES = {
  * drafted notes need no rewrapping.
  */
 export const UNSIGNED_NOTE = [
-  "Friends isn't signed with an Apple Developer ID yet, so macOS blocks the first launch. Open it",
-  "  once and click **Done**, then go to **System Settings → Privacy & Security** and click",
-  "  **Open Anyway** (the README has the details). On macOS 13 or 14, Control-click Friends in",
-  "  Applications and choose **Open** instead.",
+  "Friendship Reminder isn't signed with an Apple Developer ID yet, so macOS blocks the first",
+  "  launch. Open it once and click **Done**, then go to **System Settings → Privacy & Security**",
+  "  and click **Open Anyway** (the README has the details). On macOS 13 or 14, Control-click",
+  "  Friendship Reminder in Applications and choose **Open** instead.",
 ].join("\n");
 
 const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)$/;
@@ -286,7 +286,7 @@ export function draftNotes({ unreleased = "", commits = [], unsigned = true }) {
   }
   // Dependabot's chore(deps): … (chore(deps-dev) is build and test tools, not part of the app)
   if (commits.some((c) => c.scope === "deps" && (c.type === "chore" || c.type === "build"))) {
-    const line = "- Updated the libraries Friends is built on.";
+    const line = "- Updated the libraries Friendship Reminder is built on.";
     if (!groups.Changed.includes(line)) groups.Changed.push(line);
   }
   // The note may already be there, wrapped anywhere (a bullet keeps its line breaks).
