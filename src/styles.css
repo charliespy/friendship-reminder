@@ -873,6 +873,18 @@ button.done-option:disabled {
   align-self: flex-end;
 }
 
+/* Save for the day setting: a status line on the left ("Not saved yet."), the buttons on the right. */
+.settings-actions {
+  align-items: center;
+  margin-top: var(--space-3);
+}
+
+.settings-status {
+  margin: 0 auto 0 var(--space-1);
+  color: var(--label-2);
+  font-size: var(--text-sm);
+}
+
 .plain-fieldset {
   min-width: 0;
   margin: 0;
@@ -1178,6 +1190,19 @@ button.done-option:disabled {
 
 .phone .form-actions .btn {
   flex: 1;
+}
+
+.phone .settings-actions {
+  flex-wrap: wrap;
+}
+
+.phone .settings-status {
+  flex-basis: 100%;
+  margin: 0 var(--space-4);
+}
+
+.phone .settings-status:empty {
+  display: none;
 }
 
 /*

@@ -134,3 +134,46 @@ fn a_file_from_before_custom_days_reads_any_day_as_all_seven() {
     assert_eq!(data.settings.custom_days, DaySet::ALL);
     assert_eq!(data.settings.rule(), DayRule::ANY);
 }
+
+#[test]
+fn the_setting_and_its_days_save_together() {
+    let mut app = app("together");
+    let view = app
+        .call(
+            "set_day_toggle",
+            json!({"dayToggle": "custom", "customDays": ["sun"]}),
+            today(),
+        )
+        .unwrap();
+    let json = serde_json::to_value(&view).unwrap();
+    assert_eq!(json["settings"]["dayToggle"], "custom");
+    assert_eq!(json["settings"]["customDays"], json!(["sun"]));
+    // No day picked: refused, and nothing changes.
+    let err = app
+        .call(
+            "set_day_toggle",
+            json!({"dayToggle": "weekdaysOnly", "customDays": []}),
+            today(),
+        )
+        .unwrap_err();
+    assert_eq!(err.message, "Pick at least one day.");
+    let json = serde_json::to_value(app.view(today())).unwrap();
+    assert_eq!(json["settings"]["dayToggle"], "custom");
+}
+
+#[test]
+fn saving_the_same_rule_reschedules_nobody() {
+    let mut data = Data::default();
+    let id = data
+        .add_person("Ada", 30, date(2026, 7, 22), today())
+        .unwrap();
+    // Days picked while weekends only is on: the rule is the same, so Ada keeps her target.
+    data.set_day_setting(
+        DayToggle::WeekendsOnly,
+        Some(DaySet::of(&[Weekday::Mon])),
+        today(),
+    )
+    .unwrap();
+    assert_eq!(data.person(id).unwrap().next_target, date(2026, 8, 22));
+    assert_eq!(data.settings.custom_days, DaySet::of(&[Weekday::Mon]));
+}

@@ -5,8 +5,7 @@ import type { Person, View } from "./api";
 const getView = vi.fn<() => Promise<View>>();
 const onViewChanged = vi.fn<(f: (v: View) => void) => Promise<() => void>>();
 const getLaunchAtLogin = vi.fn<() => Promise<boolean>>();
-const setDayToggle = vi.fn<(t: string) => Promise<View>>();
-const setCustomDays = vi.fn<(d: string[]) => Promise<View>>();
+const setDayToggle = vi.fn<(t: string, d?: string[]) => Promise<View>>();
 
 vi.mock("./api", async (orig) => ({
   ...(await orig<typeof import("./api")>()),
@@ -14,8 +13,7 @@ vi.mock("./api", async (orig) => ({
     getView: () => getView(),
     onViewChanged: (f: (v: View) => void) => onViewChanged(f),
     getLaunchAtLogin: () => getLaunchAtLogin(),
-    setDayToggle: (t: string) => setDayToggle(t),
-    setCustomDays: (d: string[]) => setCustomDays(d),
+    setDayToggle: (t: string, d?: string[]) => setDayToggle(t, d),
     getAccount: () => Promise.resolve({ status: "signedOut", warning: null }),
     onAccountChanged: () => Promise.resolve(() => {}),
   },
@@ -148,25 +146,36 @@ describe("Preferences", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("shows the day picker only under Custom day, and flips one day at a time", async () => {
-    setCustomDays.mockReset();
-    setCustomDays.mockResolvedValue(view([]));
+  it("waits for Save before changing the day setting, and saves the days with it", async () => {
+    setDayToggle.mockReset();
+    setDayToggle.mockResolvedValue(view([]));
     await open(view([MAYA]));
     await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    const save = () => screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save().disabled).toBe(true);
     expect(screen.queryByRole("group", { name: "Days you're free" })).toBeNull();
-    cleanup();
-    const custom = view([MAYA]);
-    custom.settings = { ...custom.settings, dayToggle: "custom", customDays: ["tue", "sat"] };
-    await open(custom);
-    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
-    const days = screen.getByRole("group", { name: "Days you're free" });
+    // Pick Custom day: the days show, nothing is sent yet.
+    await act(async () => fireEvent.click(screen.getByLabelText(/Custom day/)));
+    expect(screen.getByRole("group", { name: "Days you're free" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Not saved yet.");
     const day = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
-    expect(days.querySelectorAll('[aria-pressed="true"]').length).toBe(2);
-    expect(day("Tuesday").getAttribute("aria-pressed")).toBe("true");
-    await act(async () => fireEvent.click(day("Thursday")));
-    expect(setCustomDays).toHaveBeenCalledWith(["tue", "thu", "sat"]);
-    await act(async () => fireEvent.click(day("Saturday")));
-    expect(setCustomDays).toHaveBeenLastCalledWith(["tue"]);
+    await act(async () => fireEvent.click(day("Friday")));
+    expect(day("Friday").getAttribute("aria-pressed")).toBe("false");
+    expect(setDayToggle).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(save()));
+    expect(setDayToggle).toHaveBeenCalledWith("custom", ["mon", "tue", "wed", "thu", "sat", "sun"]);
+  });
+
+  it("puts the saved setting back on Discard", async () => {
+    setDayToggle.mockReset();
+    await open(view([MAYA]));
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Weekdays only/)));
+    expect((screen.getByLabelText(/Weekdays only/) as HTMLInputElement).checked).toBe(true);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Discard" })));
+    expect((screen.getByLabelText(/Weekends only/) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    expect(setDayToggle).not.toHaveBeenCalled();
   });
 
   it("keeps the last picked day: at least one is needed", async () => {

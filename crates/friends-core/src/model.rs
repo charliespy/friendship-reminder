@@ -481,6 +481,27 @@ impl Data {
         }
     }
 
+    /// The day setting and, when given, the days picked for "Custom day", as one change: everyone is
+    /// rescheduled once. Nothing changes when the days are refused.
+    pub fn set_day_setting(
+        &mut self,
+        toggle: DayToggle,
+        custom_days: Option<DaySet>,
+        today: NaiveDate,
+    ) -> Result<(), Invalid> {
+        let days = custom_days.unwrap_or(self.settings.custom_days);
+        if days.is_empty() {
+            return invalid("Pick at least one day.");
+        }
+        let before = self.settings.rule();
+        self.settings.day_toggle = toggle;
+        self.settings.custom_days = days;
+        if self.settings.rule() != before {
+            self.recompute_all(today);
+        }
+        Ok(())
+    }
+
     /// The days to aim for under "Custom day". At least one.
     pub fn set_custom_days(&mut self, days: DaySet, today: NaiveDate) -> Result<(), Invalid> {
         if days.is_empty() {

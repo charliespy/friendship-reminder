@@ -98,8 +98,9 @@ export const api = {
   markDone: (id: number, on?: IsoDate) => call("mark_done", on ? { id, on } : { id }),
   addBlocked: (b: { start: IsoDate; end: IsoDate; label: string }) => call("add_blocked", b),
   deleteBlocked: (id: number) => call("delete_blocked", { id }),
-  setDayToggle: (dayToggle: DayToggle) => call("set_day_toggle", { dayToggle }),
-  setCustomDays: (days: Weekday[]) => call("set_custom_days", { days }),
+  /** The day setting, with the days for Custom day saved in the same change when given. */
+  setDayToggle: (dayToggle: DayToggle, customDays?: Weekday[]) =>
+    call("set_day_toggle", customDays ? { dayToggle, customDays } : { dayToggle }),
   setNotifications: (on: boolean) => call("set_notifications", { on }),
   getLaunchAtLogin: () => invoke<boolean>("get_launch_at_login"),
   setLaunchAtLogin: (on: boolean) => invoke<boolean>("set_launch_at_login", { on }),

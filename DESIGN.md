@@ -298,6 +298,7 @@ Standard macOS push buttons.
 - **Done:** a plain small push button. No colour of its own; it is the list's only action.
 - **Quiet:** no fill, Label 2 text. Hover: Hover fill and Label text. Pressed: Control Down. Used in the footer (Label, 400) and for cancel and edit.
 - **Danger:** red fill, white text, with Raise. Pressed: brightness 0.86. Only for deleting.
+- **Save** (Days to aim for): the day setting reschedules everyone, so it's a draft until Save. Under the group: a Label 2 status on the left ("Not saved yet." / "Saved."), a quiet Discard while there are changes, and a primary Save, off until something changed. On iPhone the buttons share the row and the status sits above them.
 - **Day buttons** (Custom day): seven 26px circles, M to S, Control White with Raise; a picked day fills with the accent and white text.
 
 ### Done's question

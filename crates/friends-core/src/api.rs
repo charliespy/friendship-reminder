@@ -121,6 +121,9 @@ struct BlockedArgs {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ToggleArgs {
     day_toggle: DayToggle,
+    /// The days for "Custom day", saved with the setting in one change. Left out, they stay.
+    #[serde(default)]
+    custom_days: Option<DaySet>,
 }
 
 #[derive(Deserialize)]
@@ -339,7 +342,8 @@ impl App {
             }
             "set_day_toggle" => {
                 let p: ToggleArgs = args(cmd, a)?;
-                d.set_day_toggle(p.day_toggle, today);
+                d.set_day_setting(p.day_toggle, p.custom_days, today)
+                    .map_err(invalid)?;
             }
             "set_custom_days" => {
                 let p: DaysArgs = args(cmd, a)?;

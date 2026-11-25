@@ -23,14 +23,19 @@ const WEEK: { day: Weekday; short: string; name: string }[] = [
   { day: "sun", short: "S", name: "Sunday" },
 ];
 
-/** The days picked under "Custom day": one button per day, on while picked. */
-function DayPicker({ view }: { view: View }) {
-  const pick = useAction();
-  const picked = new Set(view.settings.customDays);
-  const flip = (day: Weekday) => {
-    const next = WEEK.map((w) => w.day).filter((d) => (d === day ? !picked.has(d) : picked.has(d)));
-    void pick.run(() => api.setCustomDays(next));
-  };
+/** The days picked under "Custom day": one button per day, on while picked. Changes wait for Save. */
+function DayPicker({
+  days,
+  disabled,
+  onChange,
+}: {
+  days: Weekday[];
+  disabled: boolean;
+  onChange: (days: Weekday[]) => void;
+}) {
+  const picked = new Set(days);
+  const flip = (day: Weekday) =>
+    onChange(WEEK.map((w) => w.day).filter((d) => (d === day ? !picked.has(d) : picked.has(d))));
   return (
     <div className="day-picker-row">
       <div className="day-picker" role="group" aria-label="Days you're free">
@@ -45,7 +50,7 @@ function DayPicker({ view }: { view: View }) {
               aria-label={w.name}
               title={w.name}
               // The last day picked stays: at least one is needed.
-              disabled={pick.busy || (on && picked.size === 1)}
+              disabled={disabled || (on && picked.size === 1)}
               onClick={() => flip(w.day)}
             >
               {w.short}
@@ -53,17 +58,86 @@ function DayPicker({ view }: { view: View }) {
           );
         })}
       </div>
-      {pick.error && (
-        <p className="error" role="alert">
-          {pick.error}
-        </p>
-      )}
     </div>
   );
 }
 
+const sameDays = (a: Weekday[], b: Weekday[]) => a.length === b.length && a.every((d, i) => d === b[i]);
+
+/**
+ * Days to aim for. It reschedules everyone, so a change is a draft until Save (Discard puts the
+ * saved setting back); the days only count under Custom day.
+ */
+function DaySetting({ view }: { view: View }) {
+  const save = useAction();
+  const saved = view.settings;
+  const [draft, setDraft] = useState<{ toggle: DayToggle; days: Weekday[] } | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
+  const toggle = draft?.toggle ?? saved.dayToggle;
+  const days = draft?.days ?? saved.customDays;
+  const changed =
+    toggle !== saved.dayToggle || (toggle === "custom" && !sameDays(days, saved.customDays));
+  const edit = (next: { toggle?: DayToggle; days?: Weekday[] }) => {
+    setJustSaved(false);
+    setDraft({ toggle: next.toggle ?? toggle, days: next.days ?? days });
+  };
+  const onSave = async () => {
+    const ok = await save.run(() => api.setDayToggle(toggle, toggle === "custom" ? days : undefined));
+    if (ok) {
+      setDraft(null);
+      setJustSaved(true);
+    }
+  };
+
+  return (
+    <fieldset className="setting-group plain-fieldset">
+      <legend className="section-label">Days to aim for</legend>
+      <div className="choice-list">
+        {TOGGLES.map((t) => [
+          <label className="choice" key={t.value}>
+            <input
+              type="radio"
+              name="dayToggle"
+              value={t.value}
+              checked={toggle === t.value}
+              disabled={save.busy}
+              onChange={() => edit({ toggle: t.value })}
+            />
+            <span>
+              <span className="choice-title">{t.title}</span>
+              <br />
+              <span className="choice-text">{t.text}</span>
+            </span>
+          </label>,
+          t.value === "custom" && toggle === "custom" && (
+            <DayPicker key="days" days={days} disabled={save.busy} onChange={(d) => edit({ days: d })} />
+          ),
+        ])}
+      </div>
+      <p className="hint">Saving reschedules everyone from the last time you were in touch.</p>
+      {save.error && (
+        <p className="error" role="alert">
+          {save.error}
+        </p>
+      )}
+      <div className="form-actions settings-actions">
+        <p className="settings-status" role="status">
+          {changed ? "Not saved yet." : justSaved ? "Saved." : ""}
+        </p>
+        {changed && (
+          <button type="button" className="btn btn-quiet" disabled={save.busy} onClick={() => setDraft(null)}>
+            Discard
+          </button>
+        )}
+        <button type="button" className="btn btn-primary" disabled={!changed || save.busy} onClick={onSave}>
+          Save
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
 export function SettingsPane({ view, phone = false }: { view: View; phone?: boolean }) {
-  const toggle = useAction();
   const notify = useAction();
   const [login, setLogin] = useState<boolean | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -128,35 +202,7 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
         </div>
       </header>
 
-      <fieldset className="setting-group plain-fieldset">
-        <legend className="section-label">Days to aim for</legend>
-        <div className="choice-list">
-          {TOGGLES.map((t) => [
-            <label className="choice" key={t.value}>
-              <input
-                type="radio"
-                name="dayToggle"
-                value={t.value}
-                checked={view.settings.dayToggle === t.value}
-                disabled={toggle.busy}
-                onChange={() => toggle.run(() => api.setDayToggle(t.value))}
-              />
-              <span>
-                <span className="choice-title">{t.title}</span>
-                <br />
-                <span className="choice-text">{t.text}</span>
-              </span>
-            </label>,
-            t.value === "custom" && view.settings.dayToggle === "custom" && (
-              <DayPicker key="days" view={view} />
-            ),
-          ])}
-        </div>
-        <p className="hint">
-          Changing this reschedules everyone from the last time you were in touch.
-        </p>
-        {toggle.error && <p className="error" role="alert">{toggle.error}</p>}
-      </fieldset>
+      <DaySetting view={view} />
 
       <div className="setting-group">
         <h3 className="section-label">Reminders</h3>

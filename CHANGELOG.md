@@ -20,7 +20,8 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
   Store yet.)
 - **Custom day** replaces "Any day" in Settings: pick the days of the week you're free (any of
   Monday to Sunday), and Friends only aims for those. All seven start picked, which works the way
-  "Any day" did.
+  "Any day" did. Changes to the days to aim for now wait for **Save** (or Discard), since saving
+  reschedules everyone.
 - **Done** now asks when you were in touch: on the day Friends suggested, today, or another day
   from a calendar. The next reminder counts from that day.
 
