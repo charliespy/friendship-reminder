@@ -7,7 +7,7 @@
 //! (`http://127.0.0.1:<port>/auth/callback`) with a code the app trades for a session. (Apple's own
 //! sign-in sheet needs the Mac App Store: apps signed with a Developer ID can't use it.) On the
 //! iPhone, the same page opens in a Safari sheet over the app, which comes back to
-//! `io.github.charliespy.friends:/auth/callback`.
+//! `io.github.charliespy.friends://auth/callback`.
 //!
 //! Signing in is optional. A build without the Supabase settings (`FRIENDS_SUPABASE_URL` and
 //! `FRIENDS_SUPABASE_PUBLISHABLE_KEY` at build time, or in `.env.local` for debug builds) shows the
@@ -20,8 +20,8 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use friends_account::{
-    parse_callback, AccountState, AccountView, Attempts, Callback, Client, Config, HttpTransport,
-    Pkce, Restore, Session, Started,
+    AccountState, AccountView, Attempts, Callback, Client, Config, HttpTransport, Pkce, Restore,
+    Session, Started,
 };
 use friends_sync::SyncView;
 use serde::Serialize;
@@ -388,7 +388,7 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
         return Ok(account.view());
     }
     let waited = (|| {
-        let redirect = format!("{PHONE_SCHEME}:{}", friends_account::CALLBACK_PATH);
+        let redirect = friends_account::app_redirect(PHONE_SCHEME);
         let pkce = Pkce::new()?;
         if !account.waiting().is_waiting(attempt) {
             return Ok(None);
@@ -398,9 +398,7 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
         let Some(back) = app.web_auth().authenticate(&url, PHONE_SCHEME)? else {
             return Ok(None);
         };
-        let target = back.strip_prefix(PHONE_SCHEME).unwrap_or(&back);
-        let target = target.strip_prefix(':').unwrap_or(target);
-        match parse_callback(target) {
+        match friends_account::parse_app_callback(PHONE_SCHEME, &back) {
             Callback::Code(code) => Ok(Some((code, pkce.verifier))),
             Callback::Failed(reason) => Err(format!("Sign in with Apple didn't finish: {reason}")),
             Callback::Other => Err("Signing in came back to the wrong address.".to_string()),
@@ -484,7 +482,7 @@ fn wait_for_browser(
         let Some(request) = server.recv_timeout(left).map_err(|e| e.to_string())? else {
             continue;
         };
-        match parse_callback(request.url()) {
+        match friends_account::parse_callback(request.url()) {
             Callback::Code(code) => return Ok(Some((code, request))),
             Callback::Failed(reason) => {
                 answer(request, 200, FAILED);

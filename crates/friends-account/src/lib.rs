@@ -649,6 +649,20 @@ pub enum Callback {
     Other,
 }
 
+/// The address an app's own sign-in sheet comes back to: `<scheme>://auth/callback`. (Supabase's list
+/// of allowed addresses only takes ones written with `//`.)
+pub fn app_redirect(scheme: &str) -> String {
+    format!("{scheme}:/{CALLBACK_PATH}")
+}
+
+/// Reads the address the sign-in sheet came back to, made by [`app_redirect`].
+pub fn parse_app_callback(scheme: &str, back: &str) -> Callback {
+    match back.strip_prefix(scheme).and_then(|t| t.strip_prefix(":/")) {
+        Some(target) => parse_callback(target),
+        None => Callback::Other,
+    }
+}
+
 /// Reads the path and query of a request to the app's sign-in address, `/auth/callback?...`.
 pub fn parse_callback(target: &str) -> Callback {
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
