@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use crate::model::{
     clean_name, sane_date, sane_target, squeeze, Blocked, Data, Person, FREQUENCIES, MAX_NAME_CHARS,
 };
-use crate::schedule::DayToggle;
+use crate::schedule::{read_day_setting, DaySet, DayToggle, StoredToggle};
 
 /// A fresh random id for a new row.
 pub fn new_uid() -> String {
@@ -97,12 +97,39 @@ pub struct RemoteBlocked {
 
 /// The synced settings as the account stores them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "StoredRemoteSettings")]
 pub struct RemoteSettings {
     pub day_toggle: DayToggle,
+    /// The days picked under "Custom day".
+    pub custom_days: DaySet,
     pub modified_at: i64,
     /// The server's time of the last write to this row (only coming down).
-    #[serde(default, skip_serializing)]
+    #[serde(skip_serializing)]
     pub updated_ms: i64,
+}
+
+/// `RemoteSettings` as the account may hold them: "allDays" from an older build, and no days from
+/// before custom days (see `read_day_setting`).
+#[derive(Deserialize)]
+struct StoredRemoteSettings {
+    day_toggle: StoredToggle,
+    #[serde(default)]
+    custom_days: DaySet,
+    modified_at: i64,
+    #[serde(default)]
+    updated_ms: i64,
+}
+
+impl From<StoredRemoteSettings> for RemoteSettings {
+    fn from(s: StoredRemoteSettings) -> Self {
+        let (day_toggle, custom_days) = read_day_setting(s.day_toggle, s.custom_days);
+        RemoteSettings {
+            day_toggle,
+            custom_days,
+            modified_at: s.modified_at,
+            updated_ms: s.updated_ms,
+        }
+    }
 }
 
 /// Rows going up to the account, or coming down from it.
@@ -191,7 +218,9 @@ impl Data {
                 old => b.modified = later(now, old.map_or(b.modified, |o| o.modified)),
             }
         }
-        if self.settings.day_toggle != before.settings.day_toggle {
+        if (self.settings.day_toggle, self.settings.custom_days)
+            != (before.settings.day_toggle, before.settings.custom_days)
+        {
             self.sync.settings_modified = later(now, self.sync.settings_modified);
         }
         // Only a list that has been synced needs to tell the account about deletions: one that never
@@ -247,6 +276,7 @@ impl Data {
             self.people.clear();
             self.blocked.clear();
             self.settings.day_toggle = DayToggle::default();
+            self.settings.custom_days = DaySet::default();
             self.sync.settings_modified = 0;
         }
         if self.sync.owner.as_deref() != Some(owner) {
@@ -318,6 +348,7 @@ impl Data {
         let settings =
             (self.sync.settings_modified > self.sync.settings_synced).then_some(RemoteSettings {
                 day_toggle: self.settings.day_toggle,
+                custom_days: self.settings.custom_days,
                 modified_at: self.sync.settings_modified,
                 updated_ms: 0,
             });
@@ -387,8 +418,11 @@ impl Data {
         if let Some(s) = &got.settings {
             let (modified, synced) = (self.sync.settings_modified, self.sync.settings_synced);
             if account_wins(s.modified_at, modified, synced) {
-                schedules_changed |= self.settings.day_toggle != s.day_toggle;
+                let before = self.settings.rule();
                 self.settings.day_toggle = s.day_toggle;
+                self.settings.custom_days = s.custom_days;
+                // Only a change to the days in use moves anyone.
+                schedules_changed |= self.settings.rule() != before;
                 self.sync.settings_modified = s.modified_at;
                 self.sync.settings_synced = s.modified_at;
             }
@@ -422,7 +456,7 @@ impl Data {
                 _ => Err(()),
             }
         };
-        let toggle = self.settings.day_toggle;
+        let rule = self.settings.rule();
         let ranges = self.ranges();
         if let Some(i) = self.people.iter().position(|p| p.uid == r.id) {
             let p = &mut self.people[i];
@@ -440,7 +474,7 @@ impl Data {
             p.modified = r.modified_at;
             p.synced = r.modified_at;
             if reschedule {
-                Data::reschedule(p, toggle, &ranges, today);
+                Data::reschedule(p, rule, &ranges, today);
             }
             return Ok(());
         }
@@ -467,12 +501,13 @@ impl Data {
             next_target: last,
             notification_date: last,
             overdue: false,
+            missed_target: None,
             notified_for: None,
             uid: r.id.clone(),
             modified: r.modified_at,
             synced: r.modified_at,
         };
-        Data::reschedule(&mut person, toggle, &ranges, today);
+        Data::reschedule(&mut person, rule, &ranges, today);
         self.people.push(person);
         Ok(())
     }

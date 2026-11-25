@@ -1,6 +1,6 @@
 ---
 name: Friends
-description: A macOS menu bar reminder that looks like it came with the Mac.
+description: A macOS menu bar reminder, and its iPhone app, that look like they came with the Mac and the iPhone.
 colors:
   window: "#ececec"
   sidebar: "#e3e3e3"
@@ -298,6 +298,11 @@ Standard macOS push buttons.
 - **Done:** a plain small push button. No colour of its own; it is the list's only action.
 - **Quiet:** no fill, Label 2 text. Hover: Hover fill and Label text. Pressed: Control Down. Used in the footer (Label, 400) and for cancel and edit.
 - **Danger:** red fill, white text, with Raise. Pressed: brightness 0.86. Only for deleting.
+- **Save** (Days to aim for): the day setting reschedules everyone, so it's a draft until Save. Under the group: a Label 2 status on the left ("Not saved yet." / "Saved."), a quiet Discard while there are changes, and a primary Save, off until something changed. On iPhone the buttons share the row and the status sits above them.
+- **Day buttons** (Custom day): seven 26px circles, M to S, Control White with Raise; a picked day fills with the accent and white text.
+
+### Done's question
+Done first asks "When were you in touch with …?" in a sheet over the window: the Window grey box (10px corners, a soft drop shadow, a dim backdrop), the answers as a grouped list (title, then the date in Label 2), and a quiet Cancel. The answers are the day suggested (once it has come), Today, and Another day…, which opens a date field and a primary Done.
 - **Sign in with Apple:** black on light, white on dark, per Apple's rules.
 - **Disabled:** 40% opacity. State changes are instant, as on the Mac: no fades.
 
@@ -335,12 +340,24 @@ An Accent Tint strip with 10px corners above the People list. The count and the 
 - **Caught up:** a plain group in Label 2, 500, centred, padded 12px.
 - **Empty state:** centred Label 2 text with a 15px 600 title in Label.
 
+### iPhone
+The same tokens and components, at iOS sizes (`:root.phone-app` in `src/styles.css`), so it looks like it came with the iPhone:
+- **Colours:** iOS's grouped background (`#f2f2f7`, black in dark mode) with white groups (`#1c1c1e` dark), no group edge, and buttons as flat grey fills (`rgb(118 118 128 / 12%)`) instead of raised push buttons. iOS has no user accent, so the accent is the system blue.
+- **Type:** 17px body, 15px secondary, 13px section labels, a 34px bold large title per tab.
+- **Rows:** 56px with a 36px disc, inset hairlines that start at the text. People rows leave the disc out to give names room.
+- **Touch:** 44px buttons and fields, 32px pill buttons in rows. Nothing typed into is under 16px, or iOS zooms in. Fields show the accent edge when focused, with no Mac glow.
+- **iOS controls:** on/off settings are switches (white knob, accent track when on); a pick-one list shows an accent tick on the right of the chosen row; selecting people uses round circles that fill with the accent. The People header's Add is plain accent text at the top right, as in iOS.
+- **People rows:** the name with Done and Edit beside it, and the detail line underneath at full width.
+- **Done's question:** an iOS action sheet at the bottom: the question in small grey type on top of one rounded group of answers in accent text, and a separate bold Cancel under it.
+- **Day buttons:** 38px circles spread across the row under Custom day's text.
+- **Tab bar:** four tabs at the bottom (Today, People, Blocked, Settings), 26px line symbols, the selected one in the accent, over a translucent blurred bar. Today carries an accent badge with the number due.
+
 ## Do's and Don'ts
 
 ### Do:
 - **Do** use the role tokens in `src/styles.css` for every colour, size, radius and gap, so light and dark mode both follow.
 - **Do** use the accent token for every primary action and selected state, so the user's Mac accent shows.
-- **Do** keep every list row at 48px with a 28px disc, in both windows.
+- **Do** keep every list row at 48px with a 28px disc, in both Mac windows (56px and 36px on iPhone).
 - **Do** show pressed buttons by darkening them: Control Down for grey buttons, brightness 0.86 for accent and red.
 - **Do** edge groups with the 0.5px Group Edge, and split rows with 0.5px hairlines.
 - **Do** keep the 3px focus ring visible on every control, and keep state changes instant.

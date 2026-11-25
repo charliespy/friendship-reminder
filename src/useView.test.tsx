@@ -26,7 +26,7 @@ const VIEW: View = {
   today: "2026-11-18",
   people: [],
   blocked: [],
-  settings: { dayToggle: "weekendsOnly", notifications: true },
+  settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
   unreadableFile: null,
 };
 

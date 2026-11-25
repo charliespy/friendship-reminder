@@ -31,6 +31,11 @@ export async function seed(
   for (const b of opts.blocked ?? []) await call(request, "add_blocked", { ...b });
 }
 
+/** Answers Done's question, "When were you in touch?", with the answer whose name starts `answer`. */
+export async function answerDone(page: Page, answer: "Today" | "On the day suggested" | "Another day") {
+  await page.getByRole("dialog").getByRole("button", { name: new RegExp(`^${answer}`) }).click();
+}
+
 export async function setToday(request: APIRequestContext, day: string) {
   expect((await request.post(`${server}/__test/today`, { data: JSON.stringify(day), headers: JSON_HEADERS })).ok()).toBeTruthy();
 }

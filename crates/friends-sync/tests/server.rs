@@ -2,8 +2,9 @@
 
 use std::cell::RefCell;
 
+use chrono::Weekday;
 use friends_account::{Config, Response, Transport};
-use friends_core::schedule::DayToggle;
+use friends_core::schedule::{DaySet, DayToggle};
 use friends_core::sync::{Changes, RemotePerson, RemoteSettings};
 use friends_sync::{Server, SyncError, OVERLAP_MS};
 use serde_json::{json, Value};
@@ -109,7 +110,8 @@ fn uploads_merge_into_the_users_rows() {
         people: vec![ada()],
         blocked: vec![],
         settings: Some(RemoteSettings {
-            day_toggle: DayToggle::WeekdaysOnly,
+            day_toggle: DayToggle::Custom,
+            custom_days: DaySet::of(&[Weekday::Tue, Weekday::Sat]),
             modified_at: 7,
             updated_ms: 0,
         }),
@@ -146,7 +148,10 @@ fn uploads_merge_into_the_users_rows() {
     let body: Value = serde_json::from_str(&settings.body).unwrap();
     assert_eq!(
         body,
-        json!([{"owner": "user-1", "day_toggle": "weekdaysOnly", "modified_at": 7}])
+        json!([{
+            "owner": "user-1", "day_toggle": "custom", "custom_days": ["tue", "sat"],
+            "modified_at": 7
+        }])
     );
 }
 
@@ -182,7 +187,9 @@ fn downloads_read_what_changed_since_the_cursor() {
     assert_eq!(
         changes.settings,
         Some(RemoteSettings {
-            day_toggle: DayToggle::AllDays,
+            // "Any day", from an older build: all seven days.
+            day_toggle: DayToggle::Custom,
+            custom_days: DaySet::ALL,
             modified_at: 3,
             updated_ms: 80_000,
         })

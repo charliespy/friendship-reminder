@@ -1,0 +1,16 @@
+[package]
+name = "tauri-plugin-web-auth"
+version = "0.1.0"
+description = "Friends' iPhone sign-in sheet: opens a sign-in page in ASWebAuthenticationSession and returns the address it comes back to"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+links = "tauri-plugin-web-auth"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+serde.workspace = true
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

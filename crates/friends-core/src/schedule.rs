@@ -5,26 +5,162 @@
 //!
 //! The rules, carried over from the Swift app:
 //! - The next target is the last time you were in touch plus the person's frequency, moved forward to
-//!   the first day the day setting allows (all days, weekdays only or weekends only).
+//!   the first day the day setting allows (weekdays only, weekends only, or the days you picked).
 //! - A target inside a blocked range moves to the first allowed day after the range, again and again
 //!   until it is outside every range.
 //! - A weekend target is reminded about on the Monday of its week, so there is time to plan.
-//! - A missed target moves to the next run of allowed days (the next weekend, for weekends only).
+//! - A missed target moves to the next run of allowed days (the next weekend, for weekends only). With
+//!   days you picked, each picked day is its own chance: a missed one moves to the next picked day.
 //!
 //! Changes from the Swift app, on purpose: a blocked range typed backwards blocks the days between its
-//! ends (Swift ignored it), and frequencies are capped at ten years.
+//! ends (Swift ignored it), frequencies are capped at ten years, and "any day" became days you pick
+//! (all seven at first, which works the way "any day" did).
+
+use std::fmt;
 
 use chrono::{Datelike, Days, NaiveDate, Weekday};
-use serde::{Deserialize, Serialize};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Which days a target may fall on.
+/// Which days a target may fall on, as the setting is stored. With `Custom`, the days are the ones
+/// picked (`Settings::custom_days`); see [`DayRule`] for both together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum DayToggle {
-    AllDays,
     WeekdaysOnly,
     #[default]
     WeekendsOnly,
+    Custom,
+}
+
+/// The day setting as a file or the account may hold it, including "allDays" from before custom
+/// days. Only read: [`read_day_setting`] turns it into what this version keeps.
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum StoredToggle {
+    WeekdaysOnly,
+    #[default]
+    WeekendsOnly,
+    Custom,
+    AllDays,
+}
+
+/// A stored day setting as this version keeps it, done once where the data is read: "Any day"
+/// becomes Custom with all seven days (whatever days were stored with it, which an older build didn't
+/// know about), and no days picked, which can't be used, becomes all seven.
+pub(crate) fn read_day_setting(toggle: StoredToggle, days: DaySet) -> (DayToggle, DaySet) {
+    let days = if days.is_empty() { DaySet::ALL } else { days };
+    match toggle {
+        StoredToggle::WeekdaysOnly => (DayToggle::WeekdaysOnly, days),
+        StoredToggle::WeekendsOnly => (DayToggle::WeekendsOnly, days),
+        StoredToggle::Custom => (DayToggle::Custom, days),
+        StoredToggle::AllDays => (DayToggle::Custom, DaySet::ALL),
+    }
+}
+
+/// Some days of the week. Stored as a list of short names, Monday first: `["mon", "sat"]`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DaySet(u8);
+
+const DAY_NAMES: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+impl DaySet {
+    pub const ALL: DaySet = DaySet(0b111_1111);
+    pub const NONE: DaySet = DaySet(0);
+
+    pub fn of(days: &[Weekday]) -> DaySet {
+        DaySet(days.iter().fold(0, |bits, d| bits | Self::bit(*d)))
+    }
+
+    fn bit(day: Weekday) -> u8 {
+        1 << day.num_days_from_monday()
+    }
+
+    pub fn contains(self, day: Weekday) -> bool {
+        self.0 & Self::bit(day) != 0
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl Default for DaySet {
+    fn default() -> Self {
+        DaySet::ALL
+    }
+}
+
+impl fmt::Debug for DaySet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let names = DAY_NAMES
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.0 & (1 << i) != 0)
+            .map(|(_, n)| *n);
+        f.debug_list().entries(names).finish()
+    }
+}
+
+impl Serialize for DaySet {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut seq = serializer.serialize_seq(None)?;
+        for (i, name) in DAY_NAMES.iter().enumerate() {
+            if self.0 & (1 << i) != 0 {
+                seq.serialize_element(name)?;
+            }
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for DaySet {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Names;
+        impl<'de> Visitor<'de> for Names {
+            type Value = DaySet;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a list of days: \"mon\" to \"sun\"")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<DaySet, A::Error> {
+                let mut bits = 0u8;
+                while let Some(name) = seq.next_element::<String>()? {
+                    let i = DAY_NAMES
+                        .iter()
+                        .position(|n| *n == name)
+                        .ok_or_else(|| de::Error::unknown_variant(&name, &DAY_NAMES))?;
+                    bits |= 1 << i;
+                }
+                Ok(DaySet(bits))
+            }
+        }
+        deserializer.deserialize_seq(Names)
+    }
+}
+
+/// The day setting the rules work with: which days a target may fall on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DayRule {
+    WeekdaysOnly,
+    WeekendsOnly,
+    /// Only these days. Never empty: the setting refuses an empty set.
+    Custom(DaySet),
+}
+
+impl DayRule {
+    /// Every day of the week: what "any day" was.
+    pub const ANY: DayRule = DayRule::Custom(DaySet::ALL);
+
+    pub fn new(toggle: DayToggle, custom_days: DaySet) -> DayRule {
+        match toggle {
+            DayToggle::WeekdaysOnly => DayRule::WeekdaysOnly,
+            DayToggle::WeekendsOnly => DayRule::WeekendsOnly,
+            // Never empty once read or set; all days rather than none, just in case.
+            DayToggle::Custom if custom_days.is_empty() => DayRule::ANY,
+            DayToggle::Custom => DayRule::Custom(custom_days),
+        }
+    }
 }
 
 /// Days when no target may land (a trip, a busy stretch). Both ends are included.
@@ -68,36 +204,33 @@ fn is_weekend(date: NaiveDate) -> bool {
 }
 
 /// Whether `date` is a day the setting allows.
-pub fn matches(date: NaiveDate, toggle: DayToggle) -> bool {
-    match toggle {
-        DayToggle::AllDays => true,
-        DayToggle::WeekendsOnly => is_weekend(date),
-        DayToggle::WeekdaysOnly => !is_weekend(date),
+pub fn matches(date: NaiveDate, rule: DayRule) -> bool {
+    match rule {
+        DayRule::WeekendsOnly => is_weekend(date),
+        DayRule::WeekdaysOnly => !is_weekend(date),
+        DayRule::Custom(days) => days.contains(date.weekday()),
     }
 }
 
 /// The first allowed day on or after `date`.
-pub fn snap_to_toggle(date: NaiveDate, toggle: DayToggle) -> NaiveDate {
+pub fn snap_to_toggle(date: NaiveDate, rule: DayRule) -> NaiveDate {
     let mut candidate = date;
-    // Every setting allows at least two days a week, so this ends within a week.
-    while !matches(candidate, toggle) {
+    // Every setting allows at least one day a week (an empty set becomes all days), so this ends
+    // within a week.
+    while !matches(candidate, rule) {
         candidate = next_day(candidate);
     }
     candidate
 }
 
 /// The first allowed day on or after `date` that is outside every blocked range.
-pub fn avoid_blocked_ranges(
-    date: NaiveDate,
-    ranges: &[BlockedRange],
-    toggle: DayToggle,
-) -> NaiveDate {
-    let mut candidate = snap_to_toggle(date, toggle);
+pub fn avoid_blocked_ranges(date: NaiveDate, ranges: &[BlockedRange], rule: DayRule) -> NaiveDate {
+    let mut candidate = snap_to_toggle(date, rule);
     // Each move goes past the end of a range the candidate was in, so the candidate only moves forward
     // and can be inside each range at most once: this ends after at most one pass per range.
     loop {
         match ranges.iter().find(|r| r.contains(candidate)) {
-            Some(r) => candidate = snap_to_toggle(next_day(r.last_day()), toggle),
+            Some(r) => candidate = snap_to_toggle(next_day(r.last_day()), rule),
             None => return candidate,
         }
     }
@@ -133,25 +266,26 @@ pub const MAX_FREQUENCY_DAYS: u32 = 3650;
 pub fn compute_schedule(
     last_connected: NaiveDate,
     frequency_days: u32,
-    toggle: DayToggle,
+    rule: DayRule,
     blocked: &[BlockedRange],
 ) -> ScheduleResult {
     let raw = last_connected
         .checked_add_days(Days::new(u64::from(frequency_days.min(MAX_FREQUENCY_DAYS))))
         .expect("date out of range");
-    let target = avoid_blocked_ranges(raw, blocked, toggle);
+    let target = avoid_blocked_ranges(raw, blocked, rule);
     with_notification(target)
 }
 
 /// The last day of the run of allowed days that starts on `target`: the Sunday for a Saturday target
-/// under weekends only, the Friday for a weekday target under weekdays only, and the day itself under
-/// all days. A target counts as missed only once this day has gone by.
-pub fn last_day_of_run(target: NaiveDate, toggle: DayToggle) -> NaiveDate {
-    if toggle == DayToggle::AllDays || !matches(target, toggle) {
+/// under weekends only, the Friday for a weekday target under weekdays only, and the day itself for
+/// days you picked (each picked day is its own chance). A target counts as missed only once this day
+/// has gone by.
+pub fn last_day_of_run(target: NaiveDate, rule: DayRule) -> NaiveDate {
+    if matches!(rule, DayRule::Custom(_)) || !matches(target, rule) {
         return target;
     }
     let mut last = target;
-    while matches(next_day(last), toggle) {
+    while matches(next_day(last), rule) {
         last = next_day(last);
     }
     last
@@ -159,21 +293,21 @@ pub fn last_day_of_run(target: NaiveDate, toggle: DayToggle) -> NaiveDate {
 
 /// The schedule after the target `current_target` went by without being done: the next run of allowed
 /// days after the current one (for weekends only, the next weekend, not the Sunday after a missed
-/// Saturday). With all days allowed, it is simply the next day.
+/// Saturday). With days you picked, it is the next picked day.
 pub fn push_missed_schedule(
     current_target: NaiveDate,
-    toggle: DayToggle,
+    rule: DayRule,
     blocked: &[BlockedRange],
 ) -> ScheduleResult {
     let mut candidate = current_target;
-    if toggle == DayToggle::AllDays {
+    if matches!(rule, DayRule::Custom(_)) {
         candidate = next_day(candidate);
     } else {
-        while matches(candidate, toggle) {
+        while matches(candidate, rule) {
             candidate = next_day(candidate);
         }
     }
-    let target = avoid_blocked_ranges(candidate, blocked, toggle);
+    let target = avoid_blocked_ranges(candidate, blocked, rule);
     with_notification(target)
 }
 
@@ -193,7 +327,7 @@ mod tests {
             end: date(2026, 8, 20),
         }];
         assert_eq!(
-            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::WeekendsOnly),
+            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayRule::WeekendsOnly),
             date(2026, 8, 29)
         );
     }
@@ -211,7 +345,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::WeekendsOnly),
+            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayRule::WeekendsOnly),
             date(2026, 9, 5)
         );
     }
@@ -223,7 +357,7 @@ mod tests {
             end: date(2026, 8, 22),
         }];
         assert_eq!(
-            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayToggle::AllDays),
+            avoid_blocked_ranges(date(2026, 8, 22), &blocked, DayRule::ANY),
             date(2026, 8, 23)
         );
     }
@@ -236,7 +370,7 @@ mod tests {
     #[test]
     fn the_monday_lead_can_cross_a_year_boundary() {
         // Saturday Jan 2, 2027 belongs to the week starting Monday Dec 28, 2026.
-        let result = compute_schedule(date(2026, 12, 3), 30, DayToggle::WeekendsOnly, &[]);
+        let result = compute_schedule(date(2026, 12, 3), 30, DayRule::WeekendsOnly, &[]);
         assert_eq!(result.next_target_date, date(2027, 1, 2));
         assert_eq!(result.notification_date, date(2026, 12, 28));
     }
@@ -244,14 +378,14 @@ mod tests {
     #[test]
     fn weekdays_only_missed_friday_moves_to_monday() {
         // A missed Friday: the run of weekdays it belongs to ends that day, so the next is Monday.
-        let result = push_missed_schedule(date(2026, 8, 21), DayToggle::WeekdaysOnly, &[]);
+        let result = push_missed_schedule(date(2026, 8, 21), DayRule::WeekdaysOnly, &[]);
         assert_eq!(result.next_target_date, date(2026, 8, 24));
         assert_eq!(result.notification_date, date(2026, 8, 24));
     }
 
     #[test]
     fn weekend_targets_under_all_days_still_get_the_monday_lead() {
-        let result = compute_schedule(date(2026, 7, 23), 30, DayToggle::AllDays, &[]);
+        let result = compute_schedule(date(2026, 7, 23), 30, DayRule::ANY, &[]);
         assert_eq!(result.next_target_date, date(2026, 8, 22));
         assert_eq!(result.notification_date, date(2026, 8, 17));
     }
@@ -259,19 +393,19 @@ mod tests {
     #[test]
     fn a_run_of_allowed_days_ends_on_sunday_friday_or_the_same_day() {
         assert_eq!(
-            last_day_of_run(date(2026, 8, 22), DayToggle::WeekendsOnly),
+            last_day_of_run(date(2026, 8, 22), DayRule::WeekendsOnly),
             date(2026, 8, 23)
         );
         assert_eq!(
-            last_day_of_run(date(2026, 8, 23), DayToggle::WeekendsOnly),
+            last_day_of_run(date(2026, 8, 23), DayRule::WeekendsOnly),
             date(2026, 8, 23)
         );
         assert_eq!(
-            last_day_of_run(date(2026, 8, 17), DayToggle::WeekdaysOnly),
+            last_day_of_run(date(2026, 8, 17), DayRule::WeekdaysOnly),
             date(2026, 8, 21)
         );
         assert_eq!(
-            last_day_of_run(date(2026, 8, 22), DayToggle::AllDays),
+            last_day_of_run(date(2026, 8, 22), DayRule::ANY),
             date(2026, 8, 22)
         );
     }
@@ -279,14 +413,14 @@ mod tests {
     #[test]
     fn avoiding_ranges_also_snaps_to_an_allowed_day() {
         assert_eq!(
-            avoid_blocked_ranges(date(2026, 8, 19), &[], DayToggle::WeekendsOnly),
+            avoid_blocked_ranges(date(2026, 8, 19), &[], DayRule::WeekendsOnly),
             date(2026, 8, 22)
         );
     }
 
     #[test]
     fn an_absurd_frequency_is_capped_instead_of_crashing() {
-        let result = compute_schedule(date(2026, 8, 19), u32::MAX, DayToggle::AllDays, &[]);
+        let result = compute_schedule(date(2026, 8, 19), u32::MAX, DayRule::ANY, &[]);
         assert_eq!(result.next_target_date, date(2036, 8, 16)); // 3650 days later
     }
 

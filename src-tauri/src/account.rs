@@ -1,17 +1,22 @@
 //! The Friends account: Sign in with Apple, traded for a Supabase session that is kept in the Keychain.
-//! The rules live in friends-account; this file only opens the browser, listens for it to come back,
+//! The rules live in friends-account; this file only opens the sign-in page, waits for it to come back,
 //! and connects the Keychain and the windows.
 //!
-//! Signing in happens in the browser: the app opens Supabase's Sign in with Apple page, and when it's
-//! done the browser comes back to a one-off address on this Mac (`http://127.0.0.1:<port>/auth/callback`)
-//! with a code the app trades for a session. (Apple's own sign-in sheet needs the Mac App Store: apps
-//! signed with a Developer ID can't use it.)
+//! On the Mac, signing in happens in the browser: the app opens Supabase's Sign in with Apple page,
+//! and when it's done the browser comes back to a one-off address on this Mac
+//! (`http://127.0.0.1:<port>/auth/callback`) with a code the app trades for a session. (Apple's own
+//! sign-in sheet needs the Mac App Store: apps signed with a Developer ID can't use it.) On the
+//! iPhone, the same page opens in a Safari sheet over the app, which comes back to
+//! `io.github.charliespy.friends:/auth/callback`.
 //!
 //! Signing in is optional. A build without the Supabase settings (`FRIENDS_SUPABASE_URL` and
 //! `FRIENDS_SUPABASE_PUBLISHABLE_KEY` at build time, or in `.env.local` for debug builds) shows the
 //! Account section as unavailable, and touches neither the network nor the Keychain.
 
-use std::sync::{Arc, Mutex, MutexGuard};
+#[cfg(target_os = "macos")]
+use std::sync::Arc;
+use std::sync::{Mutex, MutexGuard};
+#[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
 
 use friends_account::{
@@ -30,15 +35,25 @@ const KEYCHAIN_SERVICE: &str = "io.github.charliespy.friends";
 const KEYCHAIN_ACCOUNT: &str = "account-session";
 
 /// How long a sign-in waits for the browser to come back.
+#[cfg(target_os = "macos")]
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// What the browser shows once it's back.
-const SIGNED_IN_PAGE: &str = "You're signed in to Friends. You can close this tab.";
-const FAILED_PAGE: &str = "Signing in to Friends didn't work. Go back to Friends to try again.";
-const CANCELLED_PAGE: &str = "Signing in to Friends was cancelled. You can close this tab.";
+/// What the browser shows once it's back (the iPhone's sheet just closes).
+const SIGNED_IN: &str = "You're signed in to Friends. You can close this tab.";
+const FAILED: &str = "Signing in to Friends didn't work. Go back to Friends to try again.";
+const CANCELLED: &str = "Signing in to Friends was cancelled. You can close this tab.";
 
 /// The browser sign-ins, each with its sign-in address (unblocking it wakes the sign-in).
+#[cfg(target_os = "macos")]
 type Waiting = Attempts<Arc<tiny_http::Server>>;
+/// The sign-ins in the sheet. The sheet has its own Cancel, so there's nothing to wake.
+#[cfg(target_os = "ios")]
+type Waiting = Attempts<()>;
+
+/// The address the iPhone's sign-in sheet comes back to: the app's own scheme, which only the sheet
+/// that opened the page listens for.
+#[cfg(target_os = "ios")]
+const PHONE_SCHEME: &str = "io.github.charliespy.friends";
 
 pub struct Account {
     /// Why this build can't sign in, or the project to sign in to.
@@ -187,12 +202,12 @@ fn publish(app: &AppHandle) {
 }
 
 /// errSecItemNotFound: the Keychain holds no such item.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 /// Saves the session in the Keychain, or removes it for `None`.
 fn save(session: Option<&Session>) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         use security_framework::passwords::{delete_generic_password, set_generic_password};
         match session {
@@ -207,7 +222,7 @@ fn save(session: Option<&Session>) -> Result<(), String> {
             },
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     {
         let _ = session;
         Ok(())
@@ -217,7 +232,7 @@ fn save(session: Option<&Session>) -> Result<(), String> {
 /// The saved session: `Ok(None)` when none was saved (or it can't be read back as one), `Err` when
 /// the Keychain wouldn't say.
 fn load() -> Result<Option<Session>, String> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         match security_framework::passwords::get_generic_password(
             KEYCHAIN_SERVICE,
@@ -228,7 +243,7 @@ fn load() -> Result<Option<Session>, String> {
             Err(e) => Err(e.to_string()),
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     Ok(None)
 }
 
@@ -294,9 +309,12 @@ pub async fn sign_in_with_apple(app: AppHandle, attempt: String) -> Result<Shown
 pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<Shown, String> {
     blocking(app, move |app| {
         let account = app.state::<Account>();
+        #[cfg(target_os = "macos")]
         if let Some(server) = account.waiting().cancel(&attempt) {
             server.unblock();
         }
+        #[cfg(target_os = "ios")]
+        account.waiting().cancel(&attempt);
         Ok(account.view())
     })
     .await
@@ -304,12 +322,14 @@ pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<Shown, St
 
 /// Preferences closed: stops a sign-in still waiting for the browser, since its Cancel is gone and it
 /// would otherwise finish out of sight.
+#[cfg(target_os = "macos")]
 pub fn cancel_waiting(app: &AppHandle) {
     if let Some(server) = app.state::<Account>().waiting().cancel_all() {
         server.unblock();
     }
 }
 
+#[cfg(target_os = "macos")]
 fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
     let account = app.state::<Account>();
     let client = account.client()?;
@@ -349,21 +369,83 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
             return Err(e);
         }
     };
-    let session = match client.exchange_code(&code, &verifier, now()) {
+    let shown = finish_sign_in(app, attempt, client, &code, &verifier, |page| {
+        answer(request, 200, page)
+    });
+    if matches!(&shown, Ok(s) if matches!(s.account, AccountView::SignedIn { .. })) {
+        // Back from the browser to Friends.
+        let _ = crate::desktop::show_preferences(app);
+    }
+    shown
+}
+
+#[cfg(target_os = "ios")]
+fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
+    use tauri_plugin_web_auth::WebAuthExt;
+    let account = app.state::<Account>();
+    let client = account.client()?;
+    if let Started::Cancelled = account.waiting().start(attempt, ()) {
+        return Ok(account.view());
+    }
+    let waited = (|| {
+        let redirect = format!("{PHONE_SCHEME}:{}", friends_account::CALLBACK_PATH);
+        let pkce = Pkce::new()?;
+        if !account.waiting().is_waiting(attempt) {
+            return Ok(None);
+        }
+        let url = client.authorize_url("apple", &redirect, &pkce);
+        // `None`: closed with the sheet's Cancel.
+        let Some(back) = app.web_auth().authenticate(&url, PHONE_SCHEME)? else {
+            return Ok(None);
+        };
+        let target = back.strip_prefix(PHONE_SCHEME).unwrap_or(&back);
+        let target = target.strip_prefix(':').unwrap_or(target);
+        match parse_callback(target) {
+            Callback::Code(code) => Ok(Some((code, pkce.verifier))),
+            Callback::Failed(reason) => Err(format!("Sign in with Apple didn't finish: {reason}")),
+            Callback::Other => Err("Signing in came back to the wrong address.".to_string()),
+        }
+    })();
+    let (code, verifier) = match waited {
+        Ok(Some(back)) => back,
+        Ok(None) => {
+            account.waiting().finish(attempt);
+            return Ok(account.view());
+        }
+        Err(e) => {
+            account.waiting().finish(attempt);
+            return Err(e);
+        }
+    };
+    finish_sign_in(app, attempt, client, &code, &verifier, |_| {})
+}
+
+/// Trades the code for a session and signs in with it, unless sign-in `attempt` was cancelled or
+/// replaced meanwhile. `respond` gets the page to show where signing in happened.
+fn finish_sign_in(
+    app: &AppHandle,
+    attempt: &str,
+    client: Client<HttpTransport>,
+    code: &str,
+    verifier: &str,
+    respond: impl FnOnce(&str),
+) -> Result<Shown, String> {
+    let account = app.state::<Account>();
+    let session = match client.exchange_code(code, verifier, now()) {
         Ok(s) => s,
         Err(e) => {
             // Cancelled meanwhile: the failure doesn't matter any more.
             if !account.waiting().finish(attempt) {
-                answer(request, 200, CANCELLED_PAGE);
+                respond(CANCELLED);
                 return Ok(account.view());
             }
-            answer(request, 200, FAILED_PAGE);
+            respond(FAILED);
             return Err(e.to_string());
         }
     };
     // Still the sign-in the user wants (not cancelled or replaced while the code was traded)?
     if !account.waiting().finish(attempt) {
-        answer(request, 200, CANCELLED_PAGE);
+        respond(CANCELLED);
         end_on_server(client, session);
         return Ok(account.view());
     }
@@ -375,14 +457,13 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
     if let Some(old) = replaced {
         end_on_server(client, old);
     }
-    answer(request, 200, SIGNED_IN_PAGE);
+    respond(SIGNED_IN);
     publish(app);
     crate::sync::nudge(app, crate::sync::Nudge::Now);
-    // Back from the browser to Friends.
-    let _ = crate::show_preferences(app);
     Ok(account.view())
 }
 
+#[cfg(target_os = "macos")]
 /// Waits for the browser to come back to the sign-in address with a code, answering anything else it
 /// asks for (a site icon). The code, and the browser's request to answer once the code is traded;
 /// `None` once `still_waiting` says the sign-in was cancelled or replaced (which unblocks the server).
@@ -406,7 +487,7 @@ fn wait_for_browser(
         match parse_callback(request.url()) {
             Callback::Code(code) => return Ok(Some((code, request))),
             Callback::Failed(reason) => {
-                answer(request, 200, FAILED_PAGE);
+                answer(request, 200, FAILED);
                 return Err(format!("Sign in with Apple didn't finish: {reason}"));
             }
             Callback::Other => answer(request, 404, "Not found."),
@@ -414,6 +495,7 @@ fn wait_for_browser(
     }
 }
 
+#[cfg(target_os = "macos")]
 fn open_in_browser(url: &str) -> Result<(), String> {
     let status = std::process::Command::new("/usr/bin/open")
         .arg(url)
@@ -426,6 +508,7 @@ fn open_in_browser(url: &str) -> Result<(), String> {
     }
 }
 
+#[cfg(target_os = "macos")]
 /// Answers the browser with a short page.
 fn answer(request: tiny_http::Request, status: u16, text: &str) {
     let body = format!(
@@ -473,7 +556,7 @@ pub async fn sign_out(app: AppHandle) -> Result<Shown, String> {
     .await
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
     use std::io::{Read, Write};
@@ -513,7 +596,7 @@ mod tests {
         let (code, request) = waiting.join().unwrap().unwrap().unwrap();
         assert_eq!(code, "abc");
         // The browser hears back only once the code is traded.
-        answer(request, 200, SIGNED_IN_PAGE);
+        answer(request, 200, SIGNED_IN);
         let page = page.join().unwrap();
         assert!(page.starts_with("HTTP/1.1 200"));
         assert!(page.contains("You're signed in to Friends"));

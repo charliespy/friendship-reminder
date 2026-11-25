@@ -133,7 +133,7 @@ fn marking_done_counts_the_next_target_from_today() {
     let id = data
         .add_person("Ada", 90, date(2026, 5, 1), today())
         .unwrap();
-    data.mark_done(id, today()).unwrap();
+    data.mark_done(id, None, today()).unwrap();
     let p = data.person(id).unwrap();
     assert_eq!(p.last_connected, today());
     assert_eq!(p.next_target, date(2026, 11, 21)); // Aug 19 + 90 = Tue Nov 17 -> Saturday Nov 21
@@ -241,7 +241,8 @@ fn changing_the_day_setting_reschedules_everyone() {
     let id = data
         .add_person("Ada", 30, date(2026, 7, 23), today())
         .unwrap();
-    data.set_day_toggle(DayToggle::WeekdaysOnly, today());
+    data.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+        .unwrap();
     let p = data.person(id).unwrap();
     assert_eq!(p.next_target, date(2026, 8, 24)); // Saturday -> Monday
     assert_eq!(p.notification_date, date(2026, 8, 24));
@@ -278,7 +279,7 @@ fn editing_the_frequency_reschedules() {
 #[test]
 fn unknown_ids_are_reported_or_skipped() {
     let mut data = Data::default();
-    assert!(data.mark_done(42, today()).is_err());
+    assert!(data.mark_done(42, None, today()).is_err());
     assert!(data.update_person(42, "Ada", 30, today(), today()).is_err());
     assert_eq!(data.delete_people(&[42]), 0);
     assert!(!data.delete_blocked(42, today()));
@@ -335,7 +336,8 @@ fn data_survives_a_json_round_trip_and_old_files_get_defaults() {
 #[test]
 fn a_weekday_target_stays_up_through_that_working_week() {
     let mut data = Data::default();
-    data.set_day_toggle(DayToggle::WeekdaysOnly, today());
+    data.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+        .unwrap();
     let id = data
         .add_person("Ada", 30, date(2026, 7, 18), today())
         .unwrap(); // Jul 18 + 30 = Mon Aug 17
@@ -346,9 +348,10 @@ fn a_weekday_target_stays_up_through_that_working_week() {
 }
 
 #[test]
-fn decades_of_missed_days_catch_up_fully_under_all_days() {
+fn decades_of_missed_days_catch_up_fully_under_custom_all_days() {
     let mut data = Data::default();
-    data.set_day_toggle(DayToggle::AllDays, today());
+    data.set_day_setting(DayToggle::Custom, None, today())
+        .unwrap();
     let id = data
         .add_person("Ada", 30, date(1950, 1, 1), today())
         .unwrap();
@@ -372,7 +375,8 @@ fn a_long_backlog_under_weekends_only_lands_on_this_weekend() {
 fn a_long_backlog_under_weekdays_only_lands_on_the_next_monday() {
     let mut data = Data::default();
     let saturday = date(2026, 8, 22);
-    data.set_day_toggle(DayToggle::WeekdaysOnly, saturday);
+    data.set_day_setting(DayToggle::WeekdaysOnly, None, saturday)
+        .unwrap();
     let id = data
         .add_person("Ada", 30, date(2020, 1, 1), saturday)
         .unwrap();
@@ -413,7 +417,8 @@ fn targets_pushed_past_a_far_range_still_make_a_loadable_file() {
 #[test]
 fn a_missed_weekday_target_stays_up_over_the_weekend_without_an_early_notification() {
     let mut data = Data::default();
-    data.set_day_toggle(DayToggle::WeekdaysOnly, today());
+    data.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+        .unwrap();
     let id = data
         .add_person("Ada", 30, date(2026, 7, 18), today())
         .unwrap(); // target Mon Aug 17

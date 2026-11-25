@@ -1,17 +1,150 @@
-/** Preferences › Settings: which days count, notifications, launch at login, and the account. */
+/**
+ * Preferences › Settings: which days count, notifications, launch at login, and the account. On the
+ * iPhone (`phone`) there's no launch at login, and due people show in the Today tab.
+ */
 import { useEffect, useRef, useState } from "react";
-import { api, errorMessage, type DayToggle, type View } from "./api";
+import { api, errorMessage, type DayToggle, type View, type Weekday } from "./api";
 import { AccountSection } from "./AccountSection";
 import { useAction } from "./useView";
 
 const TOGGLES: { value: DayToggle; title: string; text: string }[] = [
   { value: "weekendsOnly", title: "Weekends only", text: "Aim for a Saturday or Sunday. The reminder comes on the Monday before, so there's time to plan." },
   { value: "weekdaysOnly", title: "Weekdays only", text: "Aim for Monday to Friday, like a lunch or a call." },
-  { value: "allDays", title: "Any day", text: "Aim for whatever day comes up. Weekend days still get a Monday heads-up." },
+  { value: "custom", title: "Custom day", text: "Aim only for the days you're free. A missed day moves to the next one you picked. Weekend days still get a Monday heads-up." },
 ];
 
-export function SettingsPane({ view }: { view: View }) {
-  const toggle = useAction();
+const WEEK: { day: Weekday; short: string; name: string }[] = [
+  { day: "mon", short: "M", name: "Monday" },
+  { day: "tue", short: "T", name: "Tuesday" },
+  { day: "wed", short: "W", name: "Wednesday" },
+  { day: "thu", short: "T", name: "Thursday" },
+  { day: "fri", short: "F", name: "Friday" },
+  { day: "sat", short: "S", name: "Saturday" },
+  { day: "sun", short: "S", name: "Sunday" },
+];
+
+/** The days picked under "Custom day": one button per day, on while picked. Changes wait for Save. */
+function DayPicker({
+  days,
+  disabled,
+  onChange,
+}: {
+  days: Weekday[];
+  disabled: boolean;
+  onChange: (days: Weekday[]) => void;
+}) {
+  const picked = new Set(days);
+  const flip = (day: Weekday) =>
+    onChange(WEEK.map((w) => w.day).filter((d) => (d === day ? !picked.has(d) : picked.has(d))));
+  return (
+    <div className="day-picker-row">
+      <div className="day-picker" role="group" aria-label="Days you're free">
+        {WEEK.map((w) => {
+          const on = picked.has(w.day);
+          return (
+            <button
+              key={w.day}
+              type="button"
+              className="day-chip"
+              aria-pressed={on}
+              aria-label={w.name}
+              title={w.name}
+              // The last day picked stays: at least one is needed.
+              disabled={disabled || (on && picked.size === 1)}
+              onClick={() => flip(w.day)}
+            >
+              {w.short}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const sameDays = (a: Weekday[], b: Weekday[]) => a.length === b.length && a.every((d, i) => d === b[i]);
+
+/**
+ * Days to aim for. It reschedules everyone, so a change is a draft until Save (Discard puts the
+ * saved setting back); the days only count under Custom day.
+ */
+function DaySetting({ view }: { view: View }) {
+  const save = useAction();
+  const saved = view.settings;
+  const [draft, setDraft] = useState<{ toggle: DayToggle; days: Weekday[] } | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
+  const toggle = draft?.toggle ?? saved.dayToggle;
+  const days = draft?.days ?? saved.customDays;
+  const changed =
+    toggle !== saved.dayToggle || (toggle === "custom" && !sameDays(days, saved.customDays));
+  // Once the saved setting matches the draft (saved, or changed back by hand), the draft is done.
+  // Set while rendering, as React suggests for state that follows props.
+  // (The whole draft must match: days edited under Custom day stay while another choice is tried.)
+  if (draft && draft.toggle === saved.dayToggle && sameDays(draft.days, saved.customDays)) setDraft(null);
+  const discard = () => {
+    setDraft(null);
+    setJustSaved(false);
+  };
+  const edit = (next: { toggle?: DayToggle; days?: Weekday[] }) => {
+    setJustSaved(false);
+    setDraft({ toggle: next.toggle ?? toggle, days: next.days ?? days });
+  };
+  const onSave = async () => {
+    const ok = await save.run(() => api.setDayToggle(toggle, toggle === "custom" ? days : undefined));
+    // The draft stays until the new view shows it saved (the view can come after the command
+    // returns), so the choice never flicks back to the old one meanwhile.
+    if (ok) setJustSaved(true);
+  };
+
+  return (
+    <fieldset className="setting-group plain-fieldset">
+      <legend className="section-label">Days to aim for</legend>
+      <div className="choice-list">
+        {TOGGLES.map((t) => [
+          <label className="choice" key={t.value}>
+            <input
+              type="radio"
+              name="dayToggle"
+              value={t.value}
+              checked={toggle === t.value}
+              disabled={save.busy}
+              onChange={() => edit({ toggle: t.value })}
+            />
+            <span>
+              <span className="choice-title">{t.title}</span>
+              <br />
+              <span className="choice-text">{t.text}</span>
+            </span>
+          </label>,
+          t.value === "custom" && toggle === "custom" && (
+            <DayPicker key="days" days={days} disabled={save.busy} onChange={(d) => edit({ days: d })} />
+          ),
+        ])}
+      </div>
+      <p className="hint">Saving reschedules everyone from the last time you were in touch.</p>
+      {save.error && (
+        <p className="error" role="alert">
+          {save.error}
+        </p>
+      )}
+      <div className="form-actions settings-actions">
+        <p className="settings-status" role="status">
+          {changed ? "Not saved yet." : justSaved ? "Saved." : ""}
+        </p>
+        {changed && (
+          <button type="button" className="btn btn-quiet" disabled={save.busy} onClick={discard}>
+            Discard
+          </button>
+        )}
+        <button type="button" className="btn btn-primary" disabled={!changed || save.busy} onClick={onSave}>
+          Save
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+export function SettingsPane({ view, phone = false }: { view: View; phone?: boolean }) {
   const notify = useAction();
   const [login, setLogin] = useState<boolean | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -23,6 +156,7 @@ export function SettingsPane({ view }: { view: View }) {
   // Read on mount, and again whenever the window comes back: the pane stays mounted while
   // Preferences is hidden, and the setting can change in System Settings meanwhile.
   useEffect(() => {
+    if (phone) return;
     const load = () => {
       const seq = ++loginSeq.current;
       api.getLaunchAtLogin().then(
@@ -46,7 +180,7 @@ export function SettingsPane({ view }: { view: View }) {
       window.removeEventListener("focus", load);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [phone]);
 
   // One change at a time, so the box always shows the answer to the last click.
   const changeLogin = async (on: boolean) => {
@@ -75,32 +209,7 @@ export function SettingsPane({ view }: { view: View }) {
         </div>
       </header>
 
-      <fieldset className="setting-group plain-fieldset">
-        <legend className="section-label">Days to aim for</legend>
-        <div className="choice-list">
-          {TOGGLES.map((t) => (
-            <label className="choice" key={t.value}>
-              <input
-                type="radio"
-                name="dayToggle"
-                value={t.value}
-                checked={view.settings.dayToggle === t.value}
-                disabled={toggle.busy}
-                onChange={() => toggle.run(() => api.setDayToggle(t.value))}
-              />
-              <span>
-                <span className="choice-title">{t.title}</span>
-                <br />
-                <span className="choice-text">{t.text}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        <p className="hint">
-          Changing this reschedules everyone from the last time you were in touch.
-        </p>
-        {toggle.error && <p className="error" role="alert">{toggle.error}</p>}
-      </fieldset>
+      <DaySetting view={view} />
 
       <div className="setting-group">
         <h3 className="section-label">Reminders</h3>
@@ -116,29 +225,33 @@ export function SettingsPane({ view }: { view: View }) {
               <span className="choice-title">Send a notification</span>
               <br />
               <span className="choice-text">
-                When someone's reminder comes up. They also show in the menu bar either way.
+                {phone
+                  ? "On the morning someone's reminder comes up. They also show in Today either way."
+                  : "When someone's reminder comes up. They also show in the menu bar either way."}
               </span>
             </span>
           </label>
-          <label className="choice">
-            <input
-              type="checkbox"
-              checked={login ?? false}
-              disabled={loginBusy || (login === null && !loginError)}
-              onChange={(e) => changeLogin(e.target.checked)}
-            />
-            <span>
-              <span className="choice-title">Open at login</span>
-              <br />
-              <span className="choice-text">Friends starts in the menu bar when you log in.</span>
-            </span>
-          </label>
+          {!phone && (
+            <label className="choice">
+              <input
+                type="checkbox"
+                checked={login ?? false}
+                disabled={loginBusy || (login === null && !loginError)}
+                onChange={(e) => changeLogin(e.target.checked)}
+              />
+              <span>
+                <span className="choice-title">Open at login</span>
+                <br />
+                <span className="choice-text">Friends starts in the menu bar when you log in.</span>
+              </span>
+            </label>
+          )}
         </div>
         {notify.error && <p className="error" role="alert">{notify.error}</p>}
         {loginError && <p className="error" role="alert">{loginError}</p>}
       </div>
 
-      <AccountSection />
+      <AccountSection phone={phone} />
     </section>
   );
 }

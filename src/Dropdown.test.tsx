@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Person, View } from "./api";
 
@@ -25,6 +25,9 @@ const { Dropdown, DropdownContent } = await import("./Dropdown");
 
 function person(p: Partial<Person>): Person {
   return {
+    suggestedEarlier: null,
+    suggestedToday: false,
+    earliestDone: "2026-01-01",
     id: 1,
     name: "Ada",
     frequencyDays: 30,
@@ -42,7 +45,7 @@ function view(people: Person[]): View {
     today: "2026-11-18",
     people,
     blocked: [],
-    settings: { dayToggle: "weekendsOnly", notifications: true },
+    settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
     unreadableFile: null,
   };
 }
@@ -129,6 +132,8 @@ describe("DropdownContent focus after Done", () => {
     const done = button(`Mark ${name} as done`);
     done.focus();
     await click(done);
+    // The question opens: in touch today.
+    await click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Today/ }));
   }
 
   it("moves focus to the Done button of the person who took the row's place", async () => {

@@ -13,7 +13,10 @@ use crate::model::Data;
 /// The newest file format this version of the app understands.
 /// 2 added what syncing needs (an id every device shares, and change times); a version 1 file is
 /// upgraded as it loads, and an older app refuses a version 2 file instead of dropping those.
-pub const CURRENT_VERSION: u32 = 2;
+/// 3 added the days picked for Custom day (`customDays`, with "allDays" read as Custom with all seven)
+/// and each missed person's `missedTarget`; an app that knows only version 2 refuses a version 3
+/// file rather than setting it aside as unreadable over a setting it doesn't know.
+pub const CURRENT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone)]
 pub struct Store {
@@ -277,7 +280,7 @@ mod tests {
         let path = dir.join("friends.json");
         for text in [
             r#"{"version": 99}"#,
-            r#"{"version":3,"settings":{"dayToggle":"custom"}}"#,
+            r#"{"version":4,"settings":{"dayToggle":"someday"}}"#,
         ] {
             fs::write(&path, text).unwrap();
             assert!(Store::new(&path).load().is_err());

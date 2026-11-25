@@ -5,6 +5,7 @@ import type { Person, View } from "./api";
 const getView = vi.fn<() => Promise<View>>();
 const onViewChanged = vi.fn<(f: (v: View) => void) => Promise<() => void>>();
 const getLaunchAtLogin = vi.fn<() => Promise<boolean>>();
+const setDayToggle = vi.fn<(t: string, d?: string[]) => Promise<View>>();
 
 vi.mock("./api", async (orig) => ({
   ...(await orig<typeof import("./api")>()),
@@ -12,6 +13,7 @@ vi.mock("./api", async (orig) => ({
     getView: () => getView(),
     onViewChanged: (f: (v: View) => void) => onViewChanged(f),
     getLaunchAtLogin: () => getLaunchAtLogin(),
+    setDayToggle: (t: string, d?: string[]) => setDayToggle(t, d),
     getAccount: () => Promise.resolve({ status: "signedOut", warning: null }),
     onAccountChanged: () => Promise.resolve(() => {}),
   },
@@ -21,6 +23,9 @@ const { Preferences } = await import("./Preferences");
 
 function person(p: Partial<Person>): Person {
   return {
+    suggestedEarlier: null,
+    suggestedToday: false,
+    earliestDone: "2026-01-01",
     id: 1,
     name: "Maya Chen",
     frequencyDays: 30,
@@ -50,7 +55,7 @@ function view(people: Person[], unreadableFile: string | null = null): View {
     today: "2026-11-18",
     people,
     blocked: [],
-    settings: { dayToggle: "weekendsOnly", notifications: true },
+    settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
     unreadableFile,
   };
 }
@@ -141,5 +146,67 @@ describe("Preferences", () => {
   it("shows no banner when the file was read", async () => {
     await open(view([MAYA]));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("waits for Save before changing the day setting, and saves the days with it", async () => {
+    setDayToggle.mockReset();
+    setDayToggle.mockResolvedValue(view([]));
+    await open(view([MAYA]));
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    const save = () => screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save().disabled).toBe(true);
+    expect(screen.queryByRole("group", { name: "Days you're free" })).toBeNull();
+    // Pick Custom day: the days show, nothing is sent yet.
+    await act(async () => fireEvent.click(screen.getByLabelText(/Custom day/)));
+    expect(screen.getByRole("group", { name: "Days you're free" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Not saved yet.");
+    const day = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+    await act(async () => fireEvent.click(day("Friday")));
+    expect(day("Friday").getAttribute("aria-pressed")).toBe("false");
+    expect(setDayToggle).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(save()));
+    expect(setDayToggle).toHaveBeenCalledWith("custom", ["mon", "tue", "wed", "thu", "sat", "sun"]);
+  });
+
+  it("keeps showing the choice just saved until the new view arrives", async () => {
+    setDayToggle.mockReset();
+    setDayToggle.mockResolvedValue(view([]));
+    await open(view([MAYA]));
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Weekdays only/)));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    // The command returned; the view with the new setting hasn't come yet.
+    expect((screen.getByLabelText(/Weekdays only/) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("keeps days picked under Custom day while another choice is tried", async () => {
+    await open(view([MAYA]));
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Custom day/)));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Monday" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Weekends only/)));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Custom day/)));
+    expect(screen.getByRole("button", { name: "Monday" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("puts the saved setting back on Discard", async () => {
+    setDayToggle.mockReset();
+    await open(view([MAYA]));
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    await act(async () => fireEvent.click(screen.getByLabelText(/Weekdays only/)));
+    expect((screen.getByLabelText(/Weekdays only/) as HTMLInputElement).checked).toBe(true);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Discard" })));
+    expect((screen.getByLabelText(/Weekends only/) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    expect(setDayToggle).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last picked day: at least one is needed", async () => {
+    const custom = view([MAYA]);
+    custom.settings = { ...custom.settings, dayToggle: "custom", customDays: ["sun"] };
+    await open(custom);
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Settings" })));
+    expect((screen.getByRole("button", { name: "Sunday" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Monday" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

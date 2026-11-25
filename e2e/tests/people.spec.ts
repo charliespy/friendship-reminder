@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { SAMPLE, TODAY, openPreferences, seed } from "./helpers";
+import { SAMPLE, TODAY, answerDone, openPreferences, seed } from "./helpers";
 
 test("add a person", async ({ page, request }) => {
   await seed(request);
@@ -63,6 +63,7 @@ test("mark a person done from the list", async ({ page, request }) => {
   const row = page.getByTestId("person-row");
   await expect(row).toContainText("Due");
   await row.getByRole("button", { name: "Done" }).click();
+  await answerDone(page, "Today");
   await expect(row).toContainText("Monthly · Reminder in 4 weeks, Mon, Dec 14");
   await expect(page.getByRole("tab", { name: "People" })).toHaveText("People");
 });
@@ -75,6 +76,7 @@ test("saving an edit keeps a Done made while the form was open", async ({ page, 
   const form = page.getByRole("form", { name: "Save changes" });
   // With the form open, the person is marked done (as from the menu bar dropdown).
   await row.getByRole("button", { name: "Done" }).click();
+  await answerDone(page, "Today");
   await expect(row).toContainText("Reminder in 4 weeks, Mon, Dec 14");
   await form.getByLabel("Name").fill("Maya C.");
   await form.getByRole("button", { name: "Save changes" }).click();
@@ -192,7 +194,34 @@ test("Done keeps focus on that person's Done button after the list re-sorts", as
   await expect(rows.first()).toContainText("Jonah Okafor");
   await page.getByRole("button", { name: "Mark Jonah Okafor as done" }).focus();
   await page.keyboard.press("Enter");
+  await page.getByRole("dialog").getByRole("button", { name: /^Today/ }).focus();
+  await page.keyboard.press("Enter");
   // Done today: Jonah's row moves down the list.
   await expect(rows.first()).not.toContainText("Jonah Okafor");
   await expect(page.getByRole("button", { name: "Mark Jonah Okafor as done" })).toBeFocused();
+});
+
+test("Done asks when you were in touch: the missed day, or another day from the calendar", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE.slice(0, 2) });
+  await openPreferences(page);
+  const maya = page.getByTestId("person-row").filter({ hasText: "Maya Chen" });
+  // Maya's weekend (Sat, Nov 14) went by: that's the day suggested.
+  await maya.getByRole("button", { name: "Done" }).click();
+  const question = page.getByRole("dialog", { name: "When were you in touch with Maya Chen?" });
+  await expect(question.getByRole("button", { name: /^On the day suggested/ })).toContainText("Sat, Nov 14");
+  await answerDone(page, "On the day suggested");
+  await expect(question).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit Maya Chen" }).click();
+  await expect(page.getByLabel("Last in touch")).toHaveValue("2026-11-14");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  const jonah = page.getByTestId("person-row").filter({ hasText: "Jonah Okafor" });
+  await jonah.getByRole("button", { name: "Done" }).click();
+  await answerDone(page, "Another day");
+  const day = page.getByRole("dialog").getByLabel("Another day");
+  await expect(day).toHaveAttribute("max", TODAY);
+  await day.fill("2026-11-16");
+  await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Edit Jonah Okafor" }).click();
+  await expect(page.getByLabel("Last in touch")).toHaveValue("2026-11-16");
 });

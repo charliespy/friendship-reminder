@@ -5,8 +5,8 @@ use chrono::{Datelike, Days, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::schedule::{
-    compute_schedule, last_day_of_run, push_missed_schedule, BlockedRange, DayToggle,
-    ScheduleResult,
+    compute_schedule, last_day_of_run, push_missed_schedule, read_day_setting, BlockedRange,
+    DayRule, DaySet, DayToggle, ScheduleResult, StoredToggle,
 };
 
 /// The frequencies the app offers, in days.
@@ -34,6 +34,9 @@ pub struct Person {
     /// A target went by without being marked done, so this one is a catch-up.
     #[serde(default)]
     pub overdue: bool,
+    /// While overdue: the latest target that went by, the day you last meant to reach out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub missed_target: Option<NaiveDate>,
     /// The notification date the app last sent a notification for, so each one goes out once.
     #[serde(default)]
     pub notified_for: Option<NaiveDate>,
@@ -55,6 +58,21 @@ impl Person {
     /// week is pushed on the Saturday, and the person shouldn't vanish for the weekend).
     pub fn is_due(&self, today: NaiveDate) -> bool {
         self.overdue || self.notification_date <= today
+    }
+
+    /// The earliest day Done can say you were in touch: the last time, or today when the stored day
+    /// is "tomorrow" after a time zone change.
+    pub fn earliest_done(&self, today: NaiveDate) -> NaiveDate {
+        self.last_connected.min(today)
+    }
+
+    /// The day the app suggested, once it has come: the target that went by for someone overdue, or
+    /// the target itself from its day on. `None` while the target is still ahead.
+    pub fn suggested_day(&self, today: NaiveDate) -> Option<NaiveDate> {
+        match self.missed_target {
+            Some(missed) if self.overdue => Some(missed),
+            _ => (self.next_target <= today).then_some(self.next_target),
+        }
     }
 
     fn apply(&mut self, s: ScheduleResult) {
@@ -83,13 +101,44 @@ pub struct Blocked {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "StoredSettings")]
 pub struct Settings {
-    #[serde(default)]
     pub day_toggle: DayToggle,
+    /// The days picked under "Custom day" (all seven at first). Kept while another setting is on, so
+    /// coming back to it brings them back. Never empty.
+    pub custom_days: DaySet,
     /// Send a macOS notification when a reminder comes up.
-    #[serde(default = "yes")]
     pub notifications: bool,
+}
+
+/// `Settings` as a file holds them, from any version.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredSettings {
+    #[serde(default)]
+    day_toggle: StoredToggle,
+    #[serde(default)]
+    custom_days: DaySet,
+    #[serde(default = "yes")]
+    notifications: bool,
+}
+
+impl From<StoredSettings> for Settings {
+    fn from(s: StoredSettings) -> Self {
+        let (day_toggle, custom_days) = read_day_setting(s.day_toggle, s.custom_days);
+        Settings {
+            day_toggle,
+            custom_days,
+            notifications: s.notifications,
+        }
+    }
+}
+
+impl Settings {
+    /// The day setting as the scheduling rules use it.
+    pub fn rule(&self) -> DayRule {
+        DayRule::new(self.day_toggle, self.custom_days)
+    }
 }
 
 fn yes() -> bool {
@@ -100,6 +149,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             day_toggle: DayToggle::WeekendsOnly,
+            custom_days: DaySet::ALL,
             notifications: true,
         }
     }
@@ -213,6 +263,7 @@ impl Data {
                 && sane_date(p.last_connected)
                 && [p.next_target, p.notification_date]
                     .into_iter()
+                    .chain(p.missed_target)
                     .all(sane_target)
         });
         let blocked_ok = self
@@ -270,21 +321,26 @@ impl Data {
         }
     }
 
-    /// A fresh schedule for one person from their last time in touch, caught up to `today`.
+    /// A fresh schedule for one person from their last time in touch, caught up to `today`. Returns
+    /// whether its first target was already over (then they're missed).
     pub(crate) fn reschedule(
         person: &mut Person,
-        toggle: DayToggle,
+        rule: DayRule,
         ranges: &[BlockedRange],
         today: NaiveDate,
-    ) {
+    ) -> bool {
         person.apply(compute_schedule(
             person.last_connected,
             person.frequency_days,
-            toggle,
+            rule,
             ranges,
         ));
         person.overdue = false;
-        Self::catch_up_person(person, toggle, ranges, today);
+        person.missed_target = None;
+        // Behind already (someone added long out of touch, or a Done on a day more than a round
+        // ago): caught up to today, and missed. Every device makes the same plan from the same data,
+        // whichever way the last time in touch changed.
+        Self::catch_up_person(person, rule, ranges, today)
     }
 
     /// Pushes a target that went by without being done to the next allowed days, again and again
@@ -292,7 +348,7 @@ impl Data {
     /// weekend, for a Saturday target under weekends only). Returns whether it moved.
     fn catch_up_person(
         person: &mut Person,
-        toggle: DayToggle,
+        rule: DayRule,
         ranges: &[BlockedRange],
         today: NaiveDate,
     ) -> bool {
@@ -301,14 +357,18 @@ impl Data {
         // Pushing from a target years back would take one step per missed run; start from the week
         // before today instead, which lands on the same day.
         let week_ago = today.checked_sub_days(Days::new(7)).unwrap_or(today);
-        while last_day_of_run(person.next_target, toggle) < today && pushes < MAX_PUSHES {
+        let mut last_missed = None;
+        while last_day_of_run(person.next_target, rule) < today && pushes < MAX_PUSHES {
+            last_missed = Some(person.next_target);
             let from = person.next_target.max(week_ago);
-            person.apply(push_missed_schedule(from, toggle, ranges));
+            person.apply(push_missed_schedule(from, rule, ranges));
             pushes += 1;
             moved = true;
         }
         if moved {
             person.overdue = true;
+            // The latest target that went by: the day you'd most likely have been in touch on.
+            person.missed_target = last_missed;
         }
         moved
     }
@@ -332,12 +392,13 @@ impl Data {
             next_target: last_connected,
             notification_date: last_connected,
             overdue: false,
+            missed_target: None,
             notified_for: None,
             uid: crate::sync::new_uid(),
             modified: 0,
             synced: 0,
         };
-        Self::reschedule(&mut person, self.settings.day_toggle, &self.ranges(), today);
+        Self::reschedule(&mut person, self.settings.rule(), &self.ranges(), today);
         self.people.push(person);
         Ok(id)
     }
@@ -352,7 +413,7 @@ impl Data {
     ) -> Result<(), Invalid> {
         let name = clean_name(name)?;
         check_frequency(frequency_days)?;
-        let (toggle, ranges) = (self.settings.day_toggle, self.ranges());
+        let (rule, ranges) = (self.settings.rule(), self.ranges());
         let person = self.person_mut(id)?;
         // Only a changed date is checked: a stored one can be "tomorrow" after a time zone change.
         if person.last_connected != last_connected {
@@ -364,7 +425,7 @@ impl Data {
         person.frequency_days = frequency_days;
         person.last_connected = last_connected;
         if schedule_changed {
-            Self::reschedule(person, toggle, &ranges, today);
+            Self::reschedule(person, rule, &ranges, today);
         }
         Ok(())
     }
@@ -376,12 +437,26 @@ impl Data {
         before - self.people.len()
     }
 
-    /// You were in touch today: their next target counts from today.
-    pub fn mark_done(&mut self, id: u64, today: NaiveDate) -> Result<(), Invalid> {
-        let (toggle, ranges) = (self.settings.day_toggle, self.ranges());
+    /// You were in touch on `on` (today, when not given): their next target counts from that day.
+    pub fn mark_done(
+        &mut self,
+        id: u64,
+        on: Option<NaiveDate>,
+        today: NaiveDate,
+    ) -> Result<(), Invalid> {
+        let on = on.unwrap_or(today);
+        check_last_connected(on, today)?;
+        let (rule, ranges) = (self.settings.rule(), self.ranges());
         let person = self.person_mut(id)?;
-        person.last_connected = today;
-        Self::reschedule(person, toggle, &ranges, today);
+        let earliest = person.earliest_done(today);
+        if on < earliest {
+            return invalid(format!(
+                "Pick {} or later: the last time you were in touch.",
+                earliest.format("%a, %b %-d, %Y")
+            ));
+        }
+        person.last_connected = on;
+        Self::reschedule(person, rule, &ranges, today);
         Ok(())
     }
 
@@ -430,11 +505,31 @@ impl Data {
         removed
     }
 
-    pub fn set_day_toggle(&mut self, toggle: DayToggle, today: NaiveDate) {
-        if self.settings.day_toggle != toggle {
-            self.settings.day_toggle = toggle;
+    /// The day setting and, when given, the days picked for "Custom day", as one change: everyone is
+    /// rescheduled once. Nothing changes when the days are refused.
+    pub fn set_day_setting(
+        &mut self,
+        toggle: DayToggle,
+        custom_days: Option<DaySet>,
+        today: NaiveDate,
+    ) -> Result<(), Invalid> {
+        let days = custom_days.unwrap_or(self.settings.custom_days);
+        // The days only count under Custom day; kept as they were otherwise.
+        if toggle == DayToggle::Custom && days.is_empty() {
+            return invalid("Pick at least one day.");
+        }
+        let days = if days.is_empty() {
+            self.settings.custom_days
+        } else {
+            days
+        };
+        let before = self.settings.rule();
+        self.settings.day_toggle = toggle;
+        self.settings.custom_days = days;
+        if self.settings.rule() != before {
             self.recompute_all(today);
         }
+        Ok(())
     }
 
     pub fn set_notifications(&mut self, on: bool) {
@@ -444,24 +539,28 @@ impl Data {
     /// Everyone's schedule worked out again from their last time in touch, under the current day
     /// setting and blocked ranges (after a blocked range or the day setting changed).
     pub fn recompute_all(&mut self, today: NaiveDate) {
-        let (toggle, ranges) = (self.settings.day_toggle, self.ranges());
+        let (rule, ranges) = (self.settings.rule(), self.ranges());
         for person in &mut self.people {
             // A new plan can't make anyone "missed": a target the old plan never aimed for may already
             // be over (a blocked range removed after the fact). Someone already missed stays missed
             // while their new target is still behind them.
             let was_overdue = person.overdue;
-            Self::reschedule(person, toggle, &ranges, today);
-            person.overdue &= was_overdue;
+            let behind = Self::reschedule(person, rule, &ranges, today);
+            person.overdue = was_overdue && behind;
+            // Still missed: the day missed is the new plan's, the same on every device.
+            if !person.overdue {
+                person.missed_target = None;
+            }
         }
     }
 
     /// Pushes every missed target forward to today or later. Run on launch, on wake and every hour.
     /// Returns whether anything changed.
     pub fn catch_up(&mut self, today: NaiveDate) -> bool {
-        let (toggle, ranges) = (self.settings.day_toggle, self.ranges());
+        let (rule, ranges) = (self.settings.rule(), self.ranges());
         let mut changed = false;
         for person in &mut self.people {
-            changed |= Self::catch_up_person(person, toggle, &ranges, today);
+            changed |= Self::catch_up_person(person, rule, &ranges, today);
         }
         changed
     }

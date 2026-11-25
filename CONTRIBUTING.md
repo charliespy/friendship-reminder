@@ -26,9 +26,13 @@ npm run dev:web        # the UI in a browser, against a scratch data file
   and download it (Supabase's REST API). Plain Rust, tested without a network.
 - `supabase/migrations/`: the account's database tables and their privacy rules (each account
   sees only its own rows).
-- `src-tauri/`: the macOS shell: menu bar icon, windows, notifications, open at login, and for
-  the account the browser sign-in, the Keychain and when to sync.
-- `src/`: the React UI. It only shows data and calls commands.
+- `src-tauri/`: the shell. `src/desktop.rs` is the Mac's (menu bar icon, windows, notifications,
+  open at login), `src/mobile.rs` the iPhone's (booking reminders ahead with iOS), and the rest is
+  shared: the account (browser sign-in on the Mac, a sign-in sheet on iPhone from
+  `plugins/web-auth`), the Keychain and when to sync. `tauri.ios.conf.json` and `gen/apple/` are
+  the iPhone app's settings and Xcode project.
+- `src/`: the React UI. It only shows data and calls commands. `Phone.tsx` lays the same panes
+  out as the iPhone app's tabs.
 - `crates/friends-devserver/` and `src/dev/`: the browser dev mode and the end-to-end tests run
   the real rules through a small local server.
 - `e2e/`: Playwright end-to-end tests.

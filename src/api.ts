@@ -8,7 +8,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 /** A calendar date, "YYYY-MM-DD". */
 export type IsoDate = string;
 
-export type DayToggle = "allDays" | "weekdaysOnly" | "weekendsOnly";
+export type DayToggle = "custom" | "weekdaysOnly" | "weekendsOnly";
+
+/** A day of the week, as the Rust side names it. */
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 export interface Person {
   id: number;
@@ -21,6 +24,12 @@ export interface Person {
   overdue: boolean;
   /** The reminder is showing now. */
   due: boolean;
+  /** Done's "On the day suggested" answer: the day the app suggested, when it was before today. */
+  suggestedEarlier: IsoDate | null;
+  /** Today is the day suggested. */
+  suggestedToday: boolean;
+  /** The earliest day Done takes. */
+  earliestDone: IsoDate;
 }
 
 export interface Blocked {
@@ -32,6 +41,8 @@ export interface Blocked {
 
 export interface Settings {
   dayToggle: DayToggle;
+  /** The days picked under "Custom day", Monday first. */
+  customDays: Weekday[];
   notifications: boolean;
 }
 
@@ -87,10 +98,13 @@ export const api = {
   updatePerson: (p: { id: number; name: string; frequencyDays: number; lastConnected?: IsoDate }) =>
     call("update_person", p),
   deletePeople: (ids: number[]) => call("delete_people", { ids }),
-  markDone: (id: number) => call("mark_done", { id }),
+  /** `on` is the day you were in touch; today when left out. */
+  markDone: (id: number, on?: IsoDate) => call("mark_done", on ? { id, on } : { id }),
   addBlocked: (b: { start: IsoDate; end: IsoDate; label: string }) => call("add_blocked", b),
   deleteBlocked: (id: number) => call("delete_blocked", { id }),
-  setDayToggle: (dayToggle: DayToggle) => call("set_day_toggle", { dayToggle }),
+  /** The day setting, with the days for Custom day saved in the same change when given. */
+  setDayToggle: (dayToggle: DayToggle, customDays?: Weekday[]) =>
+    call("set_day_toggle", customDays ? { dayToggle, customDays } : { dayToggle }),
   setNotifications: (on: boolean) => call("set_notifications", { on }),
   getLaunchAtLogin: () => invoke<boolean>("get_launch_at_login"),
   setLaunchAtLogin: (on: boolean) => invoke<boolean>("set_launch_at_login", { on }),

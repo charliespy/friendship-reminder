@@ -3,7 +3,7 @@
 use chrono::NaiveDate;
 use friends_core::api::App;
 use friends_core::model::Data;
-use friends_core::schedule::DayToggle;
+use friends_core::schedule::{DaySet, DayToggle};
 use friends_core::store::Store;
 use friends_core::sync::{Changes, RemoteBlocked, RemotePerson, RemoteSettings};
 use serde_json::json;
@@ -93,13 +93,13 @@ fn a_first_sync_uploads_everything_once() {
     assert!(!data.has_unsynced());
     // Once chosen, it goes up.
     change(&mut data, 200, |d| {
-        d.set_day_toggle(DayToggle::AllDays, today())
+        d.set_day_setting(DayToggle::Custom, None, today()).unwrap()
     });
     assert!(data.has_unsynced());
     let sent = data.sync_start(OWNER);
     assert_eq!(
         sent.settings.map(|s| (s.day_toggle, s.modified_at)),
-        Some((DayToggle::AllDays, 200))
+        Some((DayToggle::Custom, 200))
     );
 }
 
@@ -111,6 +111,7 @@ fn a_new_device_takes_the_accounts_day_setting() {
     let got = Changes {
         settings: Some(RemoteSettings {
             day_toggle: DayToggle::WeekdaysOnly,
+            custom_days: DaySet::ALL,
             modified_at: 1,
             updated_ms: 0,
         }),
@@ -153,7 +154,7 @@ fn only_what_the_user_typed_counts_as_a_change() {
     });
     assert!(data.sync_start(OWNER).is_empty());
     let id = data.people[0].id;
-    change(&mut data, 300, |d| d.mark_done(id, today()).unwrap());
+    change(&mut data, 300, |d| d.mark_done(id, None, today()).unwrap());
     let sent = data.sync_start(OWNER);
     assert_eq!(sent.people.len(), 1);
     assert_eq!(sent.people[0].modified_at, 300);
@@ -262,7 +263,7 @@ fn deletions_from_other_devices_and_from_here() {
     // Changed here after the other device deleted them: kept, and uploaded again.
     let (mut data, uid) = synced_with_ada();
     let id = data.people[0].id;
-    change(&mut data, 600, |d| d.mark_done(id, today()).unwrap());
+    change(&mut data, 600, |d| d.mark_done(id, None, today()).unwrap());
     data.sync_pulled(&people(vec![deleted_person(&uid, 500)]), 1, today());
     assert_eq!(data.people.len(), 1);
 
@@ -335,22 +336,25 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
     assert!(data.people[0].next_target > target);
     let all_days = Changes {
         settings: Some(RemoteSettings {
-            day_toggle: DayToggle::AllDays,
+            day_toggle: DayToggle::Custom,
+            custom_days: DaySet::ALL,
             modified_at: 500,
             updated_ms: 0,
         }),
         ..Changes::default()
     };
     data.sync_pulled(&all_days, 1, today());
-    assert_eq!(data.settings.day_toggle, DayToggle::AllDays);
+    assert_eq!(data.settings.day_toggle, DayToggle::Custom);
     assert_eq!(data.people[0].next_target, day(2026, 8, 31));
     // An older day setting from another device loses to one changed here later.
     change(&mut data, 900, |d| {
-        d.set_day_toggle(DayToggle::WeekdaysOnly, today())
+        d.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+            .unwrap()
     });
     let older = Changes {
         settings: Some(RemoteSettings {
-            day_toggle: DayToggle::AllDays,
+            day_toggle: DayToggle::Custom,
+            custom_days: DaySet::ALL,
             modified_at: 800,
             updated_ms: 0,
         }),
@@ -364,7 +368,7 @@ fn blocked_ranges_and_the_day_setting_from_other_devices_move_targets() {
 fn another_accounts_list_isnt_uploaded_into_this_one() {
     let (mut data, _) = synced_with_ada();
     change(&mut data, 200, |d| {
-        d.set_day_toggle(DayToggle::AllDays, today())
+        d.set_day_setting(DayToggle::Custom, None, today()).unwrap()
     });
     let id = data.people[0].id;
     change(&mut data, 300, |d| {
@@ -422,7 +426,8 @@ fn the_app_stamps_changes_and_upgrades_old_files() {
     .unwrap();
     let saved: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    assert_eq!(saved["version"], 2);
+    assert_eq!(saved["version"], 3);
+    assert_eq!(saved["settings"]["dayToggle"], "custom");
     assert_eq!(saved["people"][1]["modified"], 4242);
     let sent = app.sync_start(OWNER).unwrap();
     assert_eq!(sent.people.len(), 2);
@@ -579,7 +584,8 @@ fn three_devices() -> (Account, [Data; 3]) {
         d.add_person("Bo", 30, day(2026, 7, 21), today()).unwrap();
         d.add_blocked(day(2026, 9, 1), day(2026, 9, 7), "Trip", today())
             .unwrap();
-        d.set_day_toggle(DayToggle::AllDays, today());
+        d.set_day_setting(DayToggle::Custom, Some(DaySet::ALL), today())
+            .unwrap();
     });
     for d in &mut devices {
         account.sync(d);
@@ -659,10 +665,12 @@ fn a_tied_day_setting_ends_the_same_everywhere() {
     let (mut account, mut devices) = three_devices();
     let [_, b, c] = &mut devices;
     change(b, 500, |d| {
-        d.set_day_toggle(DayToggle::WeekdaysOnly, today())
+        d.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+            .unwrap();
     });
     change(c, 500, |d| {
-        d.set_day_toggle(DayToggle::WeekendsOnly, today())
+        d.set_day_setting(DayToggle::WeekendsOnly, None, today())
+            .unwrap();
     });
     assert_eq!(b.sync.settings_modified, c.sync.settings_modified);
     settle(&mut account, &mut devices);
@@ -714,12 +722,14 @@ fn a_tie_with_a_change_made_during_the_download_keeps_the_change() {
     let (mut account, mut devices) = three_devices();
     let [_, b, c] = &mut devices;
     change(b, 500, |d| {
-        d.set_day_toggle(DayToggle::WeekdaysOnly, today())
+        d.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+            .unwrap();
     });
     account.sync(b);
     account.upload(c);
     change(c, 500, |d| {
-        d.set_day_toggle(DayToggle::WeekendsOnly, today())
+        d.set_day_setting(DayToggle::WeekendsOnly, None, today())
+            .unwrap();
     });
     account.download(c);
     assert_eq!(c.settings.day_toggle, DayToggle::WeekendsOnly);

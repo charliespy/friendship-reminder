@@ -14,6 +14,16 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 - You can sign in with Apple in Preferences → Settings. While you're signed in, your list syncs
   with your Friends account, ready for a later iPhone app: the people, blocked dates and the day
   setting. Signed out, everything stays on this Mac as before.
+- Friends for iPhone, with the same look and the same lists: Today, People, Blocked dates and
+  Settings as tabs. Reminders come as notifications at 9 in the morning on the day. Sign in with
+  Apple on both to keep the Mac and iPhone in sync. (Built from source for now; not in the App
+  Store yet.)
+- **Custom day** replaces "Any day" in Settings: pick the days of the week you're free (any of
+  Monday to Sunday), and Friends only aims for those. All seven start picked, which works the way
+  "Any day" did. Changes to the days to aim for now wait for **Save** (or Discard), since saving
+  reschedules everyone.
+- **Done** now asks when you were in touch: on the day Friends suggested, today, or another day
+  from a calendar. The next reminder counts from that day.
 
 ### Changed
 
