@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Releasing Friends, step by step (docs/RELEASING.md has the whole procedure):
+// Releasing Friendship Reminder, step by step (docs/RELEASING.md has the whole procedure):
 //
 //   node scripts/release.mjs plan [--patch] [--out <file> [--force]]
 //       Dry run: changes nothing. Prints the last release, the next version and why, and a draft

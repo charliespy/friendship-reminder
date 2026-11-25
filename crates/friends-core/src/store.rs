@@ -69,7 +69,7 @@ impl Store {
         if let Ok(Version { version }) = serde_json::from_str::<Version>(&text) {
             if version > CURRENT_VERSION {
                 return Err(io::Error::other(format!(
-                    "{} was saved by a newer version of Friends (format {version}). Update the app to open it.",
+                    "{} was saved by a newer version of Friendship Reminder (format {version}). Update the app to open it.",
                     self.path.display()
                 )));
             }

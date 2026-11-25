@@ -261,7 +261,7 @@ fn errors_say_what_to_do() {
     );
     assert_eq!(
         err.unwrap_err().to_string(),
-        "Couldn't sync with your Friends account: the account's database isn't set up yet"
+        "Couldn't sync with your Friendship Reminder account: the account's database isn't set up yet"
     );
 
     let fake = Fake::default();

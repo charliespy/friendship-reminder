@@ -1,4 +1,4 @@
-// Friends' sign-in sheet: shows a sign-in page in ASWebAuthenticationSession, a Safari sheet over the
+// Friendship Reminder's sign-in sheet: shows a sign-in page in ASWebAuthenticationSession, a Safari sheet over the
 // app that shares Safari's sign-ins, and hands the address it comes back to to the Rust side.
 
 import AuthenticationServices

@@ -74,14 +74,14 @@ describe("AccountSection", () => {
   });
 
   it("explains why a build can't sign in, with the button off", async () => {
-    await open({ status: "unavailable", reason: "This copy of Friends isn't signed for Sign in with Apple." });
+    await open({ status: "unavailable", reason: "This copy of Friendship Reminder isn't signed for Sign in with Apple." });
     expect((signInButton() as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/isn't signed for Sign in with Apple/)).toBeTruthy();
   });
 
   it("shows a failed sign-in and keeps the button", async () => {
     await open({ status: "signedOut", warning: null });
-    signInWithApple.mockRejectedValue("Couldn't reach the Friends account. Check your internet connection.");
+    signInWithApple.mockRejectedValue("Couldn't reach the Friendship Reminder account. Check your internet connection.");
     await act(async () => fireEvent.click(signInButton()));
     expect(screen.getByRole("alert").textContent).toMatch(/Couldn't reach/);
     expect((signInButton() as HTMLButtonElement).disabled).toBe(false);
@@ -118,10 +118,10 @@ describe("AccountSection", () => {
   it("says when Cancel didn't work", async () => {
     await open({ status: "signedOut", warning: null });
     signInWithApple.mockReturnValue(new Promise(() => {}));
-    cancelSignIn.mockRejectedValue("Friends isn't answering.");
+    cancelSignIn.mockRejectedValue("Friendship Reminder isn't answering.");
     await act(async () => fireEvent.click(signInButton()));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
-    expect(screen.getByRole("alert").textContent).toBe("Friends isn't answering.");
+    expect(screen.getByRole("alert").textContent).toBe("Friendship Reminder isn't answering.");
   });
 
   it("keeps Cancel while the sign-in waits, even if the account changes", async () => {
@@ -159,7 +159,7 @@ describe("AccountSection", () => {
         status: "signedIn",
         email: null,
         warning: null,
-        sync: { syncing: false, lastSynced: null, error: "Couldn't reach your Friends account. Friends will try again." },
+        sync: { syncing: false, lastSynced: null, error: "Couldn't reach your Friendship Reminder account. Friendship Reminder will try again." },
       }),
     );
     expect(screen.getByTestId("sync-status").textContent).toMatch(/Couldn't reach/);

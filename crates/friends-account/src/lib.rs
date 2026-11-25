@@ -1,4 +1,4 @@
-//! Signing in to a Friends account, kept in Supabase Auth so a later iPhone app can share the data.
+//! Signing in to a Friendship Reminder account, kept in Supabase Auth so a later iPhone app can share the data.
 //!
 //! The app signs in with Apple in the browser: [`Client::authorize_url`] is the page to open, the
 //! browser comes back to the app with a one-time code ([`parse_callback`]), and
@@ -38,15 +38,15 @@ pub const CALLBACK_PATH: &str = "/auth/callback";
 
 /// Shown when the Keychain wouldn't save a new or refreshed session.
 pub const NOT_SAVED: &str =
-    "Couldn't save your sign-in in the Keychain, so you may need to sign in again after Friends restarts.";
+    "Couldn't save your sign-in in the Keychain, so you may need to sign in again after Friendship Reminder restarts.";
 
 /// Shown when the saved session turned out to have ended but the Keychain wouldn't let it go.
 pub const NOT_REMOVED: &str =
-    "Your sign-in ended, but Friends couldn't remove it from the Keychain. Sign in again.";
+    "Your sign-in ended, but Friendship Reminder couldn't remove it from the Keychain. Sign in again.";
 
 /// Shown when the Keychain wouldn't say whether a session was saved.
 pub const NOT_READ: &str =
-    "Couldn't read your sign-in from the Keychain. Restart Friends, or sign in again.";
+    "Couldn't read your sign-in from the Keychain. Restart Friendship Reminder, or sign in again.";
 
 /// Where the account lives: the Supabase project's URL and its publishable key. The key is meant to be
 /// built into apps; the database's own rules decide what each signed-in user may read.
@@ -171,12 +171,12 @@ impl std::fmt::Display for AuthError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AuthError::Rejected(m) | AuthError::Refused(m) => write!(f, "Sign-in was refused: {m}"),
-            AuthError::Unreachable(_) => {
-                f.write_str("Couldn't reach the Friends account. Check your internet connection.")
-            }
-            AuthError::Server(_) => {
-                f.write_str("The Friends account isn't answering right now. Try again later.")
-            }
+            AuthError::Unreachable(_) => f.write_str(
+                "Couldn't reach the Friendship Reminder account. Check your internet connection.",
+            ),
+            AuthError::Server(_) => f.write_str(
+                "The Friendship Reminder account isn't answering right now. Try again later.",
+            ),
         }
     }
 }

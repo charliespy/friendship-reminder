@@ -1,6 +1,6 @@
 /**
  * "Done" for one person, and the question it asks first: when were you in touch? The answer may not
- * be today (you met on the Saturday, and only opened Friends on Monday), and the next target counts
+ * be today (you met on the Saturday, and only opened Friendship Reminder on Monday), and the next target counts
  * from it.
  */
 import {

@@ -1,6 +1,6 @@
 # Notes for coding agents
 
-Friends is a macOS menu bar app and an iPhone app (Tauri v2: Rust + React/TypeScript) that remind
+Friendship Reminder is a macOS menu bar app and an iPhone app (Tauri v2: Rust + React/TypeScript) that remind
 you to stay in touch with people. Read `README.md` and `CONTRIBUTING.md` first; this file adds what an agent
 needs. `CLAUDE.md` and `AGENTS.md` hold the same text: change both together.
 

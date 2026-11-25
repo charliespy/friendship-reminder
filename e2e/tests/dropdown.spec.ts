@@ -4,7 +4,7 @@ import { SAMPLE, answerDone, seed } from "./helpers";
 test("lists who to reach out to now and who's coming up", async ({ page, request }) => {
   await seed(request, { people: SAMPLE });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Friends" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Friendship Reminder" })).toBeVisible();
   await expect(page.getByText("Wed, Nov 18")).toBeVisible();
   const due = page.getByTestId("due-person");
   await expect(due).toHaveCount(3);
@@ -32,7 +32,7 @@ test("an empty list points to Preferences", async ({ page, request }) => {
   await page.goto("/");
   await expect(page.getByText("Nobody here yet")).toBeVisible();
   await expect(page.getByRole("button", { name: "Preferences…" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Quit Friends" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Quit Friendship Reminder" })).toBeVisible();
 });
 
 test("everyone done says all caught up", async ({ page, request }) => {

@@ -1,6 +1,6 @@
-# Contributing to Friends
+# Contributing to Friendship Reminder
 
-Thanks for helping. Friends is a small macOS menu bar app, so changes should stay small and
+Thanks for helping. Friendship Reminder is a small macOS menu bar app, so changes should stay small and
 focused too.
 
 ## Set up
@@ -20,9 +20,9 @@ npm run dev:web        # the UI in a browser, against a scratch data file
 
 - `crates/friends-core/`: all the rules (scheduling, the data file, the commands, and what to
   sync). Plain Rust, no macOS code, fully unit-tested.
-- `crates/friends-account/`: signing in to the Friends account (Supabase Auth): the requests,
+- `crates/friends-account/`: signing in to the Friendship Reminder account (Supabase Auth): the requests,
   the session and its rules. Plain Rust, tested without a network.
-- `crates/friends-sync/`: syncing the list with the Friends account: the requests that upload
+- `crates/friends-sync/`: syncing the list with the Friendship Reminder account: the requests that upload
   and download it (Supabase's REST API). Plain Rust, tested without a network.
 - `supabase/migrations/`: the account's database tables and their privacy rules (each account
   sees only its own rows).

@@ -1,7 +1,7 @@
 [package]
 name = "friends-sync"
 version = "0.1.0"
-description = "Uploading and downloading the Friends list to and from the account (Supabase), with no UI or OS code"
+description = "Uploading and downloading the Friendship Reminder list to and from the account (Supabase), with no UI or OS code"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

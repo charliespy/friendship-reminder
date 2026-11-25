@@ -1,4 +1,4 @@
-/** Preferences › People: add, edit, mark done and delete the people Friends reminds you about. */
+/** Preferences › People: add, edit, mark done and delete the people Friendship Reminder reminds you about. */
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { api, type IsoDate, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
@@ -338,7 +338,7 @@ export function PeoplePane({ view }: { view: View }) {
         !adding && (
           <div className="card empty">
             <strong>Nobody yet</strong>
-            Add someone, and Friends will remind you when it's time to reach out.
+            Add someone, and Friendship Reminder will remind you when it's time to reach out.
           </div>
         )
       ) : (

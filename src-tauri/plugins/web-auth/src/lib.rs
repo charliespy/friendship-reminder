@@ -1,4 +1,4 @@
-//! Friends' sign-in sheet on iPhone: opens a sign-in page in Apple's `ASWebAuthenticationSession` (a
+//! Friendship Reminder's sign-in sheet on iPhone: opens a sign-in page in Apple's `ASWebAuthenticationSession` (a
 //! Safari sheet over the app) and hands back the address the page sends the user to at the end, which
 //! carries the sign-in code. It is only the sheet; what the address means is friends-account's
 //! business. On other platforms the plugin is empty: the Mac signs in through the browser.

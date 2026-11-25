@@ -15,14 +15,14 @@ the web.)
 ## Users
 
 One person on their own Mac who wants to keep up with friends, family and old colleagues, and
-knows they drift apart when nothing prompts them. They glance at Friends from the menu bar a few
+knows they drift apart when nothing prompts them. They glance at Friendship Reminder from the menu bar a few
 times a week, act in seconds ("I texted Maya: Done"), and open Preferences rarely: to add someone,
-block a trip, or change which days count. On iPhone they open Friends from the home screen
+block a trip, or change which days count. On iPhone they open Friendship Reminder from the home screen
 for the same glance, and get the reminder as a notification in the morning.
 
 ## Product Purpose
 
-Friends reminds you to reach out to people at the rhythm you pick (every month, three months, six
+Friendship Reminder reminds you to reach out to people at the rhythm you pick (every month, three months, six
 months, or year). It picks a day to aim for, avoids blocked dates, can keep to weekends or
 weekdays, and if a day to aim for goes by without contact, aims for the next good days. Success:
 the people you care about hear from you about as often as you meant, and the app takes almost no
@@ -31,7 +31,7 @@ attention.
 ## Positioning
 
 A personal reminder that lives in the menu bar, keeps everything on the Mac with no tracking, and
-is open source. Signing in with Apple to a Friends account is optional; it keeps the list in sync
+is open source. Signing in with Apple to a Friendship Reminder account is optional; it keeps the list in sync
 between the Mac and iPhone apps. It is not a contacts manager or a CRM: there are no notes,
 fields, pipelines or scores, only a name, a rhythm, and the last time you were in touch.
 
@@ -60,14 +60,15 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 - Tests address the UI by accessible names, labels and a few `data-testid`s
   (`due-person`, `upcoming-person`, `person-row`, `blocked-row`); copy changes must keep them.
 - The web page loads no web fonts and makes no network requests: the content security policy
-  allows only the app's own files. Signing in to a Friends account (optional) and syncing with it
+  allows only the app's own files. Signing in to a Friendship Reminder account (optional) and syncing with it
   are the only network use: the sign-in page opens in the browser (a sheet over the app on
 iPhone), and the app's own requests
   (signing in, syncing) go from the Rust side.
 
 ## Brand Commitments
 
-- The name is **Friends**. Plain, warm, short sentences ("Reach out now", "You're all caught up.").
+- The name is **Friendship Reminder** (it was Friends until v0.1.2). Under the iPhone's
+  home-screen icon it is **Friendship**, since iOS cuts longer names short. Plain, warm, short sentences ("Reach out now", "You're all caught up.").
 - No guilt or gamification: no streaks, scores, or red alarm states for a missed day.
 - Looks like it came with the Mac: System Settings' greys, groups and controls, with the Mac's own
   accent colour as the only colour. No custom brand palette. On iPhone: looks like it came with

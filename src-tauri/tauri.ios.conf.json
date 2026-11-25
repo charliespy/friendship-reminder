@@ -4,7 +4,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Friends",
+        "title": "Friendship Reminder",
         "url": "phone.html"
       }
     ]

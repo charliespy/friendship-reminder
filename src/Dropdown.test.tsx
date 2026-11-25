@@ -109,7 +109,7 @@ describe("DropdownContent", () => {
     await click(button("Preferences…"));
     expect(openPreferences).toHaveBeenCalledTimes(1);
     expect(quit).not.toHaveBeenCalled();
-    await click(button("Quit Friends"));
+    await click(button("Quit Friendship Reminder"));
     expect(quit).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,18 +1,18 @@
-# Friends
+# Friendship Reminder
 
 A small macOS menu bar app, and an iPhone app, that remind you to stay in touch with people.
 
 Add the people you want to see, say how often (every month, three months, six months or
-year), and Friends picks a day to aim for and reminds you before it. It skips the dates you've
+year), and Friendship Reminder picks a day to aim for and reminds you before it. It skips the dates you've
 blocked (trips, busy weeks), can aim only for weekends or only for weekdays, and if a day to
 aim for goes by without you reaching out, it keeps them on your list and aims for the next good
 days.
 
 No tracking. Your list stays on your device unless you sign in with Apple: then it syncs with your
-Friends account, so your Mac and iPhone show the same list.
+Friendship Reminder account, so your Mac and iPhone show the same list.
 
 <p>
-  <img src="docs/screenshots/dropdown-light.png" width="300" alt="The Friends menu bar dropdown: three people to reach out to now, each with a Done button, and three coming up">
+  <img src="docs/screenshots/dropdown-light.png" width="300" alt="The Friendship Reminder menu bar dropdown: three people to reach out to now, each with a Done button, and three coming up">
   <img src="docs/screenshots/dropdown-dark.png" width="300" alt="The same dropdown in dark mode">
 </p>
 <p>
@@ -28,14 +28,14 @@ The people in these screenshots are made up.
 
 ## Install
 
-1. Download `Friends_<version>_universal.dmg` from the
+1. Download `Friendship.Reminder_<version>_universal.dmg` from the
    [latest release](https://github.com/charliespy/friendship-reminder/releases/latest).
-2. Open it and drag **Friends** to **Applications**.
-3. Open **Friends**. It is signed with an Apple Developer ID and notarized by Apple, so macOS
+2. Open it and drag **Friendship Reminder** to **Applications**.
+3. Open **Friendship Reminder**. It is signed with an Apple Developer ID and notarized by Apple, so macOS
    only asks once whether you want to open an app downloaded from the internet. (Versions before
    0.1.2 weren't: macOS blocks their first launch until you click **Open Anyway** in
    **System Settings → Privacy & Security**.)
-4. Friends appears in the menu bar and the Dock. Click the menu bar icon to see who's due;
+4. Friendship Reminder appears in the menu bar and the Dock. Click the menu bar icon to see who's due;
    click the Dock icon or open **Preferences** to add people.
 
 Requires macOS 13 (Ventura) or newer.
@@ -47,13 +47,13 @@ You need [Node.js](https://nodejs.org/) 22+ and [Rust](https://rustup.rs/).
 ```sh
 npm install
 npm run tauri dev        # run the app
-npm run tauri build      # build Friends.app and a .dmg into target/release/bundle/
+npm run tauri build      # build Friendship Reminder.app and a .dmg into target/release/bundle/
 ```
 
 ### Sign in with Apple
 
-Signing in happens in the browser: Friends opens Sign in with Apple there, and the browser comes
-back to Friends at `http://127.0.0.1:<port>/auth/callback` when it's done. (Apple's own sign-in
+Signing in happens in the browser: Friendship Reminder opens Sign in with Apple there, and the browser comes
+back to Friendship Reminder at `http://127.0.0.1:<port>/auth/callback` when it's done. (Apple's own sign-in
 sheet only works in Mac App Store apps.) A build offers it only when it has the account server's settings,
 `FRIENDS_SUPABASE_URL` and `FRIENDS_SUPABASE_PUBLISHABLE_KEY`; otherwise the Account section in
 Settings says sign-in isn't available, and everything else works the same. Release builds take them
@@ -69,7 +69,7 @@ For a release build with them: `set -a; . ./.env.local; set +a; npm run tauri bu
 
 ### Sync
 
-While signed in, Friends syncs the list with the account's database: at launch, right after
+While signed in, Friendship Reminder syncs the list with the account's database: at launch, right after
 signing in, a few seconds after each change, and every five minutes. The tables and their privacy
 rules (each account sees only its own rows) are in `supabase/migrations/`: run them once in the
 project's SQL Editor. Only what you typed is synced (names, how often, the last time in touch,
@@ -96,6 +96,7 @@ where the phone does:
 - **Sign in with Apple opens in a sheet over the app** (`ASWebAuthenticationSession`, in
   `src-tauri/plugins/web-auth`), which comes back to `io.github.charliespy.friends://auth/callback`.
   Add that address to the Supabase project's allowed redirect URLs too.
+- Its home-screen name is **Friendship**: iOS cuts longer names short.
 - No menu bar, Dock icon or open at login.
 
 To build it you also need Xcode (with the iOS simulator), [rustup](https://rustup.rs/)'s Rust
@@ -129,10 +130,10 @@ commit. They all have to pass before anything reaches `main`; CONTRIBUTING.md ex
   or the days of the week you picked under **Custom day**.
 - When the day to aim for is a Saturday or Sunday, the reminder comes on the Monday before, so
   there's time to plan. A weekday is reminded on the day itself.
-- Mark someone **Done** from the menu bar when you've been in touch. Friends asks when: on the
+- Mark someone **Done** from the menu bar when you've been in touch. Friendship Reminder asks when: on the
   day it suggested (once that day has come), today, or another day from a calendar. Their next
   day is scheduled from that day.
-- If the day passes without **Done**, Friends keeps them in the list. It counts the day as
+- If the day passes without **Done**, Friendship Reminder keeps them in the list. It counts the day as
   missed only once the rest of that weekend (under weekends only) or that week (under weekdays
   only) is over too; under Custom day, just that day. Then it aims for the next run of
   allowed days, past any blocked dates.

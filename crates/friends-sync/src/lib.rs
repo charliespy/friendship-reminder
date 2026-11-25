@@ -44,12 +44,12 @@ impl std::fmt::Display for SyncError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SyncError::Expired => {
-                f.write_str("Your sign-in needs renewing. Friends will try again.")
+                f.write_str("Your sign-in needs renewing. Friendship Reminder will try again.")
             }
             SyncError::Unreachable(_) => {
-                f.write_str("Couldn't reach your Friends account. Friends will try again.")
+                f.write_str("Couldn't reach your Friendship Reminder account. Friendship Reminder will try again.")
             }
-            SyncError::Failed(m) => write!(f, "Couldn't sync with your Friends account: {m}"),
+            SyncError::Failed(m) => write!(f, "Couldn't sync with your Friendship Reminder account: {m}"),
             SyncError::Renew(m) => f.write_str(m),
             SyncError::SignedOut => f.write_str("Signed out before syncing finished."),
         }

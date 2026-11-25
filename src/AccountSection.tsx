@@ -116,7 +116,7 @@ export function AccountSection({ phone = false }: { phone?: boolean }) {
         ) : (
           <div className="account-row">
             <span className="choice-text">
-              Sign in to keep your list in your Friends account, ready for your other devices.
+              Sign in to keep your list in your Friendship Reminder account, ready for your other devices.
             </span>
             <button
               className="btn btn-apple"

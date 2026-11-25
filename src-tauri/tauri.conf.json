@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Friends",
+  "productName": "Friendship Reminder",
   "version": "0.1.2",
   "identifier": "io.github.charliespy.friends",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "dropdown",
-        "title": "Friends",
+        "title": "Friendship Reminder",
         "url": "index.html",
         "width": 360,
         "height": 520,

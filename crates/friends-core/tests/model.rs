@@ -465,7 +465,7 @@ fn renaming_works_when_the_stored_date_is_after_today() {
         .is_err());
 }
 
-/// One person and one blocked range, with `edit` applied: is the result a file Friends would load?
+/// One person and one blocked range, with `edit` applied: is the result a file Friendship Reminder would load?
 fn loads_with(edit: impl FnOnce(&mut Data)) -> bool {
     let mut data = Data::default();
     data.add_person("Ada", 30, date(2026, 7, 23), today())

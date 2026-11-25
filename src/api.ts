@@ -75,7 +75,7 @@ export interface SyncStatus {
   error: string | null;
 }
 
-/** The Friends account, as the Account section shows it. */
+/** The Friendship Reminder account, as the Account section shows it. */
 export type Account =
   | { status: "unavailable"; reason: string }
   | { status: "signedOut"; warning: string | null }

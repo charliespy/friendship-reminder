@@ -1,7 +1,7 @@
 [package]
 name = "friends-devserver"
 version = "0.1.0"
-description = "Serves the Friends commands over local HTTP, so the UI can run in a browser for development and end-to-end tests"
+description = "Serves the Friendship Reminder commands over local HTTP, so the UI can run in a browser for development and end-to-end tests"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

@@ -10,7 +10,7 @@ configs:
 settingGroups:
   app:
     base:
-      PRODUCT_NAME: Friends
+      PRODUCT_NAME: Friendship Reminder
       PRODUCT_BUNDLE_IDENTIFIER: io.github.charliespy.friends
 targetTemplates:
   app:
@@ -44,6 +44,8 @@ targets:
     info:
       path: friends_iOS/Info.plist
       properties:
+        # The name under the home-screen icon: iOS cuts "Friendship Reminder" short.
+        CFBundleDisplayName: Friendship
         LSRequiresIPhoneOS: true
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
