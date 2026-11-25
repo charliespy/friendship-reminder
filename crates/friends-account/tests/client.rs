@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
 use friends_account::{
-    parse_callback, AccountView, AuthError, Callback, Client, Config, Pkce, Response, Session,
-    Transport,
+    app_redirect, parse_app_callback, parse_callback, AccountView, AuthError, Callback, Client,
+    Config, Pkce, Response, Session, Transport,
 };
 use serde_json::{json, Value};
 
@@ -330,5 +330,31 @@ fn the_account_view_is_tagged_for_the_ui() {
         })
         .unwrap(),
         json!({ "status": "signedIn", "email": "ada@example.com", "warning": null })
+    );
+}
+
+#[test]
+fn the_iphone_sheet_comes_back_to_an_address_supabase_accepts() {
+    let scheme = "io.example.friends";
+    // Supabase's list of allowed addresses only takes ones written `scheme://...`.
+    assert_eq!(app_redirect(scheme), "io.example.friends://auth/callback");
+    assert_eq!(
+        parse_app_callback(scheme, "io.example.friends://auth/callback?code=abc"),
+        Callback::Code("abc".into())
+    );
+    assert_eq!(
+        parse_app_callback(
+            scheme,
+            "io.example.friends://auth/callback?error=access_denied"
+        ),
+        Callback::Failed("access_denied".into())
+    );
+    assert_eq!(
+        parse_app_callback(scheme, "io.example.other://auth/callback?code=abc"),
+        Callback::Other
+    );
+    assert_eq!(
+        parse_app_callback(scheme, "io.example.friends://elsewhere?code=abc"),
+        Callback::Other
     );
 }

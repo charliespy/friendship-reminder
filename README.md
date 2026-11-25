@@ -94,7 +94,7 @@ where the phone does:
   reminders (up to 60), each for 9:00 in the morning of its day. Reminders from earlier days count
   as sent: the person shows in Today instead.
 - **Sign in with Apple opens in a sheet over the app** (`ASWebAuthenticationSession`, in
-  `src-tauri/plugins/web-auth`), which comes back to `io.github.charliespy.friends:/auth/callback`.
+  `src-tauri/plugins/web-auth`), which comes back to `io.github.charliespy.friends://auth/callback`.
   Add that address to the Supabase project's allowed redirect URLs too.
 - No menu bar, Dock icon or open at login.
 
