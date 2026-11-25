@@ -104,13 +104,15 @@ with the iOS targets, CocoaPods and XcodeGen:
 
 ```sh
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+rustup component add llvm-tools                            # for builds for a real iPhone
 brew install cocoapods xcodegen
 npm run tauri ios dev                                      # run it in the simulator
 npm run tauri ios build -- --debug --target aarch64-sim    # or build a simulator app
 ```
 
-Running it on a real iPhone needs an Apple Developer team (`APPLE_DEVELOPMENT_TEAM`) and a
-provisioning profile; there's no App Store or TestFlight build yet.
+It isn't on the App Store yet. Test builds go to TestFlight with `npm run ios:testflight`, which
+needs an Apple Developer team and an App Store Connect API key: see
+[docs/RELEASING.md](docs/RELEASING.md#iphone-a-testflight-build).
 
 ## Test
 
