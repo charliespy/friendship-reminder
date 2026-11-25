@@ -166,8 +166,8 @@ export function Dropdown() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Escape in the Done question closes just the question.
-      if (e.key === "Escape" && !document.querySelector("dialog[open]")) api.hideDropdown();
+      // Escape in Done's question closes just the question (it stops the key there).
+      if (e.key === "Escape") api.hideDropdown();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

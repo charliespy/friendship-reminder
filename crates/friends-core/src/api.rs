@@ -36,9 +36,11 @@ pub struct PersonView {
     pub person: Person,
     /// The reminder is showing now.
     pub due: bool,
-    /// The day the app suggested, once it has come (see `Person::suggested_day`): what Done offers
-    /// as "the day suggested".
-    pub suggested_day: Option<NaiveDate>,
+    /// Done's "On the day suggested" answer: the day the app suggested (see
+    /// `Person::suggested_day`), when it was before today.
+    pub suggested_earlier: Option<NaiveDate>,
+    /// Today is the day suggested, so Done's "Today" answer says so.
+    pub suggested_today: bool,
     /// The earliest day Done takes (see `Person::earliest_done`).
     pub earliest_done: NaiveDate,
 }
@@ -247,7 +249,8 @@ impl App {
             .map(|p| PersonView {
                 person: p.clone(),
                 due: p.is_due(today),
-                suggested_day: p.suggested_day(today),
+                suggested_earlier: p.suggested_day(today).filter(|d| *d < today),
+                suggested_today: p.suggested_day(today) == Some(today),
                 earliest_done: p.earliest_done(today),
             })
             .collect();

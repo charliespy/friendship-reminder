@@ -23,7 +23,8 @@ const TODAY = "2026-11-18";
 
 function person(p: Partial<Person>): Person {
   return {
-    suggestedDay: null,
+    suggestedEarlier: null,
+    suggestedToday: false,
     earliestDone: "2026-01-01",
     id: 1,
     name: "Maya Chen",

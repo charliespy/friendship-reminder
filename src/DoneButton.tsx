@@ -3,10 +3,23 @@
  * be today (you met on the Saturday, and only opened Friends on Monday), and the next target counts
  * from it.
  */
-import { useId, useLayoutEffect, useRef, useState, type Ref } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import { api, type IsoDate, type Person } from "./api";
 import { formatDay } from "./date";
 import { useAction } from "./useView";
+
+/** Closes the question's dialog (jsdom, in tests, has no `close`). */
+function closeDialog(d: HTMLDialogElement | null) {
+  if (d && typeof d.close === "function") d.close();
+  else d?.removeAttribute("open");
+}
 
 export function DoneButton({
   person,
@@ -32,10 +45,7 @@ export function DoneButton({
   const titleId = useId();
   const dayId = useId();
 
-  // The day suggested, when it has come and isn't today: offered as its own answer.
-  const suggested = person.suggestedDay;
-  const suggestedEarlier =
-    suggested !== null && suggested < today ? suggested : null;
+  const suggestedEarlier = person.suggestedEarlier;
 
   const open = () => {
     setError(null);
@@ -50,10 +60,21 @@ export function DoneButton({
     if (typeof d.showModal === "function") d.showModal();
     else d.setAttribute("open", "");
   }, [shown]);
+  // The menu bar list hides when it loses focus: an unanswered question goes with it, so it isn't
+  // waiting there, with an old day, the next time the list opens.
+  useEffect(() => {
+    if (!shown) return;
+    const onHidden = () => {
+      if (document.visibilityState !== "hidden" || busy) return;
+      // Closing fires the dialog's close event, which hides the question.
+      closeDialog(dialog.current);
+      setShown(false);
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    return () => document.removeEventListener("visibilitychange", onHidden);
+  }, [shown, busy]);
   const close = () => {
-    const d = dialog.current;
-    if (d && typeof d.close === "function") d.close();
-    else d?.removeAttribute("open");
+    closeDialog(dialog.current);
     setShown(false);
   };
 
@@ -87,6 +108,10 @@ export function DoneButton({
         onCancel={(e) => {
           if (busy) e.preventDefault();
         }}
+        // Escape is the question's alone: the menu bar list mustn't hide with it.
+        onKeyDown={(e) => {
+          if (e.key === "Escape") e.stopPropagation();
+        }}
         onClick={(e) => {
           // A click on the dimmed backdrop (the dialog itself, outside its box) cancels.
           if (e.target === e.currentTarget && !busy) close();
@@ -118,7 +143,7 @@ export function DoneButton({
                 <span className="choice-title">Today</span>
                 <span className="choice-text">
                   {formatDay(today, today)}
-                  {suggested === today && " · the day suggested"}
+                  {person.suggestedToday && " · the day suggested"}
                 </span>
               </button>
               {picking ? (

@@ -23,7 +23,8 @@ function person(p: Partial<Person> = {}): Person {
     notificationDate: "2026-11-23",
     overdue: false,
     due: true,
-    suggestedDay: null,
+    suggestedEarlier: null,
+    suggestedToday: false,
     earliestDone: "2026-10-20",
     ...p,
   };
@@ -67,14 +68,14 @@ describe("DoneButton", () => {
   });
 
   it("offers the day suggested when it has gone by", async () => {
-    const d = await ask(person({ overdue: true, suggestedDay: "2026-11-21" }));
+    const d = await ask(person({ overdue: true, suggestedEarlier: "2026-11-21" }));
     expect(names(d)[0]).toBe("On the day suggestedSat, Nov 21");
     await click(d.getByRole("button", { name: /^On the day suggested/ }));
     expect(markDone).toHaveBeenCalledWith(7, "2026-11-21");
   });
 
   it("says so when today is the day suggested, without a second answer for it", async () => {
-    const d = await ask(person({ nextTarget: TODAY, suggestedDay: TODAY }));
+    const d = await ask(person({ nextTarget: TODAY, suggestedToday: true }));
     expect(names(d)).toEqual([
       "TodayWed, Nov 25 · the day suggested",
       "Another day…Pick it on a calendar.",
@@ -120,5 +121,24 @@ describe("DoneButton", () => {
     const d = await ask(person({ lastConnected: "2026-11-26", earliestDone: TODAY }));
     await click(d.getByRole("button", { name: /^Another day/ }));
     expect((d.getByLabelText("Another day") as HTMLInputElement).min).toBe(TODAY);
+  });
+
+  it("closes an unanswered question when the window hides", async () => {
+    await ask(person());
+    const hidden = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    hidden.mockRestore();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps Escape inside the question", async () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    const d = await ask(person());
+    fireEvent.keyDown(d.getByRole("button", { name: /^Today/ }), { key: "Escape" });
+    window.removeEventListener("keydown", onWindow);
+    expect(onWindow).not.toHaveBeenCalled();
   });
 });

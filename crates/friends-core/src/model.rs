@@ -5,8 +5,8 @@ use chrono::{Datelike, Days, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 use crate::schedule::{
-    compute_schedule, last_day_of_run, push_missed_schedule, upgrade_day_setting, BlockedRange,
-    DayRule, DaySet, DayToggle, ScheduleResult,
+    compute_schedule, last_day_of_run, push_missed_schedule, read_day_setting, BlockedRange,
+    DayRule, DaySet, DayToggle, ScheduleResult, StoredToggle,
 };
 
 /// The frequencies the app offers, in days.
@@ -34,7 +34,7 @@ pub struct Person {
     /// A target went by without being marked done, so this one is a catch-up.
     #[serde(default)]
     pub overdue: bool,
-    /// While overdue: the first target that went by, the day you meant to reach out.
+    /// While overdue: the latest target that went by, the day you last meant to reach out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub missed_target: Option<NaiveDate>,
     /// The notification date the app last sent a notification for, so each one goes out once.
@@ -101,29 +101,43 @@ pub struct Blocked {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "StoredSettings")]
 pub struct Settings {
-    #[serde(default)]
     pub day_toggle: DayToggle,
     /// The days picked under "Custom day" (all seven at first). Kept while another setting is on, so
-    /// coming back to it brings them back.
-    #[serde(default)]
+    /// coming back to it brings them back. Never empty.
     pub custom_days: DaySet,
     /// Send a macOS notification when a reminder comes up.
-    #[serde(default = "yes")]
     pub notifications: bool,
+}
+
+/// `Settings` as a file holds them, from any version.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredSettings {
+    #[serde(default)]
+    day_toggle: StoredToggle,
+    #[serde(default)]
+    custom_days: DaySet,
+    #[serde(default = "yes")]
+    notifications: bool,
+}
+
+impl From<StoredSettings> for Settings {
+    fn from(s: StoredSettings) -> Self {
+        let (day_toggle, custom_days) = read_day_setting(s.day_toggle, s.custom_days);
+        Settings {
+            day_toggle,
+            custom_days,
+            notifications: s.notifications,
+        }
+    }
 }
 
 impl Settings {
     /// The day setting as the scheduling rules use it.
     pub fn rule(&self) -> DayRule {
         DayRule::new(self.day_toggle, self.custom_days)
-    }
-
-    /// Brings a setting saved by an older version up to date (see [`upgrade_day_setting`]).
-    pub fn upgrade(&mut self) {
-        (self.day_toggle, self.custom_days) =
-            upgrade_day_setting(self.day_toggle, self.custom_days);
     }
 }
 
@@ -343,8 +357,9 @@ impl Data {
         // Pushing from a target years back would take one step per missed run; start from the week
         // before today instead, which lands on the same day.
         let week_ago = today.checked_sub_days(Days::new(7)).unwrap_or(today);
-        let first_missed = person.next_target;
+        let mut last_missed = None;
         while last_day_of_run(person.next_target, rule) < today && pushes < MAX_PUSHES {
+            last_missed = Some(person.next_target);
             let from = person.next_target.max(week_ago);
             person.apply(push_missed_schedule(from, rule, ranges));
             pushes += 1;
@@ -352,8 +367,8 @@ impl Data {
         }
         if moved {
             person.overdue = true;
-            // Missed again: still the first missed target that counts.
-            person.missed_target.get_or_insert(first_missed);
+            // The latest target that went by: the day you'd most likely have been in touch on.
+            person.missed_target = last_missed;
         }
         moved
     }
@@ -433,10 +448,11 @@ impl Data {
         check_last_connected(on, today)?;
         let (rule, ranges) = (self.settings.rule(), self.ranges());
         let person = self.person_mut(id)?;
-        if on < person.earliest_done(today) {
+        let earliest = person.earliest_done(today);
+        if on < earliest {
             return invalid(format!(
-                "You were last in touch on {}. Pick that day or later.",
-                person.last_connected.format("%a, %b %-d, %Y")
+                "Pick {} or later: the last time you were in touch.",
+                earliest.format("%a, %b %-d, %Y")
             ));
         }
         person.last_connected = on;
@@ -498,13 +514,18 @@ impl Data {
         today: NaiveDate,
     ) -> Result<(), Invalid> {
         let days = custom_days.unwrap_or(self.settings.custom_days);
-        if days.is_empty() {
+        // The days only count under Custom day; kept as they were otherwise.
+        if toggle == DayToggle::Custom && days.is_empty() {
             return invalid("Pick at least one day.");
         }
+        let days = if days.is_empty() {
+            self.settings.custom_days
+        } else {
+            days
+        };
         let before = self.settings.rule();
         self.settings.day_toggle = toggle;
         self.settings.custom_days = days;
-        self.settings.upgrade();
         if self.settings.rule() != before {
             self.recompute_all(today);
         }

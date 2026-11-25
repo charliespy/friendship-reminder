@@ -24,8 +24,10 @@ export interface Person {
   overdue: boolean;
   /** The reminder is showing now. */
   due: boolean;
-  /** The day the app suggested, once it has come (the missed day, for someone overdue). */
-  suggestedDay: IsoDate | null;
+  /** Done's "On the day suggested" answer: the day the app suggested, when it was before today. */
+  suggestedEarlier: IsoDate | null;
+  /** Today is the day suggested. */
+  suggestedToday: boolean;
   /** The earliest day Done takes. */
   earliestDone: IsoDate;
 }

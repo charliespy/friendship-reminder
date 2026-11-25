@@ -162,17 +162,17 @@ fn the_setting_and_its_days_save_together() {
     let json = serde_json::to_value(&view).unwrap();
     assert_eq!(json["settings"]["dayToggle"], "custom");
     assert_eq!(json["settings"]["customDays"], json!(["sun"]));
-    // No day picked: refused, and nothing changes.
+    // Custom day with no day picked: refused, and nothing changes.
     let err = app
         .call(
             "set_day_toggle",
-            json!({"dayToggle": "weekdaysOnly", "customDays": []}),
+            json!({"dayToggle": "custom", "customDays": []}),
             today(),
         )
         .unwrap_err();
     assert_eq!(err.message, "Pick at least one day.");
     let json = serde_json::to_value(app.view(today())).unwrap();
-    assert_eq!(json["settings"]["dayToggle"], "custom");
+    assert_eq!(json["settings"]["customDays"], json!(["sun"]));
 }
 
 #[test]
@@ -219,15 +219,25 @@ fn any_day_from_an_older_build_on_the_account_means_all_seven_days() {
     .unwrap();
     // An older build chose "Any day"; the row kept the days this one saved before.
     let got = Changes {
-        settings: Some(RemoteSettings {
-            day_toggle: DayToggle::AllDays,
-            custom_days: DaySet::of(&[Weekday::Tue]),
-            modified_at: i64::MAX,
-            updated_ms: 1,
-        }),
+        settings: Some(
+            serde_json::from_value::<RemoteSettings>(json!({
+                "day_toggle": "allDays", "custom_days": ["tue"],
+                "modified_at": i64::MAX, "updated_ms": 1
+            }))
+            .unwrap(),
+        ),
         ..Changes::default()
     };
     data.sync_pulled(&got, 1, today());
     assert_eq!(data.settings.day_toggle, DayToggle::Custom);
+    assert_eq!(data.settings.custom_days, DaySet::ALL);
+}
+
+#[test]
+fn the_days_only_need_picking_under_custom_day() {
+    let mut data = Data::default();
+    data.set_day_setting(DayToggle::WeekdaysOnly, Some(DaySet::NONE), today())
+        .unwrap();
+    assert_eq!(data.settings.day_toggle, DayToggle::WeekdaysOnly);
     assert_eq!(data.settings.custom_days, DaySet::ALL);
 }

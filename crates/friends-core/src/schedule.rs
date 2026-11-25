@@ -32,19 +32,30 @@ pub enum DayToggle {
     #[default]
     WeekendsOnly,
     Custom,
-    /// "Any day", from before custom days: only ever read (from an older file, or an account row an
-    /// older build wrote), and turned into `Custom` with all seven days by [`upgrade_day_setting`].
+}
+
+/// The day setting as a file or the account may hold it, including "allDays" from before custom
+/// days. Only read: [`read_day_setting`] turns it into what this version keeps.
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum StoredToggle {
+    WeekdaysOnly,
+    #[default]
+    WeekendsOnly,
+    Custom,
     AllDays,
 }
 
-/// The day setting as this version keeps it: "Any day" becomes Custom with all seven days (whatever
-/// days were stored with it, which an older build didn't know about), and no days picked, which can't
-/// be used, becomes all seven.
-pub fn upgrade_day_setting(toggle: DayToggle, days: DaySet) -> (DayToggle, DaySet) {
+/// A stored day setting as this version keeps it, done once where the data is read: "Any day"
+/// becomes Custom with all seven days (whatever days were stored with it, which an older build didn't
+/// know about), and no days picked, which can't be used, becomes all seven.
+pub(crate) fn read_day_setting(toggle: StoredToggle, days: DaySet) -> (DayToggle, DaySet) {
+    let days = if days.is_empty() { DaySet::ALL } else { days };
     match toggle {
-        DayToggle::AllDays => (DayToggle::Custom, DaySet::ALL),
-        _ if days.is_empty() => (toggle, DaySet::ALL),
-        _ => (toggle, days),
+        StoredToggle::WeekdaysOnly => (DayToggle::WeekdaysOnly, days),
+        StoredToggle::WeekendsOnly => (DayToggle::WeekendsOnly, days),
+        StoredToggle::Custom => (DayToggle::Custom, days),
+        StoredToggle::AllDays => (DayToggle::Custom, DaySet::ALL),
     }
 }
 
@@ -142,11 +153,12 @@ impl DayRule {
     pub const ANY: DayRule = DayRule::Custom(DaySet::ALL);
 
     pub fn new(toggle: DayToggle, custom_days: DaySet) -> DayRule {
-        // Settings are kept upgraded; this only makes sure, so no day is ever impossible.
-        match upgrade_day_setting(toggle, custom_days) {
-            (DayToggle::WeekdaysOnly, _) => DayRule::WeekdaysOnly,
-            (DayToggle::WeekendsOnly, _) => DayRule::WeekendsOnly,
-            (_, days) => DayRule::Custom(days),
+        match toggle {
+            DayToggle::WeekdaysOnly => DayRule::WeekdaysOnly,
+            DayToggle::WeekendsOnly => DayRule::WeekendsOnly,
+            // Never empty once read or set; all days rather than none, just in case.
+            DayToggle::Custom if custom_days.is_empty() => DayRule::ANY,
+            DayToggle::Custom => DayRule::Custom(custom_days),
         }
     }
 }
