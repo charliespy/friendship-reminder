@@ -78,7 +78,8 @@ if [ "${#ipas[@]}" -ne 1 ] || [ ! -f "${ipas[0]}" ]; then
 fi
 
 # A build without the account server can't sign in: don't send that to testers.
-if ! unzip -p "${ipas[0]}" | grep -aqF "$FRIENDS_SUPABASE_URL"; then
+# (grep reads to the end: with -q it would stop early and unzip would fail on the closed pipe.)
+if ! unzip -p "${ipas[0]}" | grep -aF "$FRIENDS_SUPABASE_URL" >/dev/null; then
   echo "ios-testflight: the build doesn't have the account server built in; not uploading" >&2
   exit 1
 fi
