@@ -69,7 +69,8 @@ signing in, a few seconds after each change, and every five minutes. The tables 
 rules (each account sees only its own rows) are in `supabase/migrations/`: run them once in the
 project's SQL Editor. Only what you typed is synced (names, how often, the last time in touch,
 blocked dates and the day setting); each device works out targets and reminders itself, and keeps
-its own notification setting. When two devices change the same thing, the later change wins.
+its own notification setting. When two devices change the same thing, the later change wins;
+if both carry the same time, the one the account got last wins, on every device.
 Signing in to a different account than the list last synced with saves the list to a copy next to
 the data file (`friends.json.other-account-<n>`) and starts from that account's list. The rules
 are in `crates/friends-core/src/sync.rs`, the requests in `crates/friends-sync`.
