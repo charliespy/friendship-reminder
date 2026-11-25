@@ -77,6 +77,12 @@ if [ "${#ipas[@]}" -ne 1 ] || [ ! -f "${ipas[0]}" ]; then
   exit 1
 fi
 
+# A build without the account server can't sign in: don't send that to testers.
+if ! unzip -p "${ipas[0]}" | grep -aqF "$FRIENDS_SUPABASE_URL"; then
+  echo "ios-testflight: the build doesn't have the account server built in; not uploading" >&2
+  exit 1
+fi
+
 # altool finds the key by its id in API_PRIVATE_KEYS_DIR.
 API_PRIVATE_KEYS_DIR="$(dirname "$APPLE_API_KEY_PATH")" xcrun altool --upload-app --type ios \
   --file "${ipas[0]}" --apiKey "$APPLE_API_KEY" --apiIssuer "$APPLE_API_ISSUER"
