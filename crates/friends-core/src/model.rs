@@ -44,7 +44,7 @@ pub struct Person {
     #[serde(default)]
     pub uid: String,
     /// When this row last changed, here or on another device, in milliseconds since 1970: when two
-    /// devices change the same row, the later change wins.
+    /// devices change the same row, the later change wins (on a tie, see `account_wins` in `sync.rs`).
     #[serde(default)]
     pub modified: i64,
     /// The `modified` the account has. Behind `modified`, a change here is waiting to upload.
@@ -92,7 +92,7 @@ pub struct Blocked {
     #[serde(default)]
     pub uid: String,
     /// When this row last changed, here or on another device, in milliseconds since 1970: when two
-    /// devices change the same row, the later change wins.
+    /// devices change the same row, the later change wins (on a tie, see `account_wins` in `sync.rs`).
     #[serde(default)]
     pub modified: i64,
     /// The `modified` the account has. Behind `modified`, a change here is waiting to upload.

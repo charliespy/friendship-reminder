@@ -445,3 +445,294 @@ fn the_app_stamps_changes_and_upgrades_old_files() {
     let copy = App::open(Store::new(dir.join("friends.json.other-account-1"))).unwrap();
     assert_eq!(copy.data().people.len(), 3);
 }
+
+/// A list as every device should agree on it: each person's and range's id and name, and the day
+/// setting.
+type List = (
+    Vec<(String, String)>,
+    Vec<(String, String)>,
+    Option<DayToggle>,
+);
+
+/// A small stand-in for the account: like `friends_stamp()` in the Supabase migration, it keeps a
+/// write unless the row it has is newer (so on a tie, the last write wins), and stamps each write
+/// with its own clock so devices can ask for what changed since their cursor.
+#[derive(Default)]
+struct Account {
+    clock: i64,
+    people: Vec<RemotePerson>,
+    blocked: Vec<RemoteBlocked>,
+    settings: Option<RemoteSettings>,
+}
+
+fn write_row<T: Clone>(
+    rows: &mut Vec<T>,
+    clock: &mut i64,
+    row: &T,
+    key: impl Fn(&T) -> (String, i64),
+    stamp: impl Fn(&mut T, i64),
+) {
+    let (id, modified_at) = key(row);
+    let at = rows.iter().position(|r| key(r).0 == id);
+    if at.is_some_and(|i| modified_at < key(&rows[i]).1) {
+        return;
+    }
+    *clock += 1;
+    let mut row = row.clone();
+    stamp(&mut row, *clock);
+    match at {
+        Some(i) => rows[i] = row,
+        None => rows.push(row),
+    }
+}
+
+impl Account {
+    /// One sync of `data`, the way friends-sync runs it: upload, then download what changed.
+    fn sync(&mut self, data: &mut Data) {
+        self.upload(data);
+        self.download(data);
+    }
+
+    fn upload(&mut self, data: &mut Data) {
+        let sent = data.sync_start(OWNER);
+        for r in &sent.people {
+            let key = |r: &RemotePerson| (r.id.clone(), r.modified_at);
+            write_row(&mut self.people, &mut self.clock, r, key, |r, ms| {
+                r.updated_ms = ms
+            });
+        }
+        for r in &sent.blocked {
+            let key = |r: &RemoteBlocked| (r.id.clone(), r.modified_at);
+            write_row(&mut self.blocked, &mut self.clock, r, key, |r, ms| {
+                r.updated_ms = ms
+            });
+        }
+        if let Some(s) = &sent.settings {
+            if self
+                .settings
+                .as_ref()
+                .is_none_or(|o| s.modified_at >= o.modified_at)
+            {
+                self.clock += 1;
+                self.settings = Some(RemoteSettings {
+                    updated_ms: self.clock,
+                    ..s.clone()
+                });
+            }
+        }
+        data.sync_pushed(&sent);
+    }
+
+    fn download(&mut self, data: &mut Data) {
+        let since = data.sync.cursor;
+        let got = Changes {
+            people: self
+                .people
+                .iter()
+                .filter(|r| r.updated_ms > since)
+                .cloned()
+                .collect(),
+            blocked: self
+                .blocked
+                .iter()
+                .filter(|r| r.updated_ms > since)
+                .cloned()
+                .collect(),
+            settings: self.settings.clone().filter(|s| s.updated_ms > since),
+        };
+        data.sync_pulled(&got, self.clock, today());
+    }
+
+    /// What every device should end up with: the live rows' fields, and the day setting.
+    fn list(&self) -> List {
+        let mut people: Vec<_> = (self.people.iter())
+            .filter(|r| !r.deleted)
+            .map(|r| (r.id.clone(), r.name.clone().unwrap()))
+            .collect();
+        let mut blocked: Vec<_> = (self.blocked.iter())
+            .filter(|r| !r.deleted)
+            .map(|r| (r.id.clone(), r.label.clone().unwrap()))
+            .collect();
+        people.sort();
+        blocked.sort();
+        (
+            people,
+            blocked,
+            self.settings.as_ref().map(|s| s.day_toggle),
+        )
+    }
+}
+
+fn list(data: &Data) -> List {
+    let mut people: Vec<_> = (data.people.iter())
+        .map(|p| (p.uid.clone(), p.name.clone()))
+        .collect();
+    let mut blocked: Vec<_> = (data.blocked.iter())
+        .map(|b| (b.uid.clone(), b.label.clone()))
+        .collect();
+    people.sort();
+    blocked.sort();
+    (people, blocked, Some(data.settings.day_toggle))
+}
+
+/// Device A adds Bo, a trip and a day setting at 1000; all three devices sync. Then B and C, whose
+/// clocks read 500, each change the same row: both changes are stamped 1001, a tie.
+fn three_devices() -> (Account, [Data; 3]) {
+    let mut account = Account::default();
+    let mut devices: [Data; 3] = Default::default();
+    change(&mut devices[0], 1000, |d| {
+        d.add_person("Bo", 30, day(2026, 7, 21), today()).unwrap();
+        d.add_blocked(day(2026, 9, 1), day(2026, 9, 7), "Trip", today())
+            .unwrap();
+        d.set_day_setting(DayToggle::Custom, Some(DaySet::ALL), today())
+            .unwrap();
+    });
+    for d in &mut devices {
+        account.sync(d);
+    }
+    assert_eq!(list(&devices[2]), account.list());
+    (account, devices)
+}
+
+/// C syncs, then B, then everyone a few times: every device must end with the account's list.
+fn settle(account: &mut Account, devices: &mut [Data; 3]) {
+    let [_, b, c] = devices;
+    account.sync(c);
+    account.sync(b);
+    for _ in 0..3 {
+        for d in devices.iter_mut() {
+            account.sync(d);
+        }
+    }
+    for d in devices.iter() {
+        assert_eq!(list(d), account.list());
+        assert!(!d.has_unsynced());
+    }
+}
+
+#[test]
+fn a_tie_between_a_deletion_and_an_edit_ends_the_same_everywhere() {
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    let (bo_b, bo_c) = (b.people[0].id, c.people[0].id);
+    change(b, 500, |d| {
+        d.delete_people(&[bo_b]);
+    });
+    change(c, 500, |d| {
+        d.update_person(bo_c, "Cleo", 30, day(2026, 7, 21), today())
+            .unwrap()
+    });
+    assert_eq!(b.sync.tombstones[0].modified, c.people[0].modified);
+    settle(&mut account, &mut devices);
+    assert!(devices[2].people.is_empty());
+}
+
+#[test]
+fn a_tie_between_two_edits_ends_the_same_everywhere() {
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    let (bo_b, bo_c) = (b.people[0].id, c.people[0].id);
+    change(b, 500, |d| {
+        d.update_person(bo_b, "Bea", 30, day(2026, 7, 21), today())
+            .unwrap()
+    });
+    change(c, 500, |d| {
+        d.update_person(bo_c, "Cleo", 30, day(2026, 7, 21), today())
+            .unwrap()
+    });
+    assert_eq!(b.people[0].modified, c.people[0].modified);
+    settle(&mut account, &mut devices);
+    assert_eq!(devices[2].people[0].name, "Bea");
+}
+
+#[test]
+fn a_tied_blocked_range_ends_the_same_everywhere() {
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    let trip_b = b.blocked[0].id;
+    change(b, 500, |d| {
+        d.delete_blocked(trip_b, today());
+    });
+    // Ranges can't be edited in the app yet; a changed label stands for an edit made elsewhere.
+    change(c, 500, |d| d.blocked[0].label = "Holiday".into());
+    assert_eq!(b.sync.tombstones[0].modified, c.blocked[0].modified);
+    settle(&mut account, &mut devices);
+    assert!(devices[2].blocked.is_empty());
+}
+
+#[test]
+fn a_tied_day_setting_ends_the_same_everywhere() {
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    change(b, 500, |d| {
+        d.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+            .unwrap();
+    });
+    change(c, 500, |d| {
+        d.set_day_setting(DayToggle::WeekendsOnly, None, today())
+            .unwrap();
+    });
+    assert_eq!(b.sync.settings_modified, c.sync.settings_modified);
+    settle(&mut account, &mut devices);
+    assert_eq!(devices[2].settings.day_toggle, DayToggle::WeekdaysOnly);
+}
+
+#[test]
+fn a_tie_with_a_change_made_during_the_download_keeps_the_change() {
+    // B deletes Bo and syncs. C uploads, then renames Bo while the download is on its way: the
+    // rename isn't lost, it goes up next and wins.
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    let (bo_b, bo_c) = (b.people[0].id, c.people[0].id);
+    change(b, 500, |d| {
+        d.delete_people(&[bo_b]);
+    });
+    account.sync(b);
+    account.upload(c);
+    change(c, 500, |d| {
+        d.update_person(bo_c, "Cleo", 30, day(2026, 7, 21), today())
+            .unwrap()
+    });
+    account.download(c);
+    assert_eq!(c.people[0].name, "Cleo");
+    assert!(c.has_unsynced());
+    settle(&mut account, &mut devices);
+    assert_eq!(devices[1].people[0].name, "Cleo");
+
+    // The other way round: B renames Bo and syncs; C deletes Bo during the download. The deletion
+    // stands, goes up next, and wins.
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    let (bo_b, bo_c) = (b.people[0].id, c.people[0].id);
+    change(b, 500, |d| {
+        d.update_person(bo_b, "Bea", 30, day(2026, 7, 21), today())
+            .unwrap()
+    });
+    account.sync(b);
+    account.upload(c);
+    change(c, 500, |d| {
+        d.delete_people(&[bo_c]);
+    });
+    account.download(c);
+    assert!(c.people.is_empty());
+    settle(&mut account, &mut devices);
+    assert!(devices[1].people.is_empty());
+
+    // The same for the day setting.
+    let (mut account, mut devices) = three_devices();
+    let [_, b, c] = &mut devices;
+    change(b, 500, |d| {
+        d.set_day_setting(DayToggle::WeekdaysOnly, None, today())
+            .unwrap();
+    });
+    account.sync(b);
+    account.upload(c);
+    change(c, 500, |d| {
+        d.set_day_setting(DayToggle::WeekendsOnly, None, today())
+            .unwrap();
+    });
+    account.download(c);
+    assert_eq!(c.settings.day_toggle, DayToggle::WeekendsOnly);
+    settle(&mut account, &mut devices);
+    assert_eq!(devices[1].settings.day_toggle, DayToggle::WeekendsOnly);
+}
