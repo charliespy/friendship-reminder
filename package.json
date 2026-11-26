@@ -1,7 +1,7 @@
 {
   "name": "friends",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A macOS menu bar app that reminds you to stay in touch with people",
   "license": "MIT",
   "type": "module",
@@ -17,6 +17,8 @@
     "check:web": "npm run typecheck && npm run lint && npm run test && vite build",
     "check:scripts": "bash scripts/test-pr-title-check.sh && bash scripts/test-dependabot-auto-merge.sh && bash scripts/test-repo-settings.sh",
     "check": "npm run check:scripts && npm run check:web && npm run check:rust",
+    "check:ios": "cargo clippy -p friends -p tauri-plugin-web-auth --target aarch64-apple-ios-sim -- -D warnings",
+    "ios:testflight": "bash scripts/ios-testflight.sh",
     "e2e": "playwright test",
     "privacy": "scripts/privacy-scan.sh",
     "release:plan": "node scripts/release.mjs plan",

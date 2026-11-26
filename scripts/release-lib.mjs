@@ -23,11 +23,17 @@ const HEADING_ALIASES = {
   "good to know": "Good to know",
 };
 
-/** What a user of an unsigned build needs to open it the first time. */
-export const UNSIGNED_NOTE =
-  "Friends isn't signed with an Apple Developer ID yet, so macOS blocks the first launch. " +
-  "Open it once and click **Done**, then go to **System Settings → Privacy & Security** and " +
-  "click **Open Anyway** (the README has the details).";
+/**
+ * What a user of an unsigned build needs to open it the first time. Wrapped like a hand-written
+ * bullet in CHANGELOG.md (lines of at most 100 characters, the rest indented two spaces), so the
+ * drafted notes need no rewrapping.
+ */
+export const UNSIGNED_NOTE = [
+  "Friendship Reminder isn't signed with an Apple Developer ID yet, so macOS blocks the first",
+  "  launch. Open it once and click **Done**, then go to **System Settings → Privacy & Security**",
+  "  and click **Open Anyway** (the README has the details). On macOS 13 or 14, Control-click",
+  "  Friendship Reminder in Applications and choose **Open** instead.",
+].join("\n");
 
 const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 
@@ -280,10 +286,11 @@ export function draftNotes({ unreleased = "", commits = [], unsigned = true }) {
   }
   // Dependabot's chore(deps): … (chore(deps-dev) is build and test tools, not part of the app)
   if (commits.some((c) => c.scope === "deps" && (c.type === "chore" || c.type === "build"))) {
-    const line = "- Updated the libraries Friends is built on.";
+    const line = "- Updated the libraries Friendship Reminder is built on.";
     if (!groups.Changed.includes(line)) groups.Changed.push(line);
   }
-  if (unsigned && !groups["Good to know"].some((l) => l.includes("Open Anyway"))) {
+  // The note may already be there, wrapped anywhere (a bullet keeps its line breaks).
+  if (unsigned && !groups["Good to know"].some((l) => l.replace(/\s+/g, " ").includes("Open Anyway"))) {
     groups["Good to know"].push(`- ${UNSIGNED_NOTE}`);
   }
   return renderSections(groups);

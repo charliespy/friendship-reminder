@@ -40,6 +40,8 @@ expect fail "an example domain inside another" text "jane@example.com.au, jane@e
 expect fail "a home folder in a local dev link" text "http://localhost:1420/@fs/Users/jane/Code/x.ts"
 expect pass "web routes" text 'fetch("/api/users/list"), /api/home/feed, /settings/users/new'
 expect pass "retina names" text "icon@2x.webp, photo@3x.jpeg, a@2x.gif, b@2x.avif"
+expect pass "Xcode's numbered icon copies" text "AppIcon-20x20@2x-1.png"
+expect fail "an address that only looks numbered" text "ana@2x-1.example.org"
 expect fail "a linux home at the start of a path" text 'cd "/home/jane/src"'
 expect fail "a linux home in a local dev link" text "http://localhost:1420/@fs/home/jane/x.ts"
 expect fail "a linux home in a 127.0.0.1 dev link" text "http://127.0.0.1:1420/@fs/home/jane/x.ts"

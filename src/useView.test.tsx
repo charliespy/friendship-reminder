@@ -14,6 +14,8 @@ vi.mock("./api", async (orig) => ({
     setLaunchAtLogin: (on: boolean) => setLaunchAtLogin(on),
     setDayToggle: vi.fn(),
     setNotifications: vi.fn(),
+    getAccount: () => Promise.resolve({ status: "signedOut", warning: null }),
+    onAccountChanged: () => Promise.resolve(() => {}),
   },
 }));
 
@@ -24,7 +26,7 @@ const VIEW: View = {
   today: "2026-11-18",
   people: [],
   blocked: [],
-  settings: { dayToggle: "weekendsOnly", notifications: true },
+  settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
   unreadableFile: null,
 };
 

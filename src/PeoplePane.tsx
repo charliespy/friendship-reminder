@@ -1,7 +1,8 @@
-/** Preferences › People: add, edit, mark done and delete the people Friends reminds you about. */
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, type Person, type View } from "./api";
+/** Preferences › People: add, edit, mark done and delete the people Friendship Reminder reminds you about. */
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { api, type IsoDate, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
+import { DoneButton } from "./DoneButton";
 import { aimDay, formatDay, relativeDay } from "./date";
 import { FREQUENCIES, frequencyLabel } from "./format";
 import { useAction } from "./useView";
@@ -105,6 +106,10 @@ function PersonRow({
   selected,
   onSelect,
   onEdit,
+  onDoneStart,
+  onDoneEnd,
+  selectRef,
+  doneRef,
   editRef,
 }: {
   person: Person;
@@ -112,9 +117,14 @@ function PersonRow({
   selected: boolean;
   onSelect: (on: boolean) => void;
   onEdit: () => void;
+  /** Called when Done is pressed, before the command runs. */
+  onDoneStart: (on: IsoDate) => void;
+  /** Called when the Done command has finished, with whether it worked. */
+  onDoneEnd: (ok: boolean) => void;
+  selectRef: (el: HTMLInputElement | null) => void;
+  doneRef: (el: HTMLButtonElement | null) => void;
   editRef: (el: HTMLButtonElement | null) => void;
 }) {
-  const { run, busy, error } = useAction();
   const when = person.due
     ? person.overdue
       ? `Missed last time · aim for ${aimDay(person.nextTarget, today)}`
@@ -123,6 +133,7 @@ function PersonRow({
   return (
     <li className="list-row" data-testid="person-row" data-overdue={person.overdue}>
       <input
+        ref={selectRef}
         type="checkbox"
         checked={selected}
         onChange={(e) => onSelect(e.target.checked)}
@@ -137,16 +148,8 @@ function PersonRow({
         <div className="person-meta">
           {frequencyLabel(person.frequencyDays)} · {when}
         </div>
-        {error && <p className="error" role="alert">{error}</p>}
       </div>
-      <button
-        className="btn btn-done btn-sm"
-        disabled={busy}
-        onClick={() => run(() => api.markDone(person.id))}
-        aria-label={`Mark ${person.name} as done`}
-      >
-        Done
-      </button>
+      <DoneButton person={person} today={today} buttonRef={doneRef} onStart={onDoneStart} onEnd={onDoneEnd} />
       <button ref={editRef} className="btn btn-quiet btn-sm" onClick={onEdit} aria-label={`Edit ${person.name}`}>
         Edit
       </button>
@@ -161,23 +164,63 @@ export function PeoplePane({ view }: { view: View }) {
   const [confirming, setConfirming] = useState(false);
   const del = useAction();
 
-  // When a form closes, focus goes back to the button that opened it (Add person, or the person's
-  // Edit), so keyboard and screen reader users don't land back at the top of the window.
-  const addButton = useRef<HTMLButtonElement>(null);
-  const editButtons = useRef(new Map<number, HTMLButtonElement>());
-  const returnFocus = useRef<"add" | number | null>(null);
-  useEffect(() => {
-    const target = returnFocus.current;
-    if (target === null) return;
-    returnFocus.current = null;
-    // Only if focus was lost with the form; never take it from somewhere the user moved it.
-    if (document.activeElement && document.activeElement !== document.body) return;
-    (target === "add" ? addButton.current : editButtons.current.get(target))?.focus();
-  });
-
   // Forget selections of people who are gone.
   const present = new Set(view.people.map((p) => p.id));
   const chosen = [...selected].filter((id) => present.has(id));
+
+  // When a form closes, focus goes back to the button that opened it (Add person, or the person's
+  // Edit), so keyboard and screen reader users don't land back at the top of the window. After a
+  // delete, it goes to the checkbox of the person who takes the first deleted person's place (or
+  // the one before, if the deleted people were at the end), or to Add person when nobody is left.
+  // After a Done, the list re-sorts and moves the person's row, which drops focus: it goes back to
+  // their Done button in its new place. After Deselect all, the selection bar goes away with the
+  // focused button: focus goes to the checkbox of the first person who was selected.
+  const section = useRef<HTMLElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const editButtons = useRef(new Map<number, HTMLButtonElement>());
+  const checkboxes = useRef(new Map<number, HTMLInputElement>());
+  const doneButtons = useRef(new Map<number, HTMLButtonElement>());
+  const returnFocus = useRef<
+    | "add"
+    | number
+    | { deleted: number[]; next: number | null }
+    | { done: number; on: IsoDate; before: View; finished: boolean }
+    | { deselected: number }
+    | null
+  >(null);
+  // Re-renders the pane when a Done command finishes (its busy state lives in the row).
+  const [, setDoneFinished] = useState(0);
+  useEffect(() => {
+    const target = returnFocus.current;
+    if (target === null) return;
+    // The new view can arrive after the command returns: wait until it no longer shows the deleted
+    // people. After a Done, the new view can come before or after the command returns (the macOS
+    // app sends it first): wait for both, so the Done button is enabled again, and for a newer view
+    // than the one Done was pressed in that shows the person as done on the day picked, is gone, or is a new day
+    // (then the target is used up either way, so it can't take focus later).
+    if (typeof target === "object" && "deleted" in target && target.deleted.some((id) => present.has(id))) return;
+    if (typeof target === "object" && "done" in target) {
+      const person = view.people.find((p) => p.id === target.done);
+      const newDay = view.today !== target.before.today;
+      if (!target.finished || view === target.before || (person && person.lastConnected !== target.on && !newDay)) {
+        return;
+      }
+    }
+    returnFocus.current = null;
+    // Only if focus was lost; never take it from somewhere the user moved it.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    if (typeof target === "object" && "done" in target) {
+      doneButtons.current.get(target.done)?.focus();
+    } else if (typeof target === "object" && "deselected" in target) {
+      checkboxes.current.get(target.deselected)?.focus();
+    } else if (typeof target === "object") {
+      const next = target.next === null ? undefined : checkboxes.current.get(target.next);
+      // Add person is hidden while its form is open; then the form's first field takes focus.
+      (next ?? addButton.current ?? section.current?.querySelector<HTMLElement>("form input"))?.focus();
+    } else {
+      (target === "add" ? addButton.current : editButtons.current.get(target))?.focus();
+    }
+  });
 
   const select = (id: number, on: boolean) => {
     const next = new Set(chosen);
@@ -188,8 +231,27 @@ export function PeoplePane({ view }: { view: View }) {
     del.setError(null);
   };
 
+  const deselectAll = (event: MouseEvent<HTMLButtonElement>) => {
+    // The selection bar, and the Deselect all button in it, are about to go. Only when the button
+    // had focus (a mouse click in WebKit doesn't focus it), and never in place of a Done that is
+    // still waiting to send focus back.
+    const first = view.people.find((p) => chosen.includes(p.id));
+    if (first && document.activeElement === event.currentTarget && returnFocus.current === null) {
+      returnFocus.current = { deselected: first.id };
+    }
+    setSelected(new Set());
+    del.setError(null);
+  };
+
   const deleteChosen = async () => {
+    // Who takes the first deleted person's place: the next person who stays, else the one before.
+    const people = view.people;
+    const first = people.findIndex((p) => chosen.includes(p.id));
+    const stays = (p: Person) => !chosen.includes(p.id);
+    const next = people.slice(first).find(stays) ?? people.slice(0, first).findLast(stays);
     if (await del.run(() => api.deletePeople(chosen))) {
+      // The selection bar, and the Delete button in it, are about to go.
+      returnFocus.current = { deleted: chosen, next: next?.id ?? null };
       setSelected(new Set());
       setConfirming(false);
       // Close the edit form only if its person was deleted; another person's edit stays open.
@@ -200,7 +262,7 @@ export function PeoplePane({ view }: { view: View }) {
   const editingPerson = view.people.find((p) => p.id === editing);
 
   return (
-    <section aria-labelledby="people-title">
+    <section ref={section} aria-labelledby="people-title">
       <header className="pane-header">
         <div>
           <h2 id="people-title">People</h2>
@@ -260,7 +322,7 @@ export function PeoplePane({ view }: { view: View }) {
             </>
           ) : (
             <>
-              <button className="btn btn-quiet btn-sm" onClick={() => (setSelected(new Set()), del.setError(null))}>
+              <button className="btn btn-quiet btn-sm" onClick={deselectAll}>
                 Deselect all
               </button>
               <button className="btn btn-outline btn-sm" onClick={() => setConfirming(true)}>
@@ -276,7 +338,7 @@ export function PeoplePane({ view }: { view: View }) {
         !adding && (
           <div className="card empty">
             <strong>Nobody yet</strong>
-            Add someone, and Friends will remind you when it's time to reach out.
+            Add someone, and Friendship Reminder will remind you when it's time to reach out.
           </div>
         )
       ) : (
@@ -289,6 +351,26 @@ export function PeoplePane({ view }: { view: View }) {
               selected={chosen.includes(p.id)}
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}
+              // `view` here is the one Done was pressed in.
+              onDoneStart={(on) => (returnFocus.current = { done: p.id, on, before: view, finished: false })}
+              onDoneEnd={(ok) => {
+                const target = returnFocus.current;
+                if (typeof target !== "object" || target === null || !("done" in target) || target.done !== p.id) return;
+                if (ok) {
+                  target.finished = true;
+                  setDoneFinished((n) => n + 1);
+                } else {
+                  returnFocus.current = null;
+                }
+              }}
+              selectRef={(el) => {
+                if (el) checkboxes.current.set(p.id, el);
+                else checkboxes.current.delete(p.id);
+              }}
+              doneRef={(el) => {
+                if (el) doneButtons.current.set(p.id, el);
+                else doneButtons.current.delete(p.id);
+              }}
               editRef={(el) => {
                 if (el) editButtons.current.set(p.id, el);
                 else editButtons.current.delete(p.id);

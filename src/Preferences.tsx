@@ -21,7 +21,7 @@ export function Preferences() {
   return (
     <div className="prefs">
       <nav className="sidebar" aria-label="Preferences">
-        <h1 className="wordmark">Friends</h1>
+        <h1 className="wordmark">Friendship Reminder</h1>
         <div role="tablist" aria-orientation="vertical">
           {TABS.map((t) => (
             <button
@@ -42,7 +42,7 @@ export function Preferences() {
       <main className="pane">
         {view?.unreadableFile && (
           <p className="banner" role="alert">
-            Your saved list couldn't be read, so Friends started fresh. The old file is at {view.unreadableFile}.
+            Your saved list couldn't be read, so Friendship Reminder started fresh. The old file is at {view.unreadableFile}.
           </p>
         )}
         {!view ? (

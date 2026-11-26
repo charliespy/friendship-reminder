@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Releasing Friends, step by step (docs/RELEASING.md has the whole procedure):
+// Releasing Friendship Reminder, step by step (docs/RELEASING.md has the whole procedure):
 //
 //   node scripts/release.mjs plan [--patch] [--out <file> [--force]]
 //       Dry run: changes nothing. Prints the last release, the next version and why, and a draft
@@ -213,7 +213,12 @@ function plan(argv, { nothingIsFine = false } = {}) {
   process.stdout.write(`${out.join("\n")}\n`);
   if (!next.version) process.exit(nothingIsFine ? 0 : 3);
 
-  const notes = draftNotes({ unreleased, commits: lastTag ? conventional.map((c) => c.parsed) : [] });
+  // Releases are signed and notarized since v0.1.2, so the draft no longer adds the unsigned note.
+  const notes = draftNotes({
+    unreleased,
+    commits: lastTag ? conventional.map((c) => c.parsed) : [],
+    unsigned: false,
+  });
   process.stdout.write(`\nDraft notes for v${next.version} (rewrite into plain words before "prepare"):\n\n${notes}\n`);
   if (flags["--out"]) writeFileSync(userPath(flags["--out"]), `${notes}\n`);
 }

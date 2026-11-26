@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Friends doesn't work as it should.
+description: Something in Friendship Reminder doesn't work as it should.
 labels: [bug]
 body:
   - type: markdown
@@ -22,7 +22,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Friends version
+      label: Friendship Reminder version
       placeholder: "0.1.0"
   - type: input
     id: macos

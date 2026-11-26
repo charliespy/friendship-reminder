@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use chrono::NaiveDate;
-use friends_core::api::{App, ErrorKind};
+use friends_core::api::{App, ErrorKind, View};
 use friends_core::store::Store;
 use serde_json::json;
 
@@ -118,15 +118,27 @@ fn every_command_works_end_to_end() {
         today(),
     )
     .unwrap();
-    let id = app.data().people[0].id;
+    let (id, bo) = (app.data().people[0].id, app.data().people[1].id);
     let view = app.call("mark_done", json!({"id": id}), today()).unwrap();
     assert!(!view.people.iter().any(|p| p.due));
-    app.call(
-        "update_person",
-        json!({"id": id, "name": "Ada L", "frequencyDays": 90, "lastConnected": "2026-08-19"}),
-        today(),
-    )
-    .unwrap();
+    let target = |view: &View, id: u64| {
+        view.people
+            .iter()
+            .find(|p| p.person.id == id)
+            .expect("the person is in the view")
+            .person
+            .next_target
+    };
+    let ada_target = |view: &View| target(view, id);
+    let view = app
+        .call(
+            "update_person",
+            json!({"id": id, "name": "Ada L", "frequencyDays": 90, "lastConnected": "2026-08-19"}),
+            today(),
+        )
+        .unwrap();
+    // Aug 19 + 90 = Tue Nov 17 -> Sat Nov 21.
+    assert_eq!(ada_target(&view), date(2026, 11, 21));
     let view = app
         .call(
             "add_blocked",
@@ -139,11 +151,19 @@ fn every_command_works_end_to_end() {
     assert!(view.people.iter().all(|p| {
         p.person.next_target < date(2026, 11, 1) || p.person.next_target > date(2026, 11, 30)
     }));
+    assert_eq!(ada_target(&view), date(2026, 12, 5)); // the first weekend after the trip
     let blocked_id = view.blocked[0].id;
-    app.call("delete_blocked", json!({"id": blocked_id}), today())
+    let view = app
+        .call("delete_blocked", json!({"id": blocked_id}), today())
         .unwrap();
-    app.call("set_day_toggle", json!({"dayToggle": "allDays"}), today())
+    assert!(view.blocked.is_empty());
+    assert_eq!(ada_target(&view), date(2026, 11, 21));
+    let view = app
+        .call("set_day_toggle", json!({"dayToggle": "custom"}), today())
         .unwrap();
+    assert_eq!(ada_target(&view), date(2026, 11, 17));
+    // Aug 1 + 90 = Fri Oct 30: Bo moves too, off the Saturday after it.
+    assert_eq!(target(&view, bo), date(2026, 10, 30));
     let view = app
         .call("set_notifications", json!({"on": false}), today())
         .unwrap();

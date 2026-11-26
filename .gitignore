@@ -11,3 +11,13 @@ playwright-report/
 .impeccable/hook.cache.json
 # Release notes drafted by `npm run release:plan -- --out release-notes.md`.
 release-notes.md
+
+# Local build settings, such as the account server (see README).
+.env.local
+
+# Supabase CLI scratch files
+supabase/.temp/
+
+# Impeccable scratch: decision sketches and review captures
+.impeccable/mocks/
+.impeccable/review/

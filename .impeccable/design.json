@@ -1,64 +1,55 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-18T20:00:00Z",
-  "title": "Design System: Friends",
+  "generatedAt": "2026-11-24T12:00:00Z",
+  "title": "Design System: Friendship Reminder",
   "extensions": {
     "colorMeta": {
-      "stock": { "role": "neutral", "displayName": "Fog Stock", "canonical": "#eef0f4", "dark": "#181a21", "tonalRamp": ["oklch(15% 0.001 265)", "oklch(26% 0.003 265)", "oklch(38% 0.004 265)", "oklch(49% 0.004 265)", "oklch(61% 0.005 265)", "oklch(72% 0.005 265)", "oklch(84% 0.005 265)", "oklch(95% 0.003 265)"] },
-      "sheet": { "role": "neutral", "displayName": "Sheet White", "canonical": "#ffffff", "dark": "#22252e", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(49% 0 0)", "oklch(61% 0 0)", "oklch(72% 0 0)", "oklch(84% 0 0)", "oklch(95% 0 0)"] },
-      "well": { "role": "neutral", "displayName": "Well", "canonical": "#e4e7ee", "dark": "#13151b", "tonalRamp": ["oklch(15% 0.002 267)", "oklch(26% 0.006 267)", "oklch(38% 0.006 267)", "oklch(49% 0.007 267)", "oklch(61% 0.008 267)", "oklch(72% 0.009 267)", "oklch(84% 0.009 267)", "oklch(95% 0.005 267)"] },
-      "sidebar": { "role": "neutral", "displayName": "Sidebar Fog", "canonical": "#e6e9f0", "dark": "#1d2028", "tonalRamp": ["oklch(15% 0.002 267)", "oklch(26% 0.006 267)", "oklch(38% 0.006 267)", "oklch(49% 0.007 267)", "oklch(61% 0.008 267)", "oklch(72% 0.009 267)", "oklch(84% 0.009 267)", "oklch(95% 0.005 267)"] },
-      "ink": { "role": "neutral", "displayName": "Indigo Ink", "canonical": "#1d2233", "dark": "#e9ebf2", "tonalRamp": ["oklch(15% 0.015 271)", "oklch(26% 0.033 271)", "oklch(38% 0.030 271)", "oklch(49% 0.027 271)", "oklch(61% 0.024 271)", "oklch(72% 0.021 271)", "oklch(84% 0.018 271)", "oklch(95% 0.007 271)"] },
-      "ink-2": { "role": "neutral", "displayName": "Secondary Ink", "canonical": "#4f5568", "dark": "#b4b8c6", "tonalRamp": ["oklch(15% 0.011 271)", "oklch(26% 0.025 271)", "oklch(38% 0.029 271)", "oklch(49% 0.031 271)", "oklch(61% 0.027 271)", "oklch(72% 0.023 271)", "oklch(84% 0.019 271)", "oklch(95% 0.007 271)"] },
-      "ink-3": { "role": "neutral", "displayName": "Tertiary Ink", "canonical": "#5c6275", "dark": "#9196a6", "tonalRamp": ["oklch(15% 0.009 271)", "oklch(26% 0.023 271)", "oklch(38% 0.027 271)", "oklch(49% 0.031 271)", "oklch(61% 0.027 271)", "oklch(72% 0.023 271)", "oklch(84% 0.019 271)", "oklch(95% 0.007 271)"] },
-      "rule": { "role": "neutral", "displayName": "Rule", "canonical": "rgb(29 34 51 / 11%)", "dark": "rgb(233 235 242 / 10%)" },
-      "rule-strong": { "role": "neutral", "displayName": "Rule Strong", "canonical": "rgb(29 34 51 / 20%)", "dark": "rgb(233 235 242 / 18%)" },
-      "press": { "role": "primary", "displayName": "Press Blue", "canonical": "#3346c4", "dark": "#4a5bd4", "tonalRamp": ["oklch(15% 0.064 270)", "oklch(26% 0.152 270)", "oklch(38% 0.177 270)", "oklch(49% 0.189 270)", "oklch(61% 0.164 270)", "oklch(72% 0.139 270)", "oklch(84% 0.114 270)", "oklch(95% 0.045 270)"] },
-      "press-down": { "role": "primary", "displayName": "Press Blue Down", "canonical": "#2a3aa6", "dark": "#3f4fbf", "tonalRamp": ["oklch(15% 0.064 270)", "oklch(26% 0.147 270)", "oklch(38% 0.167 270)", "oklch(49% 0.158 270)", "oklch(61% 0.138 270)", "oklch(72% 0.118 270)", "oklch(84% 0.098 270)", "oklch(95% 0.039 270)"] },
-      "press-tint": { "role": "primary", "displayName": "Press Tint", "canonical": "rgb(51 70 196 / 10%)", "dark": "rgb(122 138 240 / 16%)" },
-      "on-press": { "role": "primary", "displayName": "On Press", "canonical": "#ffffff", "dark": "#ffffff" },
-      "sea": { "role": "secondary", "displayName": "Sea Green", "canonical": "#17705a", "dark": "#5fcbae", "tonalRamp": ["oklch(15% 0.026 172)", "oklch(26% 0.065 172)", "oklch(38% 0.076 172)", "oklch(49% 0.087 172)", "oklch(61% 0.076 172)", "oklch(72% 0.064 172)", "oklch(84% 0.052 172)", "oklch(95% 0.020 172)"] },
-      "sea-tint": { "role": "secondary", "displayName": "Sea Tint", "canonical": "rgb(23 112 90 / 11%)", "dark": "rgb(95 203 174 / 14%)" },
-      "on-sea": { "role": "secondary", "displayName": "On Sea", "canonical": "#ffffff", "dark": "#0d2a23" },
-      "amber": { "role": "tertiary", "displayName": "Amber", "canonical": "#96600c", "dark": "#e3b25c", "tonalRamp": ["oklch(15% 0.032 70)", "oklch(26% 0.078 70)", "oklch(38% 0.092 70)", "oklch(49% 0.107 70)", "oklch(61% 0.103 70)", "oklch(72% 0.089 70)", "oklch(84% 0.074 70)", "oklch(95% 0.030 70)"] },
-      "amber-tint": { "role": "tertiary", "displayName": "Amber Tint", "canonical": "rgb(150 96 12 / 11%)", "dark": "rgb(227 178 92 / 14%)" },
-      "plum": { "role": "tertiary", "displayName": "Plum", "canonical": "#7c4a86", "dark": "#c99ad3", "tonalRamp": ["oklch(15% 0.033 321)", "oklch(26% 0.080 321)", "oklch(38% 0.095 321)", "oklch(49% 0.109 321)", "oklch(61% 0.094 321)", "oklch(72% 0.079 321)", "oklch(84% 0.065 321)", "oklch(95% 0.025 321)"] },
-      "danger": { "role": "tertiary", "displayName": "Delete Red", "canonical": "#b02a24", "dark": "#ff6b61", "tonalRamp": ["oklch(15% 0.052 28)", "oklch(26% 0.128 28)", "oklch(38% 0.151 28)", "oklch(49% 0.175 28)", "oklch(61% 0.172 28)", "oklch(72% 0.148 28)", "oklch(84% 0.125 28)", "oklch(95% 0.051 28)"] },
-      "danger-fill": { "role": "tertiary", "displayName": "Delete Red Fill", "canonical": "#b02a24", "dark": "#c8322b" },
-      "danger-down": { "role": "tertiary", "displayName": "Delete Red Down", "canonical": "#93231e", "dark": "#ad2a24", "tonalRamp": ["oklch(15% 0.051 28)", "oklch(26% 0.123 28)", "oklch(38% 0.145 28)", "oklch(49% 0.162 28)", "oklch(61% 0.141 28)", "oklch(72% 0.119 28)", "oklch(84% 0.097 28)", "oklch(95% 0.038 28)"] },
-      "focus": { "role": "primary", "displayName": "Focus Ring", "canonical": "rgb(51 70 196 / 42%)", "dark": "rgb(127 143 255 / 55%)" },
-      "selection": { "role": "primary", "displayName": "Text Selection", "canonical": "rgb(51 70 196 / 20%)", "dark": "rgb(127 143 255 / 30%)" },
-      "disc-indigo": { "role": "avatar", "displayName": "Indigo Disc", "canonical": "#3346c4" },
-      "disc-green": { "role": "avatar", "displayName": "Green Disc", "canonical": "#1c7d66" },
-      "disc-slate": { "role": "avatar", "displayName": "Slate Disc", "canonical": "#4d5a73" },
-      "disc-plum": { "role": "avatar", "displayName": "Plum Disc", "canonical": "#7c4a86" }
+      "window": { "role": "neutral", "displayName": "Window Grey", "canonical": "#ececec", "dark": "#1e1e1e", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(49% 0 0)", "oklch(61% 0 0)", "oklch(72% 0 0)", "oklch(84% 0 0)", "oklch(95% 0 0)"] },
+      "sidebar": { "role": "neutral", "displayName": "Sidebar Grey", "canonical": "#e3e3e3", "dark": "#282828", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(49% 0 0)", "oklch(61% 0 0)", "oklch(72% 0 0)", "oklch(84% 0 0)", "oklch(95% 0 0)"] },
+      "group": { "role": "neutral", "displayName": "Group White", "canonical": "#ffffff", "dark": "#2a2a2a", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(49% 0 0)", "oklch(61% 0 0)", "oklch(72% 0 0)", "oklch(84% 0 0)", "oklch(95% 0 0)"] },
+      "control": { "role": "neutral", "displayName": "Control White", "canonical": "#ffffff", "dark": "#4a4a4c" },
+      "control-down": { "role": "neutral", "displayName": "Control Down", "canonical": "#e3e3e3", "dark": "#5c5c5f" },
+      "hover": { "role": "neutral", "displayName": "Hover", "canonical": "rgb(0 0 0 / 5%)", "dark": "rgb(255 255 255 / 7%)" },
+      "label": { "role": "neutral", "displayName": "Label", "canonical": "#1d1d1f", "dark": "#e8e8ea", "tonalRamp": ["oklch(15% 0.003 286)", "oklch(26% 0.004 286)", "oklch(38% 0.005 286)", "oklch(49% 0.006 286)", "oklch(61% 0.006 286)", "oklch(72% 0.005 286)", "oklch(84% 0.004 286)", "oklch(95% 0.002 286)"] },
+      "label-2": { "role": "neutral", "displayName": "Label 2", "canonical": "#636366", "dark": "#a1a1a6", "tonalRamp": ["oklch(15% 0.004 286)", "oklch(26% 0.005 286)", "oklch(38% 0.006 286)", "oklch(49% 0.007 286)", "oklch(61% 0.007 286)", "oklch(72% 0.006 286)", "oklch(84% 0.004 286)", "oklch(95% 0.002 286)"] },
+      "label-3": { "role": "neutral", "displayName": "Label 3", "canonical": "#6e6e73", "dark": "#98989d", "tonalRamp": ["oklch(15% 0.004 286)", "oklch(26% 0.006 286)", "oklch(38% 0.007 286)", "oklch(49% 0.008 286)", "oklch(61% 0.008 286)", "oklch(72% 0.007 286)", "oklch(84% 0.005 286)", "oklch(95% 0.002 286)"] },
+      "separator": { "role": "neutral", "displayName": "Separator", "canonical": "rgb(0 0 0 / 10%)", "dark": "rgb(255 255 255 / 10%)" },
+      "separator-strong": { "role": "neutral", "displayName": "Separator Strong", "canonical": "rgb(0 0 0 / 18%)", "dark": "rgb(255 255 255 / 18%)" },
+      "accent": { "role": "primary", "displayName": "Mac Accent", "canonical": "-apple-system-control-accent", "fallback": "#007aff", "note": "Follows System Settings > Appearance in WebKit via @supports; #007aff elsewhere. Not overridden in dark mode.", "tonalRamp": ["oklch(15% 0.06 258)", "oklch(26% 0.11 258)", "oklch(38% 0.16 258)", "oklch(49% 0.20 258)", "oklch(60% 0.218 258)", "oklch(72% 0.15 258)", "oklch(84% 0.08 258)", "oklch(95% 0.025 258)"] },
+      "on-accent": { "role": "primary", "displayName": "On Accent", "canonical": "#ffffff" },
+      "accent-tint": { "role": "primary", "displayName": "Accent Tint", "canonical": "rgb(0 122 255 / 12%)", "live": "color-mix(in srgb, var(--accent) 12%, transparent)" },
+      "focus": { "role": "primary", "displayName": "Focus Ring", "canonical": "rgb(0 122 255 / 45%)", "live": "color-mix(in srgb, var(--accent) 45%, transparent)" },
+      "selection": { "role": "primary", "displayName": "Text Selection", "canonical": "rgb(0 122 255 / 22%)", "live": "color-mix(in srgb, var(--accent) 22%, transparent)" },
+      "orange": { "role": "secondary", "displayName": "Missed Orange", "canonical": "#b25000", "dark": "#ffa337", "tonalRamp": ["oklch(15% 0.04 50)", "oklch(26% 0.08 50)", "oklch(38% 0.11 50)", "oklch(49% 0.14 50)", "oklch(58% 0.155 52)", "oklch(72% 0.15 62)", "oklch(84% 0.10 68)", "oklch(95% 0.03 70)"] },
+      "orange-tint": { "role": "secondary", "displayName": "Orange Tint", "canonical": "rgb(255 149 0 / 16%)", "dark": "rgb(255 159 10 / 18%)" },
+      "danger": { "role": "tertiary", "displayName": "Delete Red", "canonical": "#d70015", "dark": "#ff6961", "tonalRamp": ["oklch(15% 0.06 27)", "oklch(26% 0.11 27)", "oklch(38% 0.16 27)", "oklch(49% 0.20 27)", "oklch(57% 0.23 27)", "oklch(72% 0.16 25)", "oklch(84% 0.08 22)", "oklch(95% 0.025 20)"] },
+      "danger-fill": { "role": "tertiary", "displayName": "Delete Red Fill", "canonical": "#e0352b", "dark": "#d93a30" },
+      "monogram-top": { "role": "neutral", "displayName": "Monogram Grey (top)", "canonical": "#8e8e93", "dark": "#78787d", "note": "Gradient stop: --monogram: linear-gradient(top, bottom)." },
+      "monogram-bottom": { "role": "neutral", "displayName": "Monogram Grey (bottom)", "canonical": "#6f6f74", "dark": "#5a5a5e" }
     },
     "typographyMeta": {
       "headline": { "displayName": "Headline", "purpose": "Preferences pane titles." },
       "title": { "displayName": "Title", "purpose": "The bold first line of an empty state." },
-      "wordmark": { "displayName": "Wordmark", "purpose": "\"Friends\" in the dropdown header; 11px 600 tertiary ink in the sidebar." },
-      "body": { "displayName": "Body", "purpose": "Base size for all text, buttons (500) and tabs. Tabular figures." },
-      "body-strong": { "displayName": "Body Strong", "purpose": "Person names, selection count, Done." },
-      "meta": { "displayName": "Meta", "purpose": "Lines under names, field labels, hints, small buttons, errors." },
-      "label": { "displayName": "Label", "purpose": "Sentence-case section labels over lists, and tags." }
+      "wordmark": { "displayName": "Wordmark", "purpose": "\"Friendship Reminder\" in the dropdown header; 11px 600 Label 3 in the sidebar." },
+      "body": { "displayName": "Body", "purpose": "Base text, sidebar rows, footer buttons. Tabular figures." },
+      "body-strong": { "displayName": "Body Strong", "purpose": "Person names and the selection count." },
+      "button": { "displayName": "Button", "purpose": "Push buttons, choice titles, the selected sidebar row, avatar initials." },
+      "meta": { "displayName": "Meta", "purpose": "Meta lines, field labels (500), hints, errors, small buttons, the dropdown date." },
+      "label": { "displayName": "Label", "purpose": "Section labels above groups, and tags. Sentence case." }
     },
     "shadows": [
-      { "name": "lift", "value": "0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%)", "dark": "0 0 0 0.5px rgb(255 255 255 / 6%), 0 1px 2px rgb(0 0 0 / 30%)", "purpose": "Sheets on the stock: cards, grouped lists, primary, outline and danger buttons." },
-      { "name": "press-in", "value": "inset 0 1px 2px rgb(10 14 30 / 28%)", "dark": "inset 0 1px 2px rgb(0 0 0 / 45%)", "purpose": "Any push button while pressed, with translateY(0.5px)." },
-      { "name": "field-inset", "value": "inset 0 0 0 0.5px var(--rule-strong), inset 0 1px 1px rgb(10 14 30 / 6%)", "purpose": "Text fields and selects at rest." },
-      { "name": "field-focus", "value": "inset 0 0 0 1px var(--press), 0 0 0 3px var(--focus)", "purpose": "Text fields and selects when focused." },
-      { "name": "focus-ring", "value": "outline: 3px solid var(--focus); outline-offset: 1px", "purpose": "Every other focusable control (focus-visible)." }
+      { "name": "group-edge", "value": "0 0 0 0.5px rgb(0 0 0 / 7%)", "dark": "0 0 0 0.5px rgb(255 255 255 / 6%)", "purpose": "The hairline around every inset group." },
+      { "name": "raise", "value": "0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1px rgb(0 0 0 / 14%)", "dark": "0 0 0 0.5px rgb(255 255 255 / 8%), 0 0.5px 1px rgb(0 0 0 / 40%)", "purpose": "The Mac push button's edge and drop. Push buttons only." },
+      { "name": "focus-ring", "value": "outline: 3px solid var(--focus); outline-offset: 1px", "purpose": "Every focusable control. Inputs use inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus)." }
     ],
     "motion": [
-      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "All state transitions." },
-      { "name": "duration-press", "value": "120ms", "purpose": "Button background, shadow and press offset; input focus shadow. Disabled under prefers-reduced-motion." }
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "120ms background and filter changes on buttons, box-shadow on inputs. Off under reduced motion." },
+      { "name": "press-darken", "value": "filter: brightness(0.86)", "purpose": "Pressed state of accent and danger buttons." }
     ],
-    "breakpoints": [],
     "sizes": [
-      { "name": "row", "value": "48px", "purpose": "Every list row in both windows." },
-      { "name": "disc", "value": "28px", "purpose": "Avatar disc." },
-      { "name": "sidebar", "value": "168px", "purpose": "Preferences source list width." },
-      { "name": "dropdown", "value": "360 x 520pt", "purpose": "Menu bar dropdown window." }
+      { "name": "row", "value": "48px", "purpose": "Every list row." },
+      { "name": "disc", "value": "28px", "purpose": "Avatar monogram disc." },
+      { "name": "sidebar", "value": "168px", "purpose": "Preferences source-list width." }
     ]
   },
   "components": [
@@ -66,117 +57,111 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one action per pane, in press blue. Sinks into the stock when pressed.",
+      "description": "The main action, in the Mac's accent. Darkens when pressed.",
       "html": "<button class=\"ds-btn ds-btn-primary\">Add person</button>",
-      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 0 12px; border: none; border-radius: 6px; font: 500 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-btn-primary { background: var(--press, #3346c4); color: var(--on-press, #fff); box-shadow: var(--lift, 0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%)); } .ds-btn-primary:hover { background: var(--press-down, #2a3aa6); } .ds-btn-primary:active { background: var(--press-down, #2a3aa6); box-shadow: var(--press-in, inset 0 1px 2px rgb(10 14 30 / 28%)); transform: translateY(0.5px); }"
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 0 12px; border: none; border-radius: 6px; font: 500 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-btn-primary { background: var(--accent, #007aff); color: var(--on-accent, #fff); box-shadow: var(--raise, 0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1px rgb(0 0 0 / 14%)); } .ds-btn-primary:active { filter: brightness(0.86); } .ds-btn:focus-visible { outline: 3px solid var(--focus, rgb(0 122 255 / 45%)); outline-offset: 1px; }"
     },
     {
-      "name": "Outline Button",
+      "name": "Push Button",
       "kind": "button",
-      "refersTo": "button-outline",
-      "description": "A white sheet button for a secondary step, such as Delete selected… before confirming.",
-      "html": "<button class=\"ds-btn-outline\">Delete selected…</button>",
-      "css": ".ds-btn-outline { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; font: 500 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: var(--sheet, #fff); color: var(--ink, #1d2233); box-shadow: 0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%), inset 0 0 0 0.5px var(--rule-strong, rgb(29 34 51 / 20%)); transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-outline:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-btn-outline:active { background: var(--well, #e4e7ee); box-shadow: var(--press-in, inset 0 1px 2px rgb(10 14 30 / 28%)); transform: translateY(0.5px); }"
+      "refersTo": "button-push",
+      "description": "The standard grey Mac push button; Done uses it at the small size.",
+      "html": "<button class=\"ds-btn ds-btn-push\">Sign out</button> <button class=\"ds-btn ds-btn-push ds-btn-sm\">Done</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 0 12px; border: none; border-radius: 6px; font: 500 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-btn-push { background: var(--control, #fff); color: var(--label, #1d1d1f); box-shadow: var(--raise, 0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1px rgb(0 0 0 / 14%)); } .ds-btn-push:active { background: var(--control-down, #e3e3e3); } .ds-btn-sm { min-height: 22px; padding: 0 8px; font-size: 12px; } .ds-btn:focus-visible { outline: 3px solid var(--focus, rgb(0 122 255 / 45%)); outline-offset: 1px; }"
     },
     {
       "name": "Quiet Button",
       "kind": "button",
       "refersTo": "button-quiet",
-      "description": "Groundless text button for Cancel, Edit, Keep and the dropdown footer.",
-      "html": "<button class=\"ds-btn-quiet\">Edit</button>",
-      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; font: 500 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: transparent; color: var(--ink-2, #4f5568); transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-quiet:hover { background: var(--press-tint, rgb(51 70 196 / 10%)); color: var(--ink, #1d2233); } .ds-btn-quiet:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-btn-quiet:active { background: var(--well, #e4e7ee); box-shadow: inset 0 1px 2px rgb(10 14 30 / 28%); transform: translateY(0.5px); }"
-    },
-    {
-      "name": "Done Button",
-      "kind": "button",
-      "refersTo": "button-done",
-      "description": "Marks a person done. Sea green wherever it appears; solid on hover and press.",
-      "html": "<button class=\"ds-btn-done\">Done</button>",
-      "css": ".ds-btn-done { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; font: 600 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: var(--sea-tint, rgb(23 112 90 / 11%)); color: var(--sea, #17705a); transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-done:hover { background: var(--sea, #17705a); color: var(--on-sea, #fff); } .ds-btn-done:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-btn-done:active { background: var(--sea, #17705a); color: var(--on-sea, #fff); box-shadow: inset 0 1px 2px rgb(10 14 30 / 28%); transform: translateY(0.5px); }"
+      "description": "Text-only button for cancel, edit and the dropdown footer.",
+      "html": "<button class=\"ds-btn ds-btn-quiet\">Cancel</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 0 12px; border: none; border-radius: 6px; font: 500 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-btn-quiet { background: transparent; color: var(--label-2, #636366); } .ds-btn-quiet:hover { background: var(--hover, rgb(0 0 0 / 5%)); color: var(--label, #1d1d1f); } .ds-btn-quiet:active { background: var(--control-down, #e3e3e3); } .ds-btn:focus-visible { outline: 3px solid var(--focus, rgb(0 122 255 / 45%)); outline-offset: 1px; }"
     },
     {
       "name": "Danger Button",
       "kind": "button",
       "refersTo": "button-danger",
-      "description": "The confirming Delete only; appears after the outline Delete selected… step.",
-      "html": "<button class=\"ds-btn-danger\">Delete</button>",
-      "css": ".ds-btn-danger { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; font: 500 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: var(--danger-fill, #b02a24); color: #fff; box-shadow: 0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%); transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-danger:hover { background: var(--danger-down, #93231e); } .ds-btn-danger:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-btn-danger:active { background: var(--danger-down, #93231e); box-shadow: inset 0 1px 2px rgb(10 14 30 / 28%); transform: translateY(0.5px); }"
+      "description": "Red fill, only for deleting.",
+      "html": "<button class=\"ds-btn ds-btn-danger ds-btn-sm\">Delete 2 people</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 0 12px; border: none; border-radius: 6px; font: 500 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-btn-danger { background: var(--danger-fill, #e0352b); color: #fff; box-shadow: var(--raise, 0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1px rgb(0 0 0 / 14%)); } .ds-btn-danger:active { filter: brightness(0.86); } .ds-btn-sm { min-height: 22px; padding: 0 8px; font-size: 12px; } .ds-btn:focus-visible { outline: 3px solid var(--focus, rgb(0 122 255 / 45%)); outline-offset: 1px; }"
     },
     {
       "name": "Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "Labelled 26px field on the sheet; blue inner stroke and halo on focus.",
-      "html": "<label class=\"ds-field\"><span>Name</span><input class=\"ds-input\" placeholder=\"Who do you want to keep up with?\"></label>",
-      "css": ".ds-field { display: flex; flex-direction: column; gap: 4px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-field > span { color: var(--ink-2, #4f5568); font-size: 12px; font-weight: 500; } .ds-input { height: 26px; padding: 0 8px; border: none; border-radius: 6px; background: var(--sheet, #fff); color: var(--ink, #1d2233); font: 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; caret-color: var(--press, #3346c4); box-shadow: inset 0 0 0 0.5px var(--rule-strong, rgb(29 34 51 / 20%)), inset 0 1px 1px rgb(10 14 30 / 6%); transition: box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-input::placeholder { color: var(--ink-3, #5c6275); } .ds-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--press, #3346c4), 0 0 0 3px var(--focus, rgb(51 70 196 / 42%)); }"
+      "description": "White field with a hairline stroke; accent ring on focus.",
+      "html": "<label class=\"ds-field\"><span>Name</span><input class=\"ds-input\" placeholder=\"Who to keep in touch with\"></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 4px; font: 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-field > span { color: var(--label-2, #636366); font-size: 12px; font-weight: 500; } .ds-input { height: 26px; padding: 0 8px; border: none; border-radius: 6px; background: var(--group, #fff); color: var(--label, #1d1d1f); font: inherit; box-shadow: inset 0 0 0 0.5px var(--separator-strong, rgb(0 0 0 / 18%)); transition: box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-input::placeholder { color: var(--label-3, #6e6e73); } .ds-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent, #007aff), 0 0 0 3px var(--focus, rgb(0 122 255 / 45%)); }"
     },
     {
-      "name": "Sidebar Tabs",
+      "name": "Source List",
       "kind": "nav",
-      "refersTo": "tab",
-      "description": "Mac source list for Preferences; selected tab is solid press blue, with an inverted count tag.",
-      "html": "<nav class=\"ds-sidebar\"><div class=\"ds-wordmark\">Friends</div><button class=\"ds-tab\" aria-selected=\"true\">People <span class=\"ds-tag\">3</span></button><button class=\"ds-tab\">Blocked dates</button><button class=\"ds-tab\">Settings</button></nav>",
-      "css": ".ds-sidebar { display: flex; flex-direction: column; gap: 1px; width: 168px; padding: 12px 8px; background: var(--sidebar, #e6e9f0); border-right: 0.5px solid var(--rule-strong, rgb(29 34 51 / 20%)); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-wordmark { margin: 4px 8px 12px; color: var(--ink-3, #5c6275); font-size: 11px; font-weight: 600; } .ds-tab { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 8px; border: none; border-radius: 6px; background: none; color: var(--ink, #1d2233); font-size: 13px; font-weight: 400; font-family: inherit; text-align: left; } .ds-tab:hover { background: var(--press-tint, rgb(51 70 196 / 10%)); } .ds-tab:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-tab[aria-selected=\"true\"] { background: var(--press, #3346c4); color: var(--on-press, #fff); font-weight: 500; } .ds-tag { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--press, #3346c4); color: var(--on-press, #fff); font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; } .ds-tab[aria-selected=\"true\"] .ds-tag { background: var(--on-press, #fff); color: var(--press, #3346c4); }"
-    },
-    {
-      "name": "Person Row on a Sheet",
-      "kind": "card",
-      "refersTo": "list-row",
-      "description": "The signature: a white grouped list of 48px rows with disc, name, meta line (amber when missed) and Done.",
-      "html": "<ul class=\"ds-sheet\"><li class=\"ds-row\" data-overdue=\"true\"><span class=\"ds-disc\" style=\"background:#4d5a73\">M</span><div class=\"ds-text\"><div class=\"ds-name\">Maya Chen</div><div class=\"ds-meta\">Missed last time · aim for Sat, Nov 21</div></div><button class=\"ds-done\">Done</button></li><li class=\"ds-row\"><span class=\"ds-disc\" style=\"background:#1c7d66\">T</span><div class=\"ds-text\"><div class=\"ds-name\">Theo Marsh</div><div class=\"ds-meta\">Aim for today</div></div><button class=\"ds-done\">Done</button></li></ul>",
-      "css": ".ds-sheet { margin: 0; padding: 0; list-style: none; border-radius: 10px; background: var(--sheet, #fff); box-shadow: 0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%); font: 13px/1.38 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; font-variant-numeric: tabular-nums; color: var(--ink, #1d2233); } .ds-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; } .ds-row + .ds-row { border-top: 0.5px solid var(--rule, rgb(29 34 51 / 11%)); } .ds-disc { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 600; letter-spacing: -0.01em; } .ds-text { flex: 1; min-width: 0; } .ds-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-meta { margin-top: 1px; color: var(--ink-2, #4f5568); font-size: 12px; } .ds-row[data-overdue=\"true\"] .ds-meta { color: var(--amber, #96600c); } .ds-done { min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; background: var(--sea-tint, rgb(23 112 90 / 11%)); color: var(--sea, #17705a); font-size: 12px; font-weight: 600; font-family: inherit; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-done:hover { background: var(--sea, #17705a); color: var(--on-sea, #fff); } .ds-done:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-done:active { background: var(--sea, #17705a); color: var(--on-sea, #fff); box-shadow: inset 0 1px 2px rgb(10 14 30 / 28%); transform: translateY(0.5px); }"
+      "refersTo": "sidebar-row",
+      "description": "Preferences sidebar; the selected row fills with the accent and the count tag flips.",
+      "html": "<nav class=\"ds-sidebar\"><button class=\"ds-tab ds-on\">People <span class=\"ds-tag\">3</span></button><button class=\"ds-tab\">Settings</button><button class=\"ds-tab\">Blocked days</button></nav>",
+      "css": ".ds-sidebar { display: flex; flex-direction: column; gap: 1px; width: 168px; padding: 12px 8px; background: var(--sidebar, #e3e3e3); border-right: 0.5px solid var(--separator-strong, rgb(0 0 0 / 18%)); font: 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-tab { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 8px; border: none; border-radius: 6px; background: none; color: var(--label, #1d1d1f); font: inherit; text-align: left; } .ds-tab:focus-visible { outline: 3px solid var(--focus, rgb(0 122 255 / 45%)); outline-offset: 1px; } .ds-on { background: var(--accent, #007aff); color: var(--on-accent, #fff); font-weight: 500; } .ds-tag { min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--accent, #007aff); color: var(--on-accent, #fff); font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; } .ds-on .ds-tag { background: var(--on-accent, #fff); color: var(--accent, #007aff); }"
     },
     {
       "name": "Tags",
       "kind": "chip",
-      "refersTo": "tag-due",
-      "description": "Small pills: press-blue count tag, amber Due tag after a name.",
-      "html": "<span class=\"ds-pill ds-pill-count\">3</span> <span class=\"ds-pill ds-pill-due\">Due</span>",
-      "css": ".ds-pill { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; font: 600 11px/17px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; text-align: center; } .ds-pill-count { background: var(--press, #3346c4); color: var(--on-press, #fff); } .ds-pill-due { background: var(--amber-tint, rgb(150 96 12 / 11%)); color: var(--amber, #96600c); }"
+      "refersTo": "tag-count",
+      "description": "Accent count pill; the Due tag is the same pill in orange.",
+      "html": "<span class=\"ds-tag\">3</span> <span class=\"ds-tag ds-due\">Due</span>",
+      "css": ".ds-tag { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--accent, #007aff); color: var(--on-accent, #fff); font: 600 11px/17px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; text-align: center; } .ds-due { background: var(--orange-tint, rgb(255 149 0 / 16%)); color: var(--orange, #b25000); }"
+    },
+    {
+      "name": "Due Group",
+      "kind": "card",
+      "refersTo": "person-row",
+      "description": "Inset white group of 48px person rows: grey monogram, name, meta line, plain Done button. Missed meta is orange.",
+      "html": "<div class=\"ds-group\"><div class=\"ds-row\"><span class=\"ds-disc\">A</span><div class=\"ds-text\"><div class=\"ds-name\">Alex Moreno</div><div class=\"ds-meta\">Due today</div></div><button class=\"ds-done\">Done</button></div><div class=\"ds-row ds-over\"><span class=\"ds-disc\">S</span><div class=\"ds-text\"><div class=\"ds-name\">Sam Okafor</div><div class=\"ds-meta\">Missed by 4 days</div></div><button class=\"ds-done\">Done</button></div></div>",
+      "css": ".ds-group { border-radius: 10px; background: var(--group, #fff); box-shadow: var(--group-edge, 0 0 0 0.5px rgb(0 0 0 / 7%)); font: 13px/1.38 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; color: var(--label, #1d1d1f); font-variant-numeric: tabular-nums; } .ds-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; } .ds-row + .ds-row { border-top: 0.5px solid var(--separator, rgb(0 0 0 / 10%)); } .ds-disc { display: inline-grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--monogram, linear-gradient(#8e8e93, #6f6f74)); color: #fff; font-weight: 500; letter-spacing: -0.01em; } .ds-text { flex: 1; min-width: 0; } .ds-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-meta { margin-top: 1px; color: var(--label-2, #636366); font-size: 12px; } .ds-over .ds-meta { color: var(--orange, #b25000); } .ds-done { min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; background: var(--control, #fff); color: var(--label, #1d1d1f); font: 500 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; box-shadow: var(--raise, 0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1px rgb(0 0 0 / 14%)); } .ds-done:active { background: var(--control-down, #e3e3e3); } .ds-done:focus-visible { outline: 3px solid var(--focus, rgb(0 122 255 / 45%)); outline-offset: 1px; }"
     },
     {
       "name": "Selection Bar",
       "kind": "custom",
       "refersTo": "selection-bar",
-      "description": "Press-tint strip above the People list: count and way out on the left, the destructive step alone at the far right.",
-      "html": "<div class=\"ds-selbar\"><span class=\"ds-count\">2 selected</span><button class=\"ds-q\">Deselect all</button><button class=\"ds-o\">Delete selected…</button></div>",
-      "css": ".ds-selbar { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--press-tint, rgb(51 70 196 / 10%)); font: 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; color: var(--ink, #1d2233); } .ds-count { font-weight: 600; } .ds-q { margin-right: auto; min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; background: transparent; color: var(--ink-2, #4f5568); font-size: 12px; font-weight: 500; font-family: inherit; } .ds-q:hover { background: var(--press-tint, rgb(51 70 196 / 10%)); color: var(--ink, #1d2233); } .ds-o { min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; background: var(--sheet, #fff); color: var(--ink, #1d2233); font-size: 12px; font-weight: 500; font-family: inherit; box-shadow: 0 0.5px 0 rgb(29 34 51 / 6%), 0 1px 2px rgb(29 34 51 / 8%), inset 0 0 0 0.5px var(--rule-strong, rgb(29 34 51 / 20%)); } .ds-q:focus-visible, .ds-o:focus-visible { outline: 3px solid var(--focus, rgb(51 70 196 / 42%)); outline-offset: 1px; } .ds-o:active { background: var(--well, #e4e7ee); box-shadow: inset 0 1px 2px rgb(10 14 30 / 28%); transform: translateY(0.5px); }"
+      "description": "Accent-tint strip above the People list: count and way out on the left, delete alone at the far right.",
+      "html": "<div class=\"ds-selbar\"><span class=\"ds-count\">2 selected</span><button class=\"ds-q\">Deselect all</button><button class=\"ds-o\">Delete…</button></div>",
+      "css": ".ds-selbar { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--accent-tint, rgb(0 122 255 / 12%)); font: 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; color: var(--label, #1d1d1f); } .ds-count { font-weight: 600; } .ds-q, .ds-o { min-height: 22px; padding: 0 8px; border: none; border-radius: 6px; font: 500 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; } .ds-q { margin-right: auto; background: transparent; color: var(--label-2, #636366); } .ds-q:hover { background: var(--hover, rgb(0 0 0 / 5%)); color: var(--label, #1d1d1f); } .ds-o { background: var(--control, #fff); color: var(--label, #1d1d1f); box-shadow: var(--raise, 0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1px rgb(0 0 0 / 14%)); } .ds-o:active, .ds-q:active { background: var(--control-down, #e3e3e3); } .ds-q:focus-visible, .ds-o:focus-visible { outline: 3px solid var(--focus, rgb(0 122 255 / 45%)); outline-offset: 1px; }"
     }
   ],
   "narrative": {
-    "northStar": "Letterpress Stationery",
-    "overview": "Friends is two inks printed on good card stock. Text is deep indigo ink rather than black, actions are one press-blue spot ink, \"done\" is sea green, and \"missed\" is amber. The ground is a cool fog stock (never cream), and content sits on white sheets laid on it. Colour is flat: no gradients, no glass, no glow.\n\nIt is a native Mac utility first. Type is the system face (SF Pro) at macOS control sizes, figures are tabular, and the layouts follow the Mac's own grammar: a menu bar dropdown that fills its window edge to edge, and a settings window with a source-list sidebar and inset grouped lists. Density is calm and fixed; one 48px row scale is shared by the dropdown and Preferences.\n\nThe signature is the impression: push buttons press into the stock when clicked (an inset shadow and half a pixel down) instead of lighting up.",
+    "northStar": "Came With The Mac",
+    "overview": "Friendship Reminder looks like an app Apple shipped. It borrows System Settings: window grey, white inset groups, the system's label greys, and standard push buttons. Nothing is branded. A user should not be able to tell where macOS ends and Friendship Reminder begins.\n\nThere is one colour: the Mac's own accent, the one the user picked in System Settings > Appearance. It is blue unless they chose another. It marks the main action and what is selected. Orange marks a missed day. Red is kept for deleting and errors. Everything else is grey.\n\nThe app is small and dense, at Mac control sizes. Type is the system face, 11 to 20px, with tabular figures. One 48px row and one 28px disc are shared by the dropdown and Preferences. Light and dark mode follow the Mac, with the same roles in both.",
     "keyCharacteristics": [
-      "Cool fog stock, white sheets, indigo ink; dark mode keeps the same roles on charcoal stock.",
-      "One action ink (press blue); sea green only for done and caught up; amber for missed.",
-      "Flat colour, hairline (0.5px) dividers, one soft lift under sheets.",
-      "Buttons press in on click; nothing glows.",
-      "System type only, 11 to 20px, tabular figures everywhere."
+      "Window grey, white groups with a hairline edge, label greys; dark mode keeps the same roles.",
+      "The Mac's accent is the only colour; orange for missed, red for delete and errors.",
+      "Push buttons darken when pressed, like the Mac's.",
+      "Contacts-style grey monogram discs, the same for everyone.",
+      "System type only, 11 to 20px, tabular figures."
     ],
     "rules": [
-      { "name": "The Missed Is Amber Rule", "body": "A missed day is information, not failure: it is printed in amber, never red. Red (danger) is for destructive actions (Delete) and error messages only.", "section": "colors" },
-      { "name": "The One Action Ink Rule", "body": "Press blue is the only colour that means \"act here\" or \"selected\". Do not introduce a second action colour.", "section": "colors" },
-      { "name": "The Done Is Sea Rule", "body": "Sea green marks completion and nothing else; every Done button uses it.", "section": "colors" },
-      { "name": "The Tabular Rule", "body": "Figures are tabular across the whole app (`font-variant-numeric: tabular-nums` on the root).", "section": "typography" },
+      { "name": "The One Colour Rule", "body": "The accent is the only colour. It means \"act here\" or \"selected\". Do not add a brand colour or a second action colour.", "section": "colors" },
+      { "name": "The Missed Is Orange Rule", "body": "A missed day is shown in orange, never red. It is information, not failure.", "section": "colors" },
+      { "name": "The Red Means Delete Rule", "body": "Red is only for deleting and for error messages.", "section": "colors" },
+      { "name": "The Follow The Mac Rule", "body": "Colour comes from the Mac. Use the accent token, never a fixed blue, so the user's own accent shows through.", "section": "colors" },
+      { "name": "The Tabular Rule", "body": "Figures are tabular everywhere (`font-variant-numeric: tabular-nums` on the root).", "section": "typography" },
+      { "name": "The System Face Rule", "body": "The system face is the only face. Load no web fonts.", "section": "typography" },
       { "name": "The One Row Rule", "body": "Every list row in the dropdown and in Preferences uses the same 48px row, 28px disc and 12px gap.", "section": "layout" },
-      { "name": "The Impression Rule", "body": "Buttons respond to a press by sinking into the stock, never by glowing, scaling up, or casting a bigger shadow.", "section": "elevation" }
+      { "name": "The Darken On Press Rule", "body": "Pressed buttons darken, as the Mac's do. Grey buttons switch to Control Down. Accent and red buttons use `filter: brightness(0.86)`. They do not sink, move, scale or glow.", "section": "elevation" }
     ],
     "dos": [
       "**Do** use the role tokens in `src/styles.css` for every colour, size, radius and gap, so light and dark mode both follow.",
+      "**Do** use the accent token for every primary action and selected state, so the user's Mac accent shows.",
       "**Do** keep every list row at 48px with a 28px disc, in both windows.",
-      "**Do** use press blue for every primary action and selected state, and nothing else.",
-      "**Do** print Done in sea green wherever it appears.",
-      "**Do** show pressed buttons with the press-in shadow and a 0.5px drop.",
-      "**Do** use 0.5px hairlines between rows instead of borders around them.",
-      "**Do** keep the 3px focus ring visible on every control, and let reduced motion turn transitions off."
+      "**Do** show pressed buttons by darkening them: Control Down for grey buttons, brightness 0.86 for accent and red.",
+      "**Do** edge groups with the 0.5px Group Edge, and split rows with 0.5px hairlines.",
+      "**Do** keep the 3px focus ring visible on every control, and keep state changes instant."
     ],
     "donts": [
-      "**Don't** use red for a missed day; missed is amber.",
+      "**Don't** add a brand colour or a second action colour beside the accent.",
+      "**Don't** hard-code a blue; use the accent token.",
+      "**Don't** use red for a missed day; missed is orange.",
       "**Don't** use red for anything but deleting and error messages.",
-      "**Don't** add gradients, glass, blur or glows; colour is flat.",
-      "**Don't** use cream or warm paper for the stock; it is cool fog.",
-      "**Don't** load web fonts; the system face is the only face.",
-      "**Don't** add a second action colour beside press blue."
+      "**Don't** give Done, avatars or the caught-up note a colour of their own.",
+      "**Don't** make buttons sink, move or glow when pressed.",
+      "**Don't** load web fonts; the system face is the only face."
     ]
   }
 }

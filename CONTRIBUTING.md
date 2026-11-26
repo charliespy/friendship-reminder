@@ -1,6 +1,6 @@
-# Contributing to Friends
+# Contributing to Friendship Reminder
 
-Thanks for helping. Friends is a small macOS menu bar app, so changes should stay small and
+Thanks for helping. Friendship Reminder is a small macOS menu bar app, so changes should stay small and
 focused too.
 
 ## Set up
@@ -18,10 +18,21 @@ npm run dev:web        # the UI in a browser, against a scratch data file
 
 ## How the code is laid out
 
-- `crates/friends-core/`: all the rules (scheduling, the data file, the commands). Plain Rust,
-  no macOS code, fully unit-tested.
-- `src-tauri/`: the macOS shell: menu bar icon, windows, notifications, open at login.
-- `src/`: the React UI. It only shows data and calls commands.
+- `crates/friends-core/`: all the rules (scheduling, the data file, the commands, and what to
+  sync). Plain Rust, no macOS code, fully unit-tested.
+- `crates/friends-account/`: signing in to the Friendship Reminder account (Supabase Auth): the requests,
+  the session and its rules. Plain Rust, tested without a network.
+- `crates/friends-sync/`: syncing the list with the Friendship Reminder account: the requests that upload
+  and download it (Supabase's REST API). Plain Rust, tested without a network.
+- `supabase/migrations/`: the account's database tables and their privacy rules (each account
+  sees only its own rows).
+- `src-tauri/`: the shell. `src/desktop.rs` is the Mac's (menu bar icon, windows, notifications,
+  open at login), `src/mobile.rs` the iPhone's (booking reminders ahead with iOS), and the rest is
+  shared: the account (browser sign-in on the Mac, a sign-in sheet on iPhone from
+  `plugins/web-auth`), the Keychain and when to sync. `tauri.ios.conf.json` and `gen/apple/` are
+  the iPhone app's settings and Xcode project.
+- `src/`: the React UI. It only shows data and calls commands. `Phone.tsx` lays the same panes
+  out as the iPhone app's tabs.
 - `crates/friends-devserver/` and `src/dev/`: the browser dev mode and the end-to-end tests run
   the real rules through a small local server.
 - `e2e/`: Playwright end-to-end tests.

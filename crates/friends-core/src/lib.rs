@@ -1,9 +1,17 @@
-//! The Friends app's logic, kept free of Tauri and macOS so it can be tested on its own.
+//! The Friendship Reminder app's logic, kept free of Tauri and macOS so it can be tested on its own.
 
 pub mod api;
 pub mod model;
 pub mod schedule;
 pub mod store;
+pub mod sync;
+
+/// The time now, in milliseconds since 1970: what sync stamps changes with.
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+}
 
 /// The user's home folder, from `$HOME` (what macOS sets for every app).
 pub fn home_dir() -> Option<std::path::PathBuf> {

@@ -1,4 +1,4 @@
-# Releasing Friends
+# Releasing Friendship Reminder
 
 The step-by-step for a maintainer (or a coding agent) cutting a release. The rule for the version
 number is in [CONTRIBUTING.md](../CONTRIBUTING.md#releases); `scripts/release.mjs` does the
@@ -35,8 +35,6 @@ on `main` until then.
      each with one plain sentence per change (leave out a heading with nothing under it);
    - no PR numbers, commit hashes, branch names, or changes users can't notice (tests, CI, docs,
      refactoring);
-   - keep the "Good to know" line on opening the app the first time while releases aren't signed
-     with an Apple Developer ID (the draft always adds it; delete it once releases are signed);
    - write links inline (`[text](url)`): `prepare` refuses `[name]: url` link lines;
    - no personal information (the release page is public):
      `scripts/privacy-scan.sh --stdin < release-notes.md`.
@@ -74,7 +72,7 @@ on `main` until then.
    chore/release-vX.Y.Z`), and start again from step 1: `plan` reads the new change and may give
    a different version (your notes are still in the closed PR's description). One exception:
    when it was only Dependabot updating libraries (`chore(deps): …`, which merge by themselves),
-   the version doesn't change: if the notes lack "Updated the libraries Friends is built on.", add
+   the version doesn't change: if the notes lack "Updated the libraries Friendship Reminder is built on.", add
    it under `### Changed` in the release's `CHANGELOG.md` section on the release branch (and in the
    PR description), push, and carry on.
 
@@ -84,7 +82,7 @@ on `main` until then.
    ```sh
    git switch main && git pull
    git log --first-parent --format='%H %s' | grep -m1 ' chore(release): vX.Y.Z (#'
-   git tag -a vX.Y.Z <the hash it printed> -m "Friends vX.Y.Z"
+   git tag -a vX.Y.Z <the hash it printed> -m "Friendship Reminder vX.Y.Z"
    git push origin vX.Y.Z
    ```
 
@@ -109,7 +107,41 @@ on `main` until then.
 
    It checks that the release isn't a draft, has exactly one `.dmg` for that version, and shows
    the same description as `CHANGELOG.md`. Then download the `.dmg`, open it, and check that
-   Friends starts.
+   Friendship Reminder starts.
+
+## iPhone: a TestFlight build
+
+The iPhone app isn't on the App Store yet; test builds go to TestFlight, by hand, whenever the
+maintainer wants one. They don't need a Mac release, a tag or a version change.
+
+**Once, on the Mac that uploads:**
+
+- Everything README.md lists for building the iPhone app, plus `rustup component add llvm-tools`
+  (without it the sign-in sheet's Swift code doesn't link for a real iPhone).
+- An App Store Connect API key with **Admin** access (Users and Access → Integrations → App Store
+  Connect API → Team Keys). Its `AuthKey_<key id>.p8` file can be downloaded only once: keep it
+  outside the repo. Admin lets Xcode make the App Store certificate and profile by itself.
+- In `.env.local` at the repo root (git ignores it), next to the Supabase settings:
+
+  ```sh
+  APPLE_DEVELOPMENT_TEAM=<team id>        # Membership details on developer.apple.com
+  APPLE_API_KEY=<key id>
+  APPLE_API_ISSUER=<issuer id>            # above the list of keys
+  APPLE_API_KEY_PATH=<folder>/AuthKey_<key id>.p8
+  ```
+
+**Each build:**
+
+1. On an up-to-date `main`, with nothing uncommitted: `npm run ios:testflight`. It builds the app for the App Store, signs
+   it, and uploads it. The build number is the time in UTC (`YYYYMMDDHHMMSS`), so each upload is
+   new to Apple; the version is the one in the files.
+2. Apple processes it in 5 to 30 minutes, then it shows in App Store Connect → the app →
+   **TestFlight**. Testers in an **Internal Testing** group get it in the TestFlight app on
+   their iPhone. Internal testing needs no review; a build lasts 90 days.
+
+The app uses encryption only to secure its HTTPS connections (to the account server), which is
+exempt from export rules, so it says `ITSAppUsesNonExemptEncryption` is `false` and App Store
+Connect asks no export questions. Revisit this if the app ever encrypts anything else.
 
 ## How the script reads the history
 

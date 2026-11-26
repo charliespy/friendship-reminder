@@ -1,7 +1,7 @@
 [package]
 name = "friends-core"
 version = "0.1.0"
-description = "Scheduling rules and data for the Friends app, with no UI or OS code"
+description = "Scheduling rules and data for the Friendship Reminder app, with no UI or OS code"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -10,3 +10,4 @@ repository.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+uuid = { version = "1", features = ["v4"] }

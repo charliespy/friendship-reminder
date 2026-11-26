@@ -32,7 +32,7 @@ export default defineConfig({
   build: {
     target: "safari16",
     rollupOptions: {
-      input: { dropdown: "index.html", preferences: "preferences.html" },
+      input: { dropdown: "index.html", preferences: "preferences.html", phone: "phone.html" },
     },
   },
   test: {

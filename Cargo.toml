@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/friends-core", "crates/friends-devserver", "src-tauri"]
+members = ["crates/friends-account", "crates/friends-core", "crates/friends-devserver", "crates/friends-sync", "src-tauri", "src-tauri/plugins/web-auth"]
 
 [workspace.package]
 edition = "2021"

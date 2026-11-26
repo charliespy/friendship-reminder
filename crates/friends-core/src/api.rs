@@ -7,13 +7,14 @@
 use std::io;
 use std::path::PathBuf;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::model::{Blocked, Data, Person, Settings};
-use crate::schedule::DayToggle;
+use crate::schedule::{DaySet, DayToggle};
 use crate::store::{Loaded, Store};
+use crate::sync::Changes;
 
 /// What the UI shows: everything, worked out for `today`.
 #[derive(Debug, Clone, Serialize)]
@@ -35,6 +36,13 @@ pub struct PersonView {
     pub person: Person,
     /// The reminder is showing now.
     pub due: bool,
+    /// Done's "On the day suggested" answer: the day the app suggested (see
+    /// `Person::suggested_day`), when it was before today.
+    pub suggested_earlier: Option<NaiveDate>,
+    /// Today is the day suggested, so Done's "Today" answer says so.
+    pub suggested_today: bool,
+    /// The earliest day Done takes (see `Person::earliest_done`).
+    pub earliest_done: NaiveDate,
 }
 
 /// Why a command failed, with a message fit to show the user.
@@ -57,7 +65,7 @@ pub enum ErrorKind {
 }
 
 impl ApiError {
-    fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
+    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
         ApiError {
             kind,
             message: message.into(),
@@ -117,6 +125,18 @@ struct BlockedArgs {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ToggleArgs {
     day_toggle: DayToggle,
+    /// The days for "Custom day", saved with the setting in one change. Left out, they stay.
+    #[serde(default)]
+    custom_days: Option<DaySet>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DoneArgs {
+    id: u64,
+    /// The day you were in touch; today when left out.
+    #[serde(default)]
+    on: Option<NaiveDate>,
 }
 
 #[derive(Deserialize)]
@@ -136,11 +156,65 @@ fn args<T: for<'de> Deserialize<'de>>(cmd: &str, value: Value) -> Result<T, ApiE
         .map_err(|e| ApiError::new(ErrorKind::BadCall, format!("{cmd}: {e}")))
 }
 
+/// The most reminders [`App::plan_notifications`] books at once. iOS keeps 64 scheduled
+/// notifications per app; this leaves room under that.
+pub const MAX_PLANNED: usize = 60;
+
+/// A reminder to hand to the system ahead of time, for the morning of `date`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Planned {
+    /// The person's id.
+    pub person: u64,
+    pub date: NaiveDate,
+    pub body: String,
+}
+
+/// The hour of the morning a booked reminder comes, on the device's clock.
+pub const MORNING_HOUR: u32 = 9;
+
+/// A reminder as booked: when it comes, on the device's clock (whatever its time zone), and what
+/// it says. A wall-clock time, never stored: the next booking works it out again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Booking {
+    pub person: u64,
+    pub at: NaiveDateTime,
+    pub body: String,
+}
+
+/// The plan's reminders at [`MORNING_HOUR`] on their day, leaving out any whose morning isn't after
+/// `now` (today's, once 9:00 has come: the person shows in the list instead).
+pub fn bookings(plan: &[Planned], now: NaiveDateTime) -> Vec<Booking> {
+    plan.iter()
+        .filter_map(|p| {
+            let at = p.date.and_hms_opt(MORNING_HOUR, 0, 0)?;
+            (at > now).then(|| Booking {
+                person: p.person,
+                at,
+                body: p.body.clone(),
+            })
+        })
+        .collect()
+}
+
+/// What a reminder about `person` says.
+pub fn reminder_text(person: &Person) -> String {
+    if person.overdue {
+        format!(
+            "You meant to reach out to {} — there's still time this round.",
+            person.name
+        )
+    } else {
+        format!("It's time to reach out to {}.", person.name)
+    }
+}
+
 /// The app's data and where it is saved.
 pub struct App {
     store: Store,
     data: Data,
     unreadable_file: Option<PathBuf>,
+    /// The time now, in milliseconds since 1970, to stamp changes with (see [`crate::sync`]).
+    clock: fn() -> i64,
 }
 
 impl App {
@@ -154,7 +228,13 @@ impl App {
             store,
             data,
             unreadable_file,
+            clock: crate::now_ms,
         })
+    }
+
+    /// Uses `clock` for the time changes are stamped with, for tests.
+    pub fn set_clock(&mut self, clock: fn() -> i64) {
+        self.clock = clock;
     }
 
     pub fn data(&self) -> &Data {
@@ -166,9 +246,13 @@ impl App {
             .data
             .people
             .iter()
-            .map(|p| PersonView {
+            .map(|p| (p, p.suggested_day(today)))
+            .map(|(p, suggested)| PersonView {
                 person: p.clone(),
                 due: p.is_due(today),
+                suggested_earlier: suggested.filter(|d| *d < today),
+                suggested_today: suggested == Some(today),
+                earliest_done: p.earliest_done(today),
             })
             .collect();
         people.sort_by_cached_key(|p| {
@@ -205,6 +289,7 @@ impl App {
             self.data = before;
             return Err(e);
         }
+        self.data.stamp(&before, (self.clock)());
         if self.data != before {
             if let Err(e) = self.store.save(&self.data) {
                 self.data = before;
@@ -244,8 +329,8 @@ impl App {
                 d.delete_people(&p.ids);
             }
             "mark_done" => {
-                let p: IdArgs = args(cmd, a)?;
-                d.mark_done(p.id, today).map_err(invalid)?;
+                let p: DoneArgs = args(cmd, a)?;
+                d.mark_done(p.id, p.on, today).map_err(invalid)?;
             }
             "add_blocked" => {
                 let p: BlockedArgs = args(cmd, a)?;
@@ -258,7 +343,8 @@ impl App {
             }
             "set_day_toggle" => {
                 let p: ToggleArgs = args(cmd, a)?;
-                d.set_day_toggle(p.day_toggle, today);
+                d.set_day_setting(p.day_toggle, p.custom_days, today)
+                    .map_err(invalid)?;
             }
             "set_notifications" => {
                 let p: OnArgs = args(cmd, a)?;
@@ -272,6 +358,100 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    /// Starts a sync with account `owner`: what to upload (see [`Data::sync_start`]). Saved, since a
+    /// new account resets what was synced.
+    /// A list that last synced with another account is that account's: it is saved to a copy next to
+    /// the data file (`friends.json.other-account-<n>`) before it is cleared, so nothing is lost.
+    pub fn sync_start(&mut self, owner: &str) -> io::Result<Changes> {
+        if self.data.belongs_to_another_account(owner) {
+            self.store.save_copy(&self.data, "other-account")?;
+        }
+        let before = self.data.clone();
+        let changes = self.data.sync_start(owner);
+        self.save_or_undo(before)?;
+        Ok(changes)
+    }
+
+    /// The account took `sent` (see [`Data::sync_pushed`]).
+    pub fn sync_pushed(&mut self, sent: &Changes) -> io::Result<()> {
+        let before = self.data.clone();
+        self.data.sync_pushed(sent);
+        self.save_or_undo(before)
+    }
+
+    /// Whether a change here waits to upload.
+    pub fn has_unsynced(&self) -> bool {
+        self.data.has_unsynced()
+    }
+
+    /// Where the next download starts: the newest server change already taken in.
+    pub fn sync_cursor(&self) -> i64 {
+        self.data.sync.cursor
+    }
+
+    /// Takes in what the account sent, up to `cursor` (see [`Data::sync_pulled`]). Returns whether
+    /// anything here changed, so the windows need the new view.
+    pub fn sync_pulled(
+        &mut self,
+        got: &Changes,
+        cursor: i64,
+        today: NaiveDate,
+    ) -> io::Result<bool> {
+        let before = self.data.clone();
+        let caught_up = self.data.catch_up(today);
+        let changed = self.data.sync_pulled(got, cursor, today) || caught_up;
+        self.save_or_undo(before)?;
+        Ok(changed)
+    }
+
+    fn save_or_undo(&mut self, before: Data) -> io::Result<()> {
+        if self.data != before {
+            if let Err(e) = self.store.save(&self.data) {
+                self.data = before;
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
+
+    /// The regular check for a device that books reminders ahead instead of sending them as they
+    /// come up (the iPhone app, which is stopped when it isn't on screen): push missed targets
+    /// forward, and return the reminders to book, soonest first and at most [`MAX_PLANNED`] (none
+    /// when notifications are off). The shell replaces everything it booked before with these.
+    ///
+    /// Reminders from earlier days count as sent: they were booked back then, or the person just
+    /// shows in the list. Today's reminder is in the plan unless it was sent already; the shell
+    /// leaves it out once its hour has passed. Saves when anything changed.
+    pub fn plan_notifications(&mut self, today: NaiveDate) -> io::Result<Vec<Planned>> {
+        let before = self.data.clone();
+        self.data.catch_up(today);
+        for person in &mut self.data.people {
+            if person.notification_date < today {
+                person.notified_for = Some(person.notification_date);
+            }
+        }
+        self.save_or_undo(before)?;
+        if !self.data.settings.notifications {
+            return Ok(Vec::new());
+        }
+        let mut people: Vec<&Person> = self
+            .data
+            .people
+            .iter()
+            .filter(|p| p.notified_for != Some(p.notification_date))
+            .collect();
+        people.sort_by_cached_key(|p| (p.notification_date, p.name.to_lowercase(), p.id));
+        Ok(people
+            .into_iter()
+            .take(MAX_PLANNED)
+            .map(|p| Planned {
+                person: p.id,
+                date: p.notification_date,
+                body: reminder_text(p),
+            })
+            .collect())
     }
 
     /// The regular check (on launch, on wake and every hour): push missed targets forward, and return

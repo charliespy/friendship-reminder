@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { SAMPLE, TODAY, openPreferences, seed } from "./helpers";
+import { SAMPLE, TODAY, answerDone, openPreferences, seed } from "./helpers";
 
 test("add a person", async ({ page, request }) => {
   await seed(request);
@@ -63,6 +63,7 @@ test("mark a person done from the list", async ({ page, request }) => {
   const row = page.getByTestId("person-row");
   await expect(row).toContainText("Due");
   await row.getByRole("button", { name: "Done" }).click();
+  await answerDone(page, "Today");
   await expect(row).toContainText("Monthly · Reminder in 4 weeks, Mon, Dec 14");
   await expect(page.getByRole("tab", { name: "People" })).toHaveText("People");
 });
@@ -75,6 +76,7 @@ test("saving an edit keeps a Done made while the form was open", async ({ page, 
   const form = page.getByRole("form", { name: "Save changes" });
   // With the form open, the person is marked done (as from the menu bar dropdown).
   await row.getByRole("button", { name: "Done" }).click();
+  await answerDone(page, "Today");
   await expect(row).toContainText("Reminder in 4 weeks, Mon, Dec 14");
   await form.getByLabel("Name").fill("Maya C.");
   await form.getByRole("button", { name: "Save changes" }).click();
@@ -129,4 +131,97 @@ test("closing a form sends focus back to the button that opened it", async ({ pa
   await editForm.getByRole("button", { name: "Save changes" }).click();
   await expect(editForm).toHaveCount(0);
   await expect(edit).toBeFocused();
+});
+
+test("deleting people sends focus to the person in their place, or to Add person", async ({ page, request }) => {
+  await seed(request, {
+    people: [
+      { name: "Maya Chen", frequencyDays: 30, lastConnected: "2026-10-10" },
+      { name: "Theo Marsh", frequencyDays: 90, lastConnected: "2026-09-29" },
+      { name: "Lena Fischer", frequencyDays: 365, lastConnected: "2026-03-02" },
+    ],
+  });
+  await openPreferences(page);
+  const rows = page.getByTestId("person-row");
+  await expect(rows).toHaveCount(3);
+
+  // Delete Maya with the keyboard: focus goes to the checkbox of whoever now has her place.
+  const maya = page.getByLabel("Select Maya Chen");
+  await maya.focus();
+  await page.keyboard.press("Space");
+  const bar = page.getByRole("region", { name: "Selected people" });
+  const deleteSelected = bar.getByRole("button", { name: "Delete selected…" });
+  await deleteSelected.focus();
+  await page.keyboard.press("Enter");
+  await bar.getByRole("button", { name: "Delete", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(rows).toHaveCount(2);
+  const first = rows.first().getByRole("checkbox");
+  await expect(first).toBeFocused();
+
+  // Delete everyone left: focus goes to Add person.
+  await page.keyboard.press("Space");
+  await rows.nth(1).getByRole("checkbox").check();
+  await bar.getByRole("button", { name: "Delete selected…" }).click();
+  await bar.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByText("Nobody yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add person" })).toBeFocused();
+});
+
+test("Deselect all sends focus to the first selected person's checkbox", async ({ page, request }) => {
+  await seed(request, {
+    people: [
+      { name: "Maya Chen", frequencyDays: 30, lastConnected: "2026-10-10" },
+      { name: "Jonah Okafor", frequencyDays: 90, lastConnected: "2026-08-01" },
+    ],
+  });
+  await openPreferences(page);
+  const maya = page.getByLabel("Select Maya Chen");
+  await maya.focus();
+  await page.keyboard.press("Space");
+  const bar = page.getByRole("region", { name: "Selected people" });
+  await bar.getByRole("button", { name: "Deselect all" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(bar).toHaveCount(0);
+  await expect(maya).not.toBeChecked();
+  await expect(maya).toBeFocused();
+});
+
+test("Done keeps focus on that person's Done button after the list re-sorts", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE });
+  await openPreferences(page);
+  const rows = page.getByTestId("person-row");
+  await expect(rows.first()).toContainText("Jonah Okafor");
+  await page.getByRole("button", { name: "Mark Jonah Okafor as done" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("dialog").getByRole("button", { name: /^Today/ }).focus();
+  await page.keyboard.press("Enter");
+  // Done today: Jonah's row moves down the list.
+  await expect(rows.first()).not.toContainText("Jonah Okafor");
+  await expect(page.getByRole("button", { name: "Mark Jonah Okafor as done" })).toBeFocused();
+});
+
+test("Done asks when you were in touch: the missed day, or another day from the calendar", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE.slice(0, 2) });
+  await openPreferences(page);
+  const maya = page.getByTestId("person-row").filter({ hasText: "Maya Chen" });
+  // Maya's weekend (Sat, Nov 14) went by: that's the day suggested.
+  await maya.getByRole("button", { name: "Done" }).click();
+  const question = page.getByRole("dialog", { name: "When were you in touch with Maya Chen?" });
+  await expect(question.getByRole("button", { name: /^On the day suggested/ })).toContainText("Sat, Nov 14");
+  await answerDone(page, "On the day suggested");
+  await expect(question).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit Maya Chen" }).click();
+  await expect(page.getByLabel("Last in touch")).toHaveValue("2026-11-14");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  const jonah = page.getByTestId("person-row").filter({ hasText: "Jonah Okafor" });
+  await jonah.getByRole("button", { name: "Done" }).click();
+  await answerDone(page, "Another day");
+  const day = page.getByRole("dialog").getByLabel("Another day");
+  await expect(day).toHaveAttribute("max", TODAY);
+  await day.fill("2026-11-16");
+  await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Edit Jonah Okafor" }).click();
+  await expect(page.getByLabel("Last in touch")).toHaveValue("2026-11-16");
 });
