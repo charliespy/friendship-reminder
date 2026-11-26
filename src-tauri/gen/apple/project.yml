@@ -86,6 +86,7 @@ targets:
     dependencies:
       - framework: libapp.a
         embed: false
+      - sdk: Contacts.framework
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
