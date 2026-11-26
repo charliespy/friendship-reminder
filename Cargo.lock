@@ -1162,8 +1162,8 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-notification",
+ "tauri-plugin-phone-sheets",
  "tauri-plugin-single-instance",
- "tauri-plugin-web-auth",
  "time",
  "tiny_http",
 ]
@@ -1198,6 +1198,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "friends-core",
+ "serde",
  "serde_json",
  "tiny_http",
 ]
@@ -4097,6 +4098,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-phone-sheets"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-single-instance"
 version = "2.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4110,15 +4120,6 @@ dependencies = [
  "tracing",
  "windows-sys 0.61.2",
  "zbus 5.19.0",
-]
-
-[[package]]
-name = "tauri-plugin-web-auth"
-version = "0.1.0"
-dependencies = [
- "serde",
- "tauri",
- "tauri-plugin",
 ]
 
 [[package]]

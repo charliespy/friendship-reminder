@@ -6,8 +6,9 @@
 //! and when it's done the browser comes back to a one-off address on this Mac
 //! (`http://127.0.0.1:<port>/auth/callback`) with a code the app trades for a session. (Apple's own
 //! sign-in sheet needs the Mac App Store: apps signed with a Developer ID can't use it.) On the
-//! iPhone, the same page opens in a Safari sheet over the app, which comes back to
-//! `io.github.charliespy.friends://auth/callback`.
+//! iPhone, Apple's own Sign in with Apple sheet hands the app an identity token, which is traded for
+//! a session the same way. (A web page in a sheet would make iOS ask first whether the app may use
+//! the account server's address, which looks alarming.)
 //!
 //! Signing in is optional. A build without the Supabase settings (`FRIENDS_SUPABASE_URL` and
 //! `FRIENDS_SUPABASE_PUBLISHABLE_KEY` at build time, or in `.env.local` for debug builds) shows the
@@ -20,9 +21,11 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use friends_account::{
-    AccountState, AccountView, Attempts, Callback, Client, Config, HttpTransport, Pkce, Restore,
+    AccountState, AccountView, Attempts, AuthError, Client, Config, HttpTransport, Restore,
     Session, Started,
 };
+#[cfg(target_os = "macos")]
+use friends_account::{Callback, Pkce};
 use friends_sync::SyncView;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -50,11 +53,6 @@ type Waiting = Attempts<Arc<tiny_http::Server>>;
 /// The sign-ins in the sheet. The sheet has its own Cancel, so there's nothing to wake.
 #[cfg(target_os = "ios")]
 type Waiting = Attempts<()>;
-
-/// The address the iPhone's sign-in sheet comes back to: the app's own scheme, which only the sheet
-/// that opened the page listens for.
-#[cfg(target_os = "ios")]
-const PHONE_SCHEME: &str = "io.github.charliespy.friends";
 
 pub struct Account {
     /// Why this build can't sign in, or the project to sign in to.
@@ -307,8 +305,8 @@ pub async fn get_account(app: AppHandle) -> Result<Shown, String> {
     blocking(app, |app| Ok(app.state::<Account>().view())).await
 }
 
-/// Opens Sign in with Apple in the browser and waits for it to come back, then trades the code for a
-/// session. Starting again (or cancelling) while one waits makes the earlier one stop quietly.
+/// Opens Sign in with Apple (in the browser on the Mac, Apple's sheet on iPhone) and waits for it,
+/// then trades what comes back for a session. Starting again (or cancelling) while one waits makes the earlier one stop quietly.
 #[tauri::command]
 pub async fn sign_in_with_apple(app: AppHandle, attempt: String) -> Result<Shown, String> {
     blocking(app, move |app| sign_in(app, &attempt)).await
@@ -323,8 +321,14 @@ pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<Shown, St
         if let Some(server) = account.waiting().cancel(&attempt) {
             server.unblock();
         }
+        // Apple's sheet closes too, so it can't finish a sign-in nobody wants any more.
         #[cfg(target_os = "ios")]
-        account.waiting().cancel(&attempt);
+        if account.waiting().cancel(&attempt).is_some() {
+            use tauri_plugin_phone_sheets::PhoneSheetsExt;
+            if let Err(e) = app.phone_sheets().close_sign_in_with_apple(&attempt) {
+                eprintln!("friends: couldn't close Apple's sign-in sheet: {e}");
+            }
+        }
         Ok(account.view())
     })
     .await
@@ -352,7 +356,8 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
         .port();
     let server = Arc::new(server);
     match account.waiting().start(attempt, server.clone()) {
-        Started::Cancelled => return Ok(account.view()),
+        // `start` replaces whatever is waiting, so it's never busy.
+        Started::Cancelled | Started::Busy => return Ok(account.view()),
         Started::Waiting { replaced } => {
             if let Some(old) = replaced {
                 old.unblock();
@@ -379,9 +384,13 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
             return Err(e);
         }
     };
-    let shown = finish_sign_in(app, attempt, client, &code, &verifier, |page| {
-        answer(request, 200, page)
-    });
+    let shown = finish_sign_in(
+        app,
+        attempt,
+        client,
+        |c| c.exchange_code(&code, &verifier, now()),
+        |page| answer(request, 200, page),
+    );
     if matches!(&shown, Ok(s) if matches!(s.account, AccountView::SignedIn { .. })) {
         // Back from the browser to Friendship Reminder.
         let _ = crate::desktop::show_preferences(app);
@@ -391,55 +400,60 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
 
 #[cfg(target_os = "ios")]
 fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
-    use tauri_plugin_web_auth::WebAuthExt;
+    use friends_account::Nonce;
+    use tauri_plugin_phone_sheets::PhoneSheetsExt;
     let account = app.state::<Account>();
     let client = account.client()?;
-    if let Started::Cancelled = account.waiting().start(attempt, ()) {
-        return Ok(account.view());
+    match account.waiting().start_unless_busy(attempt, ()) {
+        Started::Cancelled => return Ok(account.view()),
+        Started::Busy => return Err("Sign in with Apple is open already.".into()),
+        Started::Waiting { .. } => {}
     }
     let waited = (|| {
-        let redirect = friends_account::app_redirect(PHONE_SCHEME);
-        let pkce = Pkce::new()?;
+        let nonce = Nonce::new()?;
         if !account.waiting().is_waiting(attempt) {
             return Ok(None);
         }
-        let url = client.authorize_url("apple", &redirect, &pkce);
-        // `None`: closed with the sheet's Cancel.
-        let Some(back) = app.web_auth().authenticate(&url, PHONE_SCHEME)? else {
-            return Ok(None);
-        };
-        match friends_account::parse_app_callback(PHONE_SCHEME, &back) {
-            Callback::Code(code) => Ok(Some((code, pkce.verifier))),
-            Callback::Failed(reason) => Err(format!("Sign in with Apple didn't finish: {reason}")),
-            Callback::Other => Err("Signing in came back to the wrong address.".to_string()),
-        }
+        // `None`: closed without signing in.
+        let token = app
+            .phone_sheets()
+            .sign_in_with_apple(attempt, &nonce.hashed)?;
+        Ok(token.map(|t| (t, nonce)))
     })();
-    let (code, verifier) = match waited {
+    let (token, nonce) = match waited {
         Ok(Some(back)) => back,
         Ok(None) => {
             account.waiting().finish(attempt);
             return Ok(account.view());
         }
         Err(e) => {
-            account.waiting().finish(attempt);
+            // Cancelled meanwhile: the user asked to stop, so no error to show.
+            if !account.waiting().finish(attempt) {
+                return Ok(account.view());
+            }
             return Err(e);
         }
     };
-    finish_sign_in(app, attempt, client, &code, &verifier, |_| {})
+    finish_sign_in(
+        app,
+        attempt,
+        client,
+        |c| c.sign_in_with_id_token("apple", &token, &nonce, now()),
+        |_| {},
+    )
 }
 
-/// Trades the code for a session and signs in with it, unless sign-in `attempt` was cancelled or
+/// Gets a session (`trade` trades what Apple handed back) and signs in with it, unless sign-in `attempt` was cancelled or
 /// replaced meanwhile. `respond` gets the page to show where signing in happened.
 fn finish_sign_in(
     app: &AppHandle,
     attempt: &str,
     client: Client<HttpTransport>,
-    code: &str,
-    verifier: &str,
+    trade: impl FnOnce(&Client<HttpTransport>) -> Result<Session, AuthError>,
     respond: impl FnOnce(&str),
 ) -> Result<Shown, String> {
     let account = app.state::<Account>();
-    let session = match client.exchange_code(code, verifier, now()) {
+    let session = match trade(&client) {
         Ok(s) => s,
         Err(e) => {
             // Cancelled meanwhile: the failure doesn't matter any more.

@@ -16,7 +16,23 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
   their names, and adds a link back to the app on their cards: tap it in Contacts to open
   Friendship Reminder at that person.
 - A short welcome when you first open Friendship Reminder: sign in with Apple (or choose Not now),
-  then pick people from Contacts (or Skip).
+  then pick people from Contacts (or Skip). Friendship Reminder says what it reads before it asks
+  for your contacts.
+- On iPhone, if you share only some contacts, the people you chose in Apple's screen go straight to
+  "How often?", with no second list to tick. To share more, Share more contacts… takes you to
+  Settings, and whoever you add there goes to "How often?" when you come back.
+
+### Changed
+
+- On iPhone, Sign in with Apple uses Apple's own sign-in sheet (Face ID or your passcode), not a
+  web page, so iOS no longer asks whether the app may use the account server's address.
+- On iPhone, Friendship Reminder no longer asks to send notifications the moment it opens. Once
+  you've added people, Today offers to turn reminders on, and iOS asks then.
+
+### Fixed
+
+- On iPhone, reminders were never booked: clearing the old ones failed every time, so the booking
+  stopped there. They're booked now.
 
 ## [0.2.0] - 2026-11-25
 

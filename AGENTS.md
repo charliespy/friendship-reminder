@@ -18,7 +18,8 @@ needs. `CLAUDE.md` and `AGENTS.md` hold the same text: change both together.
   iPhone's (booking reminders ahead), `src-tauri/src/contacts.rs` reading and writing Contacts
   (the rules, and the link a person keeps to their card, are in `crates/friends-core/src/contacts.rs`),
   `src-tauri/src/lib.rs` what both share. Account sign-in rules live in `crates/friends-account`; the
-  shell only opens the browser sign-in and keeps the session in the Keychain. Sync rules live in
+  shell only opens the sign-in (the browser on the Mac, Apple's sheet on iPhone from
+  `src-tauri/plugins/phone-sheets`) and keeps the session in the Keychain. Sync rules live in
   `crates/friends-core/src/sync.rs` and the sync requests in `crates/friends-sync`; the shell only
   decides when to sync.
 - **Dates are calendar dates** (`chrono::NaiveDate`, `"YYYY-MM-DD"` in JSON). Never store a time
@@ -37,6 +38,7 @@ npm run check     # typecheck, eslint, vitest, vite build, cargo fmt/clippy/test
 npm run e2e       # Playwright (WebKit) against the browser dev mode
 npm run privacy   # personal-info scan
 npm run check:ios # the iPhone shell compiles (needs rustup's aarch64-apple-ios-sim target)
+npm run check:ios-link # the whole iPhone app builds for the simulator, Swift and final link included
 ```
 
 `main` is protected (`.github/rulesets/main.json`, applied with `scripts/repo-settings.sh`):

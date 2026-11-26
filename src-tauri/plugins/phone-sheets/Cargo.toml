@@ -1,12 +1,12 @@
 [package]
-name = "tauri-plugin-web-auth"
+name = "tauri-plugin-phone-sheets"
 version = "0.1.0"
-description = "Friendship Reminder's iPhone sign-in sheet: opens a sign-in page in ASWebAuthenticationSession and returns the address it comes back to"
+description = "Friendship Reminder's iPhone sheets from Apple: Sign in with Apple, and choosing more contacts to share"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-links = "tauri-plugin-web-auth"
+links = "tauri-plugin-phone-sheets"
 
 [dependencies]
 tauri = { version = "2", default-features = false }

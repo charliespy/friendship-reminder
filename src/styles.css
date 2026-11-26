@@ -695,6 +695,40 @@ select.input {
   font-weight: 500;
 }
 
+/* A line under a choice, lined up with its text: what iOS allows, and a way to change it. */
+.choice-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3) calc(var(--space-4) + 22px + var(--space-3));
+}
+
+.choice-note .hint {
+  margin: 0;
+  padding: 0;
+}
+
+/* Today, on iPhone: turning reminders on, before iOS asks. */
+.notify-card {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+}
+
+.notify-card h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+
+.notify-card p {
+  margin: 0;
+}
+
+.notify-card .form-actions {
+  margin-top: var(--space-3);
+}
+
 .choice-text {
   color: var(--label-2);
   font-size: var(--text-sm);
@@ -1074,41 +1108,42 @@ button.done-option:disabled {
 
 /*
  * People rows on a grid: the checkbox, then the name with Done and Edit beside it, and the detail
- * line under all three, so it runs the full width instead of wrapping beside the buttons.
+ * line under all three, so it runs the full width instead of wrapping beside the buttons. Only
+ * People's own rows (`.people-row`): the contact picker's rows keep their layout inside People.
  */
-.phone #pane-people .list-row {
+.phone #pane-people .people-row {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0 var(--space-3);
 }
 
-.phone #pane-people .list-row .person-text {
+.phone #pane-people .people-row .person-text {
   display: contents;
 }
 
-.phone #pane-people .list-row .person-name {
+.phone #pane-people .people-row .person-name {
   grid-column: 2;
   grid-row: 1;
 }
 
-.phone #pane-people .list-row .btn-done {
+.phone #pane-people .people-row .btn-done {
   grid-column: 3;
   grid-row: 1;
 }
 
-.phone #pane-people .list-row .btn-quiet {
+.phone #pane-people .people-row .btn-quiet {
   grid-column: 4;
   grid-row: 1;
 }
 
-.phone #pane-people .list-row .person-meta,
-.phone #pane-people .list-row .error {
+.phone #pane-people .people-row .person-meta,
+.phone #pane-people .people-row .error {
   grid-column: 2 / -1;
 }
 
 /* iOS selection circles: an empty ring, filled with the accent and a white tick when chosen. */
-.phone #pane-people .list-row input[type="checkbox"],
+.phone #pane-people .people-row input[type="checkbox"],
 .phone .picker-row input[type="checkbox"] {
   flex: none;
   grid-column: 1;
@@ -1121,7 +1156,7 @@ button.done-option:disabled {
   appearance: none;
 }
 
-.phone #pane-people .list-row input[type="checkbox"]:checked,
+.phone #pane-people .people-row input[type="checkbox"]:checked,
 .phone .picker-row input[type="checkbox"]:checked {
   background: var(--accent)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='m3 7.3 2.7 2.7L11 4.3' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
@@ -1635,6 +1670,45 @@ html.in-browser #root {
 
 .picker-search .input {
   width: 100%;
+}
+
+/* "How often?" over the people just chosen in Apple's sheet, in place of the search. */
+.picker-heading {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.picker-heading h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+
+.picker-heading p {
+  margin: 0;
+}
+
+/* Why the app asks for Contacts, before Apple's question. */
+.picker-explain p + p {
+  margin-top: var(--space-2);
+}
+
+.picker-more {
+  margin-top: var(--space-2);
+  padding-inline: 0;
+}
+
+/* Only some contacts shared: how to share more, under the list. */
+.picker-share {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 0.5px solid var(--separator);
+}
+
+.picker-share .hint {
+  padding: 0;
 }
 
 .picker-list {

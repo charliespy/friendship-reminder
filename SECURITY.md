@@ -21,8 +21,8 @@ Mac, iCloud or computer backups on iPhone).
 Signing in is optional. You can sign in with Apple to a Friendship Reminder account, which keeps
 your list in sync between the Mac and iPhone apps. Only then does Friendship Reminder use the
 network. On the Mac it opens Sign in with Apple in your browser and listens on a one-off
-`127.0.0.1` address until the browser comes back (for up to 10 minutes); on iPhone the same page
-opens in a sheet over the app and comes back to `io.github.charliespy.friends://auth/callback`.
+`127.0.0.1` address until the browser comes back (for up to 10 minutes); on iPhone Apple's own
+Sign in with Apple sheet hands the app a token from Apple, made for this one sign-in.
 Either way, it talks to the Friendship Reminder account server (run on Supabase) to sign you in,
 to check and renew your sign-in (at launch, for example) and to sign you out. The account server
 gets what Apple shares when you sign in: an account ID and your email address, or Apple's private
@@ -41,8 +41,9 @@ list stays on the device. If you never sign in, Friendship Reminder sends nothin
 ### Contacts
 
 Add person › Import from Contacts (and the same step when you first open the app) lists the people
-in your Contacts so you can pick who to add. macOS or iOS asks you first, and you can say no; you
-can still type names in. Friendship Reminder reads only names (and, to spot people already in your
+in your Contacts so you can pick who to add. The app says what it reads before macOS or iOS asks you,
+and you can say no; you can still type names in. On iPhone you can share just some contacts: the app
+then sees only those, and you can share more later in iOS Settings. Friendship Reminder reads only names (and, to spot people already in your
 list, the web addresses on a card), never phone numbers, email addresses, addresses, birthdays or
 photos. For each person you add, it keeps:
 

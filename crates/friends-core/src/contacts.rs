@@ -90,6 +90,72 @@ pub fn choices(data: &Data, cards: Vec<Card>) -> Vec<Choice> {
     list
 }
 
+/// Who the user just chose in the system's own contact sheets (sharing only some contacts with the
+/// app), before the app shows anything.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Chosen {
+    /// Nobody: the app shows its own list to pick from.
+    Nobody,
+    /// Everyone the app can see: the user has just shared only some contacts, and those are them.
+    Everyone,
+    /// These cards: just added to the ones shared.
+    Cards(Vec<String>),
+}
+
+impl Chosen {
+    /// Who was just chosen when the picker lists the cards the app sees `now`. `limited`: the app
+    /// sees only some contacts. `just_shared_some`: the user answered Apple's question a moment ago
+    /// by sharing only some. `before_trip`: the cards the app saw before a trip to Settings to share
+    /// more, if it just made one.
+    pub fn when_listing(
+        limited: bool,
+        just_shared_some: bool,
+        before_trip: Option<&[String]>,
+        now: &[String],
+    ) -> Chosen {
+        match before_trip {
+            Some(before) => Chosen::shared_in_settings(before, now, limited),
+            None if limited && just_shared_some => Chosen::Everyone,
+            None => Chosen::Nobody,
+        }
+    }
+
+    /// After a trip to Settings to share more: the cards the app sees `now` and didn't `before`
+    /// were picked there, while the app still sees only some contacts (`still_limited`). If the
+    /// user turned on full access instead, every card is new to the app but nobody was picked.
+    pub fn shared_in_settings(before: &[String], now: &[String], still_limited: bool) -> Chosen {
+        if !still_limited {
+            return Chosen::Nobody;
+        }
+        let before: std::collections::HashSet<&String> = before.iter().collect();
+        Chosen::Cards(
+            now.iter()
+                .filter(|id| !before.contains(id))
+                .cloned()
+                .collect(),
+        )
+    }
+}
+
+/// The cards to go straight to "how often" for: the ones just chosen (in the order the picker shows
+/// them), leaving out people already in the list. Empty means the picker shows its list.
+pub fn just_chosen(choices: &[Choice], chosen: &Chosen) -> Vec<String> {
+    let cards: std::collections::HashSet<&String> = match chosen {
+        Chosen::Cards(ids) => ids.iter().collect(),
+        _ => Default::default(),
+    };
+    choices
+        .iter()
+        .filter(|c| !c.added)
+        .filter(|c| match chosen {
+            Chosen::Nobody => false,
+            Chosen::Everyone => true,
+            Chosen::Cards(_) => cards.contains(&c.id),
+        })
+        .map(|c| c.id.clone())
+        .collect()
+}
+
 /// A name as compared for "already added": spacing and case don't count.
 fn fold(name: &str) -> String {
     squeeze(name).to_lowercase()

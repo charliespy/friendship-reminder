@@ -93,9 +93,21 @@ where the phone does:
   check every minute like the Mac app. Whenever the list changes, it hands iOS the coming
   reminders (up to 60), each for 9:00 in the morning of its day. Reminders from earlier days count
   as sent: the person shows in Today instead.
-- **Sign in with Apple opens in a sheet over the app** (`ASWebAuthenticationSession`, in
-  `src-tauri/plugins/web-auth`), which comes back to `io.github.charliespy.friends://auth/callback`.
-  Add that address to the Supabase project's allowed redirect URLs too.
+- **Notifications are asked for when you turn reminders on**, not at launch: once the list has
+  people, Today shows a card that says what reminders are, and iOS asks after you tap Turn on
+  reminders (or Allow notifications in Settings).
+- **Sign in with Apple is Apple's own sheet** (`ASAuthorizationController`, in
+  `src-tauri/plugins/phone-sheets`). It hands the app an identity token, which Supabase trades for a
+  session, so add the iPhone app's ID (`io.github.charliespy.friends`) to the Apple provider's
+  Client IDs in Supabase. The app needs the Sign in with Apple capability, which the release build
+  turns on by itself.
+- **Sharing only some contacts** (iOS 18): whoever the user chose in Apple's sheet goes straight to
+  "how often". To share more, Share more contacts… opens the app's page in iOS Settings (Contacts ›
+  Edit Selected Contacts); whoever was shared there goes to "how often" on the way back (also in
+  `plugins/phone-sheets`). Apple's own sheet for sharing more, `contactAccessPicker`, opens blank
+  on iPhones from iOS 26 on (FB20929400), so the app doesn't use it. Turning on full access there
+  shows the whole list instead (nobody was picked), and changing the access level makes iOS restart
+  the app, so the picker starts over.
 - Its home-screen name is **Friendship**: iOS cuts longer names short.
 - No menu bar, Dock icon or open at login.
 

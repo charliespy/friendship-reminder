@@ -28,8 +28,8 @@ npm run dev:web        # the UI in a browser, against a scratch data file
   sees only its own rows).
 - `src-tauri/`: the shell. `src/desktop.rs` is the Mac's (menu bar icon, windows, notifications,
   open at login), `src/mobile.rs` the iPhone's (booking reminders ahead with iOS), and the rest is
-  shared: the account (browser sign-in on the Mac, a sign-in sheet on iPhone from
-  `plugins/web-auth`), the Keychain and when to sync. `tauri.ios.conf.json` and `gen/apple/` are
+  shared: the account (browser sign-in on the Mac, Apple's sign-in sheet on iPhone from
+  `plugins/phone-sheets`), the Keychain and when to sync. `tauri.ios.conf.json` and `gen/apple/` are
   the iPhone app's settings and Xcode project.
 - `src/`: the React UI. It only shows data and calls commands. `Phone.tsx` lays the same panes
   out as the iPhone app's tabs.

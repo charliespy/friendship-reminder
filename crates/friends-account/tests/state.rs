@@ -291,3 +291,25 @@ fn closing_preferences_cancels_the_waiting_sign_in() {
     assert_eq!(attempts.cancel_all(), Some(1));
     assert!(!attempts.finish("a"));
 }
+
+#[test]
+fn on_iphone_a_sign_in_waits_its_turn_while_apples_sheet_is_up() {
+    let mut attempts = Attempts::default();
+    assert_eq!(
+        attempts.start_unless_busy("a", ()),
+        Started::Waiting { replaced: None }
+    );
+    // Apple's sheet is up for "a": "b" doesn't take its place, and "a" can still finish.
+    assert_eq!(attempts.start_unless_busy("b", ()), Started::Busy);
+    assert!(attempts.finish("a"));
+    // "c" was cancelled before it started: that still wins, and is forgotten after.
+    attempts.start_unless_busy("d", ());
+    attempts.cancel("c");
+    assert_eq!(attempts.start_unless_busy("c", ()), Started::Cancelled);
+    assert_eq!(attempts.start_unless_busy("c", ()), Started::Busy);
+    assert!(attempts.finish("d"));
+    assert_eq!(
+        attempts.start_unless_busy("c", ()),
+        Started::Waiting { replaced: None }
+    );
+}

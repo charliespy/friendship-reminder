@@ -33,7 +33,7 @@ rfd = { version = "0.18.0", default-features = false }
 
 # The iPhone app: Sign in with Apple in a sheet over the app.
 [target.'cfg(target_os = "ios")'.dependencies]
-tauri-plugin-web-auth = { path = "plugins/web-auth" }
+tauri-plugin-phone-sheets = { path = "plugins/phone-sheets" }
 # The moment a booked reminder fires, as the notification plugin takes it.
 time = "0.3"
 

@@ -10,8 +10,16 @@
 //! - `POST /__test/reset` with a data file's JSON (or `{}`) replaces the data and clears launch at login.
 //! - `GET /__test/health` answers 200 once the server is up.
 //! - `POST /__test/today` with `"YYYY-MM-DD"` (a JSON string) moves the server's clock to that day.
-//! - `POST /__test/contacts` with `"allowed"` or `"denied"` (a JSON string) answers Contacts' "allow
-//!   access?" that way from then on (allowed at first). The address book is a made-up one.
+//! - `POST /__test/contacts` (a JSON string) sets Contacts' access, in a made-up address book:
+//!   - `"notAsked"` (at first): not asked yet; asked, the user allows all contacts.
+//!   - `"notAskedLimited"`: not asked yet; asked, the user shares only Ben, Elif and Iris.
+//!   - `"allowed"`: all contacts shared already.
+//!   - `"limited"`: only Ben, Elif and Iris shared already; sharing more (in iOS Settings) then
+//!     shares Kofi and Lena too.
+//!   - `"denied"`: the user said no.
+//! - `POST /__test/notifications` (a JSON string) sets whether the app may send notifications, as
+//!   the iPhone answers: `"allowed"` (at first, as on the Mac), `"notAsked"` (asking allows them) or
+//!   `"denied"`.
 //! - `POST /__test/open-card` with a made-up card's id (a JSON string) acts as if the app's link on
 //!   that card opened the app: the next window to ask shows that person. Answers their id, or null.
 //!
@@ -25,7 +33,7 @@ use std::path::PathBuf;
 
 use chrono::{Local, NaiveDate};
 use friends_core::api::App;
-use friends_core::contacts::{choices, link_url, person_in_link, Card};
+use friends_core::contacts::{choices, just_chosen, link_url, person_in_link, Card, Chosen};
 use friends_core::model::NewPerson;
 use friends_core::store::Store;
 use serde_json::{json, Value};
@@ -108,13 +116,43 @@ struct Dev {
     launch_at_login: bool,
     /// Stands in for Sign in with Apple: there's no Apple page in the tests, so signing in always works.
     signed_in: bool,
-    /// Stands in for the answer to Contacts' "allow access?".
-    contacts_allowed: bool,
+    /// Stands in for Contacts' access: as `POST /__test/contacts` sets it.
+    contacts: Access,
+    /// The cards shared with the app when it may see only some.
+    shared: Vec<String>,
+    /// Stands in for the iPhone's notification permission: as `POST /__test/notifications` sets it.
+    notifications: Notifications,
     /// The links the app wrote onto the made-up cards, by card.
     card_links: HashMap<String, Vec<String>>,
     /// The person a link from a card opened the app on, until a window takes them.
     shown_person: Option<u64>,
 }
+
+/// Contacts' access, as the test sets it up.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Access {
+    /// Not asked yet; `limited`: asked, the user shares only some contacts.
+    NotAsked {
+        limited: bool,
+    },
+    Allowed,
+    Limited,
+    Denied,
+}
+
+/// The iPhone's notification permission, as the test sets it up (and as `notification_access`
+/// answers it).
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum Notifications {
+    Allowed,
+    NotAsked,
+    Denied,
+}
+
+/// Who a user shares when they share only some contacts, and who "share more" adds.
+const SHARED_FIRST: [&str; 3] = ["card-02", "card-05", "card-09"];
+const SHARED_MORE: [&str; 2] = ["card-11", "card-12"];
 
 /// A made-up address book: (card id, name). The app reads only names.
 const ADDRESS_BOOK: [(&str, &str); 12] = [
@@ -175,19 +213,31 @@ impl Dev {
                 Ok(self.account())
             }
             "list_contacts" => {
-                if !self.contacts_allowed {
-                    return Ok(json!({ "status": "denied" }));
+                let ask = args.get("ask").and_then(Value::as_bool).unwrap_or(false);
+                let mut just_shared_some = false;
+                match self.contacts {
+                    Access::NotAsked { .. } if !ask => {}
+                    Access::NotAsked { limited: false } => self.set_access(Access::Allowed),
+                    Access::NotAsked { limited: true } => {
+                        self.set_access(Access::Limited);
+                        just_shared_some = true;
+                    }
+                    _ => {}
                 }
-                let cards = ADDRESS_BOOK
-                    .iter()
-                    .map(|(id, name)| Card {
-                        id: (*id).to_string(),
-                        name: (*name).to_string(),
-                        links: self.card_links.get(*id).cloned().unwrap_or_default(),
-                    })
-                    .collect();
-                let contacts = choices(self.app.data(), cards);
-                Ok(json!({ "status": "allowed", "contacts": contacts }))
+                Ok(self.contact_list(just_shared_some, None))
+            }
+            "share_more_contacts" => {
+                // The trip to Settings: Kofi and Lena are shared there, if only some were.
+                let before = self.shared.clone();
+                let limited = self.contacts == Access::Limited;
+                if limited {
+                    for id in SHARED_MORE {
+                        if !self.shared.iter().any(|s| s == id) {
+                            self.shared.push(id.to_string());
+                        }
+                    }
+                }
+                Ok(self.contact_list(false, Some(&before)))
             }
             "import_contacts" => {
                 let people: Vec<NewPerson> =
@@ -208,11 +258,54 @@ impl Dev {
                 }
                 to_value(view)
             }
+            "notification_access" => Ok(json!(self.notifications)),
+            "allow_notifications" => {
+                if self.notifications == Notifications::NotAsked {
+                    self.notifications = Notifications::Allowed;
+                }
+                Ok(json!(self.notifications))
+            }
             "take_shown_person" => Ok(json!(self.shown_person.take())),
             // Window commands have nothing to do in a browser.
             "open_preferences" | "hide_dropdown" | "quit" => Ok(Value::Null),
             _ => Err(json!(format!("unknown command: {cmd}"))),
         }
+    }
+
+    /// Sets Contacts' access; with only some contacts shared, those are Ben, Elif and Iris.
+    fn set_access(&mut self, access: Access) {
+        self.contacts = access;
+        self.shared = if access == Access::Limited {
+            SHARED_FIRST.map(String::from).to_vec()
+        } else {
+            Vec::new()
+        };
+    }
+
+    /// The cards the app may see, as `list_contacts` answers: `just_shared_some` and `before_trip`
+    /// as for `Chosen::when_listing`.
+    fn contact_list(&self, just_shared_some: bool, before_trip: Option<&[String]>) -> Value {
+        let limited = match self.contacts {
+            Access::Denied => return json!({ "status": "denied" }),
+            Access::NotAsked { .. } => return json!({ "status": "notAsked" }),
+            Access::Allowed => false,
+            Access::Limited => true,
+        };
+        let cards: Vec<Card> = ADDRESS_BOOK
+            .iter()
+            .filter(|(id, _)| !limited || self.shared.iter().any(|s| s == id))
+            .map(|(id, name)| Card {
+                id: (*id).to_string(),
+                name: (*name).to_string(),
+                links: self.card_links.get(*id).cloned().unwrap_or_default(),
+            })
+            .collect();
+        // Who's new is worked out from the cards themselves, as the app does.
+        let now: Vec<String> = cards.iter().map(|c| c.id.clone()).collect();
+        let contacts = choices(self.app.data(), cards);
+        let chosen = Chosen::when_listing(limited, just_shared_some, before_trip, &now);
+        let picked = just_chosen(&contacts, &chosen);
+        json!({ "status": "allowed", "contacts": contacts, "limited": limited, "picked": picked })
     }
 
     fn account(&self) -> Value {
@@ -246,7 +339,8 @@ impl Dev {
         self.app = App::open(Store::new(&self.store_path)).map_err(|e| e.to_string())?;
         self.launch_at_login = false;
         self.signed_in = false;
-        self.contacts_allowed = true;
+        self.set_access(Access::NotAsked { limited: false });
+        self.notifications = Notifications::Allowed;
         self.card_links.clear();
         self.shown_person = None;
         Ok(())
@@ -278,7 +372,9 @@ fn main() {
         today: opts.today,
         launch_at_login: false,
         signed_in: false,
-        contacts_allowed: true,
+        contacts: Access::NotAsked { limited: false },
+        shared: Vec::new(),
+        notifications: Notifications::Allowed,
         card_links: HashMap::new(),
         shown_person: None,
     };
@@ -346,16 +442,34 @@ fn main() {
                 Err(_) => json_response(400, &json!("send the card's id as a JSON string")),
             },
             (Method::Post, "/__test/contacts") => {
-                match serde_json::from_str::<String>(&body).as_deref() {
-                    Ok("allowed") => {
-                        dev.contacts_allowed = true;
+                let access = match serde_json::from_str::<String>(&body).as_deref() {
+                    Ok("notAsked") => Some(Access::NotAsked { limited: false }),
+                    Ok("notAskedLimited") => Some(Access::NotAsked { limited: true }),
+                    Ok("allowed") => Some(Access::Allowed),
+                    Ok("limited") => Some(Access::Limited),
+                    Ok("denied") => Some(Access::Denied),
+                    _ => None,
+                };
+                match access {
+                    Some(access) => {
+                        dev.set_access(access);
                         json_response(200, &Value::Null)
                     }
-                    Ok("denied") => {
-                        dev.contacts_allowed = false;
+                    None => json_response(
+                        400,
+                        &json!("send \"notAsked\", \"notAskedLimited\", \"allowed\", \"limited\" or \"denied\""),
+                    ),
+                }
+            }
+            (Method::Post, "/__test/notifications") => {
+                match serde_json::from_str::<Notifications>(&body) {
+                    Ok(answer) => {
+                        dev.notifications = answer;
                         json_response(200, &Value::Null)
                     }
-                    _ => json_response(400, &json!("send \"allowed\" or \"denied\"")),
+                    Err(_) => {
+                        json_response(400, &json!("send \"allowed\", \"notAsked\" or \"denied\""))
+                    }
                 }
             }
             _ => json_response(404, &json!("not found")),

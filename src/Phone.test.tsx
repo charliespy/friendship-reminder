@@ -15,6 +15,7 @@ vi.mock("./api", async (orig) => ({
     onAccountChanged: () => Promise.resolve(() => {}),
     takeShownPerson: () => Promise.resolve(null),
     onShowPerson: () => Promise.resolve(() => {}),
+    notificationAccess: () => Promise.resolve("allowed"),
   },
 }));
 

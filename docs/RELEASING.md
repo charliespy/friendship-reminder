@@ -117,7 +117,7 @@ maintainer wants one. They don't need a Mac release, a tag or a version change.
 **Once, on the Mac that uploads:**
 
 - Everything README.md lists for building the iPhone app, plus `rustup component add llvm-tools`
-  (without it the sign-in sheet's Swift code doesn't link for a real iPhone).
+  (without it the Swift code for Apple's sheets doesn't link for a real iPhone).
 - An App Store Connect API key with **Admin** access (Users and Access → Integrations → App Store
   Connect API → Team Keys). Its `AuthKey_<key id>.p8` file can be downloaded only once: keep it
   outside the repo. Admin lets Xcode make the App Store certificate and profile by itself.

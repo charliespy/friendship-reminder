@@ -2,7 +2,8 @@
 //!
 //! The app signs in with Apple in the browser: [`Client::authorize_url`] is the page to open, the
 //! browser comes back to the app with a one-time code ([`parse_callback`]), and
-//! [`Client::exchange_code`] trades it for a session. [`AccountState`] holds the session and decides
+//! [`Client::exchange_code`] trades it for a session. On iPhone, Apple's own sign-in sheet hands the
+//! app an identity token instead, which [`Client::sign_in_with_id_token`] trades for a session. [`AccountState`] holds the session and decides
 //! what each outcome does to it; the app keeps the session in the Keychain to stay signed in across
 //! launches. All the HTTP goes through [`Transport`] and the Keychain through a `save` function, so
 //! every rule here is tested without a network or a Mac.
@@ -298,6 +299,20 @@ impl<T: Transport> Client<T> {
         self.token("pkce", &body, now)
     }
 
+    /// Signs in with the identity token Apple's own sign-in sheet hands the app (on iPhone), made for
+    /// `nonce` (its [`Nonce::hashed`] went to Apple; the raw one comes here, so Supabase can check the
+    /// token was made for this sign-in and not replayed from another).
+    pub fn sign_in_with_id_token(
+        &self,
+        provider: &str,
+        id_token: &str,
+        nonce: &Nonce,
+        now: i64,
+    ) -> Result<Session, AuthError> {
+        let body = json!({ "provider": provider, "id_token": id_token, "nonce": nonce.raw });
+        self.token("id_token", &body, now)
+    }
+
     /// A fresh session from a saved refresh token. Supabase hands out a new refresh token each time and
     /// the old one stops working soon after, so the caller must save the returned session.
     pub fn refresh(&self, refresh_token: &str, now: i64) -> Result<Session, AuthError> {
@@ -565,6 +580,8 @@ pub enum Started<T> {
     Cancelled,
     /// Now the one waiting; wake the one it replaced, if any, so it stops.
     Waiting { replaced: Option<T> },
+    /// Another attempt is waiting and keeps its place ([`Attempts::start_unless_busy`]).
+    Busy,
 }
 
 impl<T> Attempts<T> {
@@ -578,6 +595,19 @@ impl<T> Attempts<T> {
             .replace((attempt.to_string(), wake))
             .map(|(_, w)| w);
         Started::Waiting { replaced }
+    }
+
+    /// As [`start`](Self::start), but an attempt already waiting keeps its place: on iPhone it has
+    /// Apple's sheet on screen, which the user may be finishing, and only it can answer that sheet.
+    pub fn start_unless_busy(&mut self, attempt: &str, wake: T) -> Started<T> {
+        if self.cancelled.as_deref() == Some(attempt) {
+            self.cancelled = None;
+            return Started::Cancelled;
+        }
+        if self.current.is_some() {
+            return Started::Busy;
+        }
+        self.start(attempt, wake)
     }
 
     /// Cancels `attempt`: returns how to wake it if it's waiting, or remembers it for when it starts.
@@ -622,11 +652,16 @@ pub struct Pkce {
     pub challenge: String,
 }
 
+/// 32 secure random bytes, in URL-safe base64 without padding.
+fn random_token() -> Result<String, String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
 impl Pkce {
     pub fn new() -> Result<Pkce, String> {
-        let mut bytes = [0u8; 32];
-        getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
-        Ok(Pkce::from_verifier(URL_SAFE_NO_PAD.encode(bytes)))
+        Ok(Pkce::from_verifier(random_token()?))
     }
 
     pub fn from_verifier(verifier: String) -> Pkce {
@@ -635,6 +670,29 @@ impl Pkce {
             verifier,
             challenge,
         }
+    }
+}
+
+/// The one-time value that ties an identity token from Apple to one sign-in: Apple gets the hash (it
+/// goes into the token), Supabase the raw value, and checks they match.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nonce {
+    pub raw: String,
+    /// SHA-256 of `raw`, in lowercase hex, as Apple's sheet takes it.
+    pub hashed: String,
+}
+
+impl Nonce {
+    pub fn new() -> Result<Nonce, String> {
+        Ok(Nonce::from_raw(random_token()?))
+    }
+
+    pub fn from_raw(raw: String) -> Nonce {
+        let hashed = Sha256::digest(raw.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        Nonce { raw, hashed }
     }
 }
 
@@ -647,20 +705,6 @@ pub enum Callback {
     Failed(String),
     /// Some other request (the browser asking for an icon), to answer and ignore.
     Other,
-}
-
-/// The address an app's own sign-in sheet comes back to: `<scheme>://auth/callback`. (Supabase's list
-/// of allowed addresses only takes ones written with `//`.)
-pub fn app_redirect(scheme: &str) -> String {
-    format!("{scheme}:/{CALLBACK_PATH}")
-}
-
-/// Reads the address the sign-in sheet came back to, made by [`app_redirect`].
-pub fn parse_app_callback(scheme: &str, back: &str) -> Callback {
-    match back.strip_prefix(scheme).and_then(|t| t.strip_prefix(":/")) {
-        Some(target) => parse_callback(target),
-        None => Callback::Other,
-    }
 }
 
 /// Reads the path and query of a request to the app's sign-in address, `/auth/callback?...`.

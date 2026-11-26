@@ -1,5 +1,5 @@
 import { devices, expect, test } from "@playwright/test";
-import { SAMPLE, answerDone, seed } from "./helpers";
+import { SAMPLE, answerDone, seed, setNotificationAccess } from "./helpers";
 
 // The iPhone app's page, at an iPhone's size.
 test.use({ viewport: devices["iPhone 15 Pro"].viewport, hasTouch: true });
@@ -39,4 +39,44 @@ test("Settings has no Open at login on the phone", async ({ page, request }) => 
   await page.getByRole("tab", { name: "Settings" }).click();
   await expect(page.getByText("Send a notification")).toBeVisible();
   await expect(page.getByText("Open at login")).toHaveCount(0);
+});
+
+test("iOS is asked about notifications only when reminders are turned on, not at launch", async ({ page, request }) => {
+  // Nobody in the list yet: nothing to remind about, so no card.
+  await seed(request);
+  await setNotificationAccess(request, "notAsked");
+  await page.goto("/phone.html");
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Get reminded on the day" })).toHaveCount(0);
+
+  // With people, Today says what reminders are; "Not now" hides it until the app opens again.
+  await seed(request, { people: SAMPLE });
+  await setNotificationAccess(request, "notAsked");
+  await page.reload();
+  const card = page.getByRole("region", { name: "Get reminded on the day" });
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Not now" }).click();
+  await expect(card).toHaveCount(0);
+  // Settings still offers it.
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Allow notifications" }).click();
+  await expect(page.getByRole("button", { name: "Allow notifications" })).toHaveCount(0);
+
+  // Next launch: allowed, so no card.
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(card).toHaveCount(0);
+
+  // "Turn on reminders" on Today asks.
+  await setNotificationAccess(request, "notAsked");
+  await page.reload();
+  await card.getByRole("button", { name: "Turn on reminders" }).click();
+  await expect(card).toHaveCount(0);
+
+  // Refused in iOS: Settings says where to turn them on.
+  await setNotificationAccess(request, "denied");
+  await page.reload();
+  await expect(card).toHaveCount(0);
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await expect(page.getByText("Notifications are off for Friendship Reminder.", { exact: false })).toBeVisible();
 });

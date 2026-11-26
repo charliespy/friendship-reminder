@@ -6,7 +6,9 @@ use std::path::PathBuf;
 
 use chrono::NaiveDate;
 use friends_core::api::App;
-use friends_core::contacts::{choices, link_url, person_in_link, uid_in_link, Card};
+use friends_core::contacts::{
+    choices, just_chosen, link_url, person_in_link, uid_in_link, Card, Chosen,
+};
 use friends_core::model::{Data, NewPerson};
 use friends_core::store::Store;
 use serde_json::json;
@@ -414,5 +416,80 @@ fn a_link_from_a_card_finds_the_person_on_this_device() {
     assert_eq!(
         person_in_link(&data, "io.github.charliespy.friends://auth/callback?code=x"),
         None
+    );
+}
+
+#[test]
+fn people_just_chosen_in_the_system_sheet_go_straight_to_how_often() {
+    let mut data = Data::default();
+    data.add_people(&[new_person("Ben Okafor", None)], today(), today())
+        .unwrap();
+    let list = choices(
+        &data,
+        vec![
+            card("c3", "Iris Novak"),
+            card("c1", "Ben Okafor"),
+            card("c2", "Elif Yilmaz"),
+        ],
+    );
+    // A fresh "share only some": everyone the app can see, except who's in the list already, by name.
+    assert_eq!(just_chosen(&list, &Chosen::Everyone), ["c2", "c3"]);
+    // Shared more: only those cards, still without anyone added.
+    assert_eq!(
+        just_chosen(&list, &Chosen::Cards(vec!["c1".into(), "c3".into()])),
+        ["c3"]
+    );
+    assert!(just_chosen(&list, &Chosen::Nobody).is_empty());
+    // A card that isn't among those the app can see is left out.
+    assert!(just_chosen(&list, &Chosen::Cards(vec!["c9".into()])).is_empty());
+}
+
+#[test]
+fn cards_shared_in_settings_are_the_ones_new_to_the_app() {
+    let ids = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let before = ids(&["c1", "c2"]);
+    // Still sharing only some: whoever the app can see now and couldn't before was picked there
+    // (c1 un-shared meanwhile doesn't count).
+    assert_eq!(
+        Chosen::shared_in_settings(&before, &ids(&["c2", "c3", "c4"]), true),
+        Chosen::Cards(ids(&["c3", "c4"]))
+    );
+    assert_eq!(
+        Chosen::shared_in_settings(&before, &ids(&["c2"]), true),
+        Chosen::Cards(vec![])
+    );
+    // Full access now: every card is new to the app, but nobody was picked; the list shows instead.
+    assert_eq!(
+        Chosen::shared_in_settings(&before, &ids(&["c1", "c2", "c3", "c4"]), false),
+        Chosen::Nobody
+    );
+}
+
+#[test]
+fn who_was_just_chosen_depends_on_how_the_list_was_reached() {
+    let ids = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let now = ids(&["c1", "c2"]);
+    // Just answered Apple's question by sharing only some: those are everyone the app sees.
+    assert_eq!(
+        Chosen::when_listing(true, true, None, &now),
+        Chosen::Everyone
+    );
+    // Opened again later, or full access: nobody, the list shows.
+    assert_eq!(
+        Chosen::when_listing(true, false, None, &now),
+        Chosen::Nobody
+    );
+    assert_eq!(
+        Chosen::when_listing(false, false, None, &now),
+        Chosen::Nobody
+    );
+    // Back from Settings: who's new since.
+    assert_eq!(
+        Chosen::when_listing(true, false, Some(&ids(&["c1"])), &now),
+        Chosen::Cards(ids(&["c2"]))
+    );
+    assert_eq!(
+        Chosen::when_listing(false, false, Some(&ids(&["c1"])), &now),
+        Chosen::Nobody
     );
 }
