@@ -181,7 +181,13 @@ impl BlockedRange {
         lo <= date && date <= hi
     }
 
-    fn last_day(&self) -> NaiveDate {
+    /// The range's first day, even when it was typed in backwards.
+    pub fn first_day(&self) -> NaiveDate {
+        self.start.min(self.end)
+    }
+
+    /// The range's last day, even when it was typed in backwards.
+    pub fn last_day(&self) -> NaiveDate {
         self.start.max(self.end)
     }
 }
