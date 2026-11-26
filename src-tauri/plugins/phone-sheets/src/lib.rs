@@ -1,8 +1,9 @@
 //! Friendship Reminder's sheets from Apple on iPhone, which only Swift can show:
 //! - Sign in with Apple (`ASAuthorizationController`): hands back Apple's identity token, which
 //!   friends-account trades for a session. It shows no web address, unlike a web sign-in sheet.
-//! - Choosing more contacts to share (`contactAccessPicker`, iOS 18): when the user shares only some
-//!   contacts with the app, this adds more and hands back the cards just shared.
+//! - Sharing more contacts, when the user shared only some with the app: opens the app's page in
+//!   iOS Settings, and once the user is back hands back the cards shared meanwhile. (Apple's sheet
+//!   for this, `contactAccessPicker`, opens blank on iPhones from iOS 26 on.)
 //!
 //! It is only the sheets; what their answers mean is the app's business. On other platforms the
 //! plugin is empty: the Mac signs in through the browser and can't share only some contacts.
@@ -66,8 +67,9 @@ impl<R: Runtime> PhoneSheets<R> {
         }
     }
 
-    /// Shows Apple's sheet for sharing more contacts with the app and waits: the ids of the cards
-    /// just shared (none when the user shared nobody new or closed it). Blocks the calling thread.
+    /// Opens the app's page in iOS Settings, for sharing more contacts, and waits for the user to
+    /// come back: the ids of the cards shared meanwhile (none when nobody new). Blocks the calling
+    /// thread.
     pub fn share_more_contacts(&self) -> Result<Vec<String>, String> {
         #[cfg(target_os = "ios")]
         {

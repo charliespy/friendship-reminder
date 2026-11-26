@@ -1,13 +1,13 @@
 // Friendship Reminder's sheets from Apple on iPhone:
 // - Sign in with Apple (ASAuthorizationController), which hands the Rust side Apple's identity token.
-// - Choosing more contacts to share (contactAccessPicker, iOS 18), for someone who shared only some
-//   contacts with the app, which hands back the ids of the cards just shared.
+// - Sharing more contacts, for someone who shared only some with the app: opens the app's page in
+//   iOS Settings and, once the user is back, hands back the ids of the cards shared meanwhile.
+//   (Apple's own sheet for this, contactAccessPicker, opens blank on iPhones from iOS 26 on:
+//   FB20929400. Apple's forums point to Settings until it's fixed.)
 
 import AuthenticationServices
 import Contacts
-import ContactsUI
 import SwiftRs
-import SwiftUI
 import Tauri
 import UIKit
 
@@ -73,38 +73,68 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
   }
 }
 
-/// Opens Apple's sheet for sharing more contacts as soon as it shows, and reports what was shared.
-@available(iOS 18.0, *)
-struct ShareMoreContacts: View {
-  let done: ([String]) -> Void
-  @State private var open = false
-  @State private var answered = false
+/// One trip to Settings for sharing more contacts: waits for the app to leave the screen and come
+/// back, then answers with the cards that became visible meanwhile.
+class SettingsTrip {
+  private let invoke: Invoke
+  private let before: Set<String>
+  private var left = false
+  private var answered = false
+  private var watching: [NSObjectProtocol] = []
+  /// Called once answered.
+  var done: () -> Void = {}
 
-  var body: some View {
-    Color.clear
-      .contactAccessPicker(isPresented: $open) { ids in
-        answer(ids)
-      }
-      .onAppear { open = true }
-      .onChange(of: open) { now in
-        // Closed. Apple's answer may still be on its way: give it a moment, then go on without it
-        // (the plugin also counts whoever became visible meanwhile).
-        if !now {
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { answer([]) }
-        }
-      }
+  init(invoke: Invoke, before: Set<String>) {
+    self.invoke = invoke
+    self.before = before
+    let center = NotificationCenter.default
+    watching.append(
+      center.addObserver(
+        forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+      ) { [weak self] _ in self?.left = true })
+    watching.append(
+      center.addObserver(
+        forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+      ) { [weak self] _ in
+        guard let self = self, self.left else { return }
+        self.answer()
+      })
   }
 
-  private func answer(_ ids: [String]) {
+  /// Back from Settings (or replaced by a newer trip): the cards the app sees now and didn't before.
+  func answer() {
     if answered { return }
     answered = true
-    done(ids)
+    stopWatching()
+    let before = self.before
+    let invoke = self.invoke
+    DispatchQueue.global(qos: .userInitiated).async {
+      let shared = PhoneSheetsPlugin.visibleCards().subtracting(before)
+      invoke.resolve(["ids": Array(shared)])
+    }
+    done()
+  }
+
+  /// Settings didn't open.
+  func fail(_ message: String) {
+    if answered { return }
+    answered = true
+    stopWatching()
+    invoke.reject(message)
+    done()
+  }
+
+  private func stopWatching() {
+    for token in watching { NotificationCenter.default.removeObserver(token) }
+    watching = []
   }
 }
 
 class PhoneSheetsPlugin: Plugin {
   /// The sign-in under way: kept alive while Apple's sheet shows.
   private var signIn: AppleSignIn?
+  /// The trip to Settings under way, if any.
+  private var trip: SettingsTrip?
 
   private func window() -> ASPresentationAnchor {
     return manager.viewController?.view.window ?? ASPresentationAnchor()
@@ -134,7 +164,7 @@ class PhoneSheetsPlugin: Plugin {
   }
 
   /// The ids of the cards the app can see now.
-  private static func visibleCards() -> Set<String> {
+  static func visibleCards() -> Set<String> {
     var ids = Set<String>()
     let request = CNContactFetchRequest(keysToFetch: [CNContactIdentifierKey as CNKeyDescriptor])
     try? CNContactStore().enumerateContacts(with: request) { contact, _ in
@@ -144,39 +174,22 @@ class PhoneSheetsPlugin: Plugin {
   }
 
   @objc public func shareMoreContacts(_ invoke: Invoke) throws {
-    guard #available(iOS 18.0, *) else {
-      invoke.reject("Choosing more contacts needs iOS 18.")
-      return
-    }
     DispatchQueue.global(qos: .userInitiated).async {
       let before = Self.visibleCards()
       DispatchQueue.main.async {
-        // Over whatever is showing: a controller that is already presenting can't present again.
-        guard var top = self.manager.viewController else {
-          invoke.reject("Couldn't open Contacts.")
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+          invoke.reject("Couldn't open Settings.")
           return
         }
-        while let shown = top.presentedViewController { top = shown }
-        var host: UIViewController?
-        let sheet = ShareMoreContacts { ids in
-          host?.dismiss(animated: false)
-          host = nil
-          // The cards Apple says were shared, and any the app can see now that it couldn't before
-          // (in case Apple's answer came too late).
-          DispatchQueue.global(qos: .userInitiated).async {
-            let now = Self.visibleCards()
-            let shared = Set(ids).union(now.subtracting(before))
-            invoke.resolve(["ids": Array(shared)])
-          }
+        let trip = SettingsTrip(invoke: invoke, before: before)
+        trip.done = { [weak self, weak trip] in
+          if let self = self, let trip = trip, self.trip === trip { self.trip = nil }
         }
-        let controller = UIHostingController(rootView: sheet)
-        controller.view.backgroundColor = .clear
-        controller.modalPresentationStyle = .overFullScreen
-        host = controller
-        top.present(controller, animated: false)
-        if controller.presentingViewController == nil {
-          host = nil
-          invoke.reject("Couldn't open Contacts. Try again.")
+        // A trip still waiting is replaced: answer its call so nothing waits on it.
+        self.trip?.answer()
+        self.trip = trip
+        UIApplication.shared.open(url) { opened in
+          if !opened { trip.fail("Couldn't open Settings.") }
         }
       }
     }

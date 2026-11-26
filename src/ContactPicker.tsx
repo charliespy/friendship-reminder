@@ -6,7 +6,8 @@
  * - Before Apple asks for access the first time, the picker says why the app wants it.
  * - People chosen in Apple's own sheets (sharing only some contacts, on iPhone) were picked there
  *   already: they go straight to "how often", with no second list to tick.
- * - With only some contacts shared, opening the picker opens Apple's sheet for sharing more first.
+ * - With only some contacts shared, "Share more contacts…" opens the app's page in iOS Settings;
+ *   whoever is shared there goes straight to "how often" on the way back.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage, type ContactList } from "./api";
@@ -14,7 +15,7 @@ import { Avatar } from "./components/Avatar";
 import { FREQUENCIES } from "./format";
 import { useAction } from "./useView";
 
-type Loaded = { status: "loading" } | ContactList | { status: "failed"; message: string };
+type Loaded = { status: "loading"; text?: string } | ContactList | { status: "failed"; message: string };
 
 /** How a search matches a name: any order of words, ignoring case and accents. */
 function fold(text: string): string {
@@ -54,8 +55,8 @@ export function ContactPicker({
   const [chosen, setChosen] = useState<string[] | null>(null);
   const add = useAction();
   const live = useRef(true);
-  // Loaded once per picker: loading opens Apple's sheets, which must not open twice (React runs
-  // effects twice in development).
+  // Loaded once per picker: loading can open Apple's question, which must not open twice (React
+  // runs effects twice in development).
   const started = useRef(false);
 
   const take = (list: ContactList) => {
@@ -74,17 +75,7 @@ export function ContactPicker({
   };
   const fail = (e: unknown) => live.current && setLoaded({ status: "failed", message: errorMessage(e) });
   /** The list; `ask`: Apple asks for access now (after the explanation). */
-  const load = (ask: boolean) =>
-    api
-      .listContacts(ask)
-      // Only some shared from before (not in the question just answered), and nobody just chosen:
-      // open Apple's sheet to share more. Closing it shows those already shared, to tick.
-      .then((list) =>
-        !ask && list.status === "allowed" && list.limited && list.picked.length === 0
-          ? api.shareMoreContacts()
-          : list,
-      )
-      .then(take, fail);
+  const load = (ask: boolean) => api.listContacts(ask).then(take, fail);
   useEffect(() => {
     live.current = true;
     if (!started.current) {
@@ -101,7 +92,7 @@ export function ContactPicker({
     load(ask);
   };
   const shareMore = () => {
-    setLoaded({ status: "loading" });
+    setLoaded({ status: "loading", text: "Share more in Settings, then come back here." });
     api.shareMoreContacts().then(take, fail);
   };
 
@@ -166,7 +157,7 @@ export function ContactPicker({
       <div className="card picker" role="region" aria-label="Contacts">
         <div className="picker-message" role={loaded.status === "loading" ? "status" : "alert"}>
           {loaded.status === "loading" ? (
-            <p className="muted">Opening Contacts…</p>
+            <p className="muted">{loaded.text ?? "Opening Contacts…"}</p>
           ) : loaded.status === "denied" ? (
             <>
               <strong>Friendship Reminder can't see your contacts</strong>
@@ -261,24 +252,31 @@ export function ContactPicker({
           ))}
         </ul>
       )}
+      {!chosen && loaded.limited && (
+        <div className="picker-share">
+          <p className="hint">
+            You shared only some contacts. To add others, tap below, then Contacts › Edit Selected Contacts in Settings.
+            They show up here when you come back.
+          </p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={shareMore}>
+            Share more contacts…
+          </button>
+        </div>
+      )}
       <div className="picker-footer">
         <p className="hint picker-hint">
           {chosen
             ? "Each counts as in touch today, so their first reminder comes one round from now."
             : free === 0 && contacts.length > 0
-              ? "Everyone in Contacts is in your list already."
+              ? loaded.limited
+                ? "Everyone you've shared from Contacts is in your list already."
+                : "Everyone in Contacts is in your list already."
               : "Pick how often for each person you tick. Each counts as in touch today, so their first reminder comes one round from now."}
         </p>
-        {chosen ? (
+        {chosen && (
           <button type="button" className="btn btn-quiet picker-more" onClick={() => setChosen(null)}>
             Choose others…
           </button>
-        ) : (
-          loaded.limited && (
-            <button type="button" className="btn btn-quiet picker-more" onClick={shareMore}>
-              Choose more in Contacts…
-            </button>
-          )
         )}
         {add.error && (
           <p className="error" role="alert">

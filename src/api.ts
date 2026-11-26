@@ -88,6 +88,9 @@ export type ContactList =
   | { status: "notAsked" }
   | { status: "denied" };
 
+/** Whether the app may send notifications. Only the iPhone can answer "notAsked": it asks when the user turns reminders on. */
+export type NotificationAccess = "allowed" | "notAsked" | "denied";
+
 export interface ApiError {
   kind: "invalid" | "storage" | "badCall";
   message: string;
@@ -147,7 +150,10 @@ export const api = {
   finishGuide: (step: GuideStep) => call("finish_guide", { step }),
   /** The cards in Contacts. Asks for access only when `ask` (after the app explained why). */
   listContacts: (ask: boolean) => invoke<ContactList>("list_contacts", { ask }),
-  /** Opens Apple's sheet for sharing more contacts (only some shared, on iPhone), then the cards. */
+  /**
+   * Opens the app's page in iOS Settings for sharing more contacts (only some shared, on iPhone), and once the user is back
+   * answers the cards, with those just shared as `picked`.
+   */
   shareMoreContacts: () => invoke<ContactList>("share_more_contacts"),
   /**
    * Adds the people picked in Contacts, each with their own frequency, in touch today, and links each to their card (on this device,
@@ -155,6 +161,9 @@ export const api = {
    */
   importContacts: (people: { name: string; contact: string; frequencyDays: number }[]) =>
     invoke<View>("import_contacts", { people }),
+  notificationAccess: () => invoke<NotificationAccess>("notification_access"),
+  /** Asks iOS to allow notifications (its question shows the first time), and answers what the user chose. */
+  allowNotifications: () => invoke<NotificationAccess>("allow_notifications"),
   getLaunchAtLogin: () => invoke<boolean>("get_launch_at_login"),
   setLaunchAtLogin: (on: boolean) => invoke<boolean>("set_launch_at_login", { on }),
   openPreferences: () => invoke<void>("open_preferences"),

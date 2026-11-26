@@ -117,7 +117,7 @@ test("on iPhone, people shared in Apple's sheet go straight to how often", async
   await expect(rows.filter({ hasText: "Ben Okafor" })).toContainText("Monthly");
 });
 
-test("with only some contacts shared, importing opens Apple's sheet to share more", async ({ page, request }) => {
+test("with only some contacts shared, people shared in Settings go straight to how often", async ({ page, request }) => {
   await seed(request, { people: SAMPLE.slice(0, 1) });
   await setContactsAccess(request, "limited");
   await page.goto("/phone.html");
@@ -125,8 +125,15 @@ test("with only some contacts shared, importing opens Apple's sheet to share mor
   await page.getByRole("button", { name: "Add person" }).click();
   await page.getByRole("button", { name: "Import from Contacts…" }).click();
 
-  // Apple's sheet shared Kofi and Lena: they go to how often.
+  // Importing shows those shared already (it doesn't send the user off to Settings by itself).
   const picker = page.getByRole("region", { name: "Contacts" });
+  await expect(picker.getByLabel("Search contacts")).toBeVisible();
+  await expect(picker.getByRole("checkbox")).toHaveCount(3);
+  // Inside People on iPhone, each row still shows its name (not squeezed into the list's grid).
+  await expect(picker.getByText("Elif Yılmaz")).toBeVisible();
+
+  // Kofi and Lena shared in Settings: they go to how often on the way back.
+  await picker.getByRole("button", { name: "Share more contacts…" }).click();
   await expect(picker.getByRole("heading", { name: "How often?" })).toBeVisible();
   await expect(picker.getByRole("checkbox")).toHaveCount(2);
   await picker.getByRole("checkbox", { name: "Lena Fischer" }).uncheck();
@@ -134,15 +141,12 @@ test("with only some contacts shared, importing opens Apple's sheet to share mor
   await expect(page.getByTestId("person-row").filter({ hasText: "Kofi Mensah" })).toHaveCount(1);
   await expect(page.getByTestId("person-row").filter({ hasText: "Lena Fischer" })).toHaveCount(0);
 
-  // Nobody new shared this time: the people already shared, to tick, and a way to share more.
+  // Again: everyone shared so far, to tick, and the way to share more.
   await page.getByRole("button", { name: "Add person" }).click();
   await page.getByRole("button", { name: "Import from Contacts…" }).click();
-  await expect(picker.getByLabel("Search contacts")).toBeVisible();
   await expect(picker.getByRole("checkbox", { name: "Kofi Mensah, already added" })).toBeDisabled();
   await expect(picker.getByRole("checkbox", { name: "Lena Fischer" })).not.toBeChecked();
-  // Inside People on iPhone, each row still shows its name (not squeezed into the list's grid).
-  await expect(picker.getByText("Lena Fischer")).toBeVisible();
-  await expect(picker.getByRole("button", { name: "Choose more in Contacts…" })).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Share more contacts…" })).toBeVisible();
 });
 
 test("on iPhone the guide fills the screen, without the tab bar", async ({ page, request }) => {

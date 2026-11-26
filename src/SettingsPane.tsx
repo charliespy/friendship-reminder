@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DayToggle, type View, type Weekday } from "./api";
 import { AccountSection } from "./AccountSection";
+import type { NotificationAccessState } from "./useNotificationAccess";
 import { useAction } from "./useView";
 
 const TOGGLES: { value: DayToggle; title: string; text: string }[] = [
@@ -144,8 +145,23 @@ function DaySetting({ view }: { view: View }) {
   );
 }
 
-export function SettingsPane({ view, phone = false }: { view: View; phone?: boolean }) {
+export function SettingsPane({
+  view,
+  phone = false,
+  access,
+}: {
+  view: View;
+  phone?: boolean;
+  /** The iPhone's notification permission (the Mac's needs nothing here). */
+  access?: NotificationAccessState;
+}) {
   const notify = useAction();
+  // Turning reminders on asks iOS too, the first time.
+  const setNotifications = (on: boolean) =>
+    notify.run(async () => {
+      await api.setNotifications(on);
+      if (on && access?.access === "notAsked") await access.allow();
+    });
   const [login, setLogin] = useState<boolean | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
@@ -219,7 +235,7 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
               type="checkbox"
               checked={view.settings.notifications}
               disabled={notify.busy}
-              onChange={(e) => notify.run(() => api.setNotifications(e.target.checked))}
+              onChange={(e) => setNotifications(e.target.checked)}
             />
             <span>
               <span className="choice-title">Send a notification</span>
@@ -231,6 +247,20 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
               </span>
             </span>
           </label>
+          {view.settings.notifications && access?.access === "notAsked" && (
+            <div className="choice-note">
+              <p className="hint">iOS hasn't been asked to let Friendship Reminder send notifications yet.</p>
+              <button type="button" className="btn btn-outline btn-sm" disabled={access.busy} onClick={access.allow}>
+                Allow notifications
+              </button>
+            </div>
+          )}
+          {view.settings.notifications && access?.access === "denied" && (
+            <p className="hint choice-note">
+              Notifications are off for Friendship Reminder. To get them, turn them on in Settings › Apps › Friendship
+              Reminder › Notifications.
+            </p>
+          )}
           {!phone && (
             <label className="choice">
               <input
@@ -248,6 +278,7 @@ export function SettingsPane({ view, phone = false }: { view: View; phone?: bool
           )}
         </div>
         {notify.error && <p className="error" role="alert">{notify.error}</p>}
+        {access?.error && <p className="error" role="alert">{access.error}</p>}
         {loginError && <p className="error" role="alert">{loginError}</p>}
       </div>
 

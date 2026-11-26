@@ -221,8 +221,8 @@ fn storage_error(message: String) -> ApiError {
     ApiError::new(ErrorKind::Storage, message)
 }
 
-/// The cards the app may read, for the picker. `shared`: the cards just shared in Apple's sheet for
-/// sharing more, if it was open.
+/// The cards the app may read, for the picker. `shared`: the cards just shared in Settings, after
+/// a trip there to share more.
 fn list(
     app: &AppHandle,
     store: &CNContactStore,
@@ -270,8 +270,9 @@ pub async fn list_contacts(app: AppHandle, ask: bool) -> Result<ContactList, Api
     .map_err(|e| storage_error(e.to_string()))?
 }
 
-/// Opens Apple's sheet for sharing more contacts with the app (when only some are shared, on
-/// iPhone), then the cards, with `picked` the ones just shared (and not in the list yet).
+/// Sends the user to the app's page in iOS Settings to share more contacts (when only some are
+/// shared, on iPhone), then answers the cards, with `picked` the ones just shared (and not in the
+/// list yet).
 #[tauri::command]
 pub async fn share_more_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
     tauri::async_runtime::spawn_blocking(move || {

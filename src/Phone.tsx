@@ -8,6 +8,8 @@ import { WithGuide } from "./Guide";
 import { ReachOut } from "./Dropdown";
 import { PeoplePane } from "./PeoplePane";
 import { SettingsPane } from "./SettingsPane";
+import { NotifyCard } from "./NotifyCard";
+import { useNotificationAccess } from "./useNotificationAccess";
 import { useShownPerson } from "./useShownPerson";
 import { useView } from "./useView";
 
@@ -67,6 +69,8 @@ export function Phone() {
   const due = view?.people.filter((p) => p.due).length ?? 0;
   // A link from a contact card: the People tab, at that person.
   const shown = useShownPerson(() => setTab("people"));
+  // iOS asks about notifications only when the user turns reminders on (Today's card, or Settings).
+  const notify = useNotificationAccess();
 
   // Each tab keeps its own place: the page scrolls as a whole, so leaving a tab saves how far down
   // it was, and coming back puts it there again (the top, the first time).
@@ -110,6 +114,7 @@ export function Phone() {
                       <p>{formatDay(view.today, view.today)}</p>
                     </div>
                   </header>
+                  <NotifyCard view={view} notify={notify} />
                   <ReachOut view={view} addHint="Add the people you want to keep up with in People." />
                 </section>
               ) : t.id === "people" ? (
@@ -117,7 +122,7 @@ export function Phone() {
               ) : t.id === "blocked" ? (
                 <BlockedPane view={view} />
               ) : (
-                <SettingsPane view={view} phone />
+                <SettingsPane view={view} phone access={notify} />
               )}
             </div>
           ))

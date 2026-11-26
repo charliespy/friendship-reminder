@@ -43,7 +43,7 @@ list stays on the device. If you never sign in, Friendship Reminder sends nothin
 Add person › Import from Contacts (and the same step when you first open the app) lists the people
 in your Contacts so you can pick who to add. The app says what it reads before macOS or iOS asks you,
 and you can say no; you can still type names in. On iPhone you can share just some contacts: the app
-then sees only those, and Import from Contacts opens Apple's sheet when you want to share more. Friendship Reminder reads only names (and, to spot people already in your
+then sees only those, and you can share more later in iOS Settings. Friendship Reminder reads only names (and, to spot people already in your
 list, the web addresses on a card), never phone numbers, email addresses, addresses, birthdays or
 photos. For each person you add, it keeps:
 

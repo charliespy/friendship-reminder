@@ -15,7 +15,7 @@ use friends_core::api::bookings;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::{NotificationExt, PermissionState, Schedule};
 
-use crate::{lock, publish_if_changed, today, State};
+use crate::{lock, publish_if_changed, today, NotificationAccess, State};
 
 /// How often to look again while the app is on screen, for the date changing at midnight.
 const TICK_EVERY: Duration = Duration::from_secs(60);
@@ -39,11 +39,8 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(Booker(Mutex::new(tx)));
     let handle = app.handle().clone();
     std::thread::spawn(move || {
-        // Shows iOS's prompt the first time and waits for the answer; iOS remembers it. Turning
-        // notifications on or off later in iOS Settings is read again at every booking.
-        if let Err(e) = handle.notification().request_permission() {
-            eprintln!("friends: couldn't ask to send notifications: {e}");
-        }
+        // iOS's question about notifications waits for the user to turn reminders on in the app
+        // (`allow_notifications`), not launch. Whether they're allowed is read at every booking.
         // Unknown at first: whatever an earlier run booked is cleared before booking.
         let mut booked: Option<Booked> = None;
         loop {
@@ -61,6 +58,33 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         views_changed(&ticker);
     });
     Ok(())
+}
+
+fn access_of(state: PermissionState) -> NotificationAccess {
+    match state {
+        PermissionState::Granted => NotificationAccess::Allowed,
+        PermissionState::Denied => NotificationAccess::Denied,
+        _ => NotificationAccess::NotAsked,
+    }
+}
+
+/// Whether iOS lets the app send notifications.
+pub fn notification_access(app: &AppHandle) -> Result<NotificationAccess, String> {
+    app.notification()
+        .permission_state()
+        .map(access_of)
+        .map_err(|e| e.to_string())
+}
+
+/// Shows iOS's question the first time and waits for the answer (iOS remembers it; later it just
+/// answers), then books the reminders. Blocks the calling thread.
+pub fn allow_notifications(app: &AppHandle) -> Result<NotificationAccess, String> {
+    let state = app
+        .notification()
+        .request_permission()
+        .map_err(|e| format!("Couldn't ask to send notifications: {e}"))?;
+    views_changed(app);
+    Ok(access_of(state))
 }
 
 /// Back on screen: the day may have moved on, or notifications been allowed, while the app was
@@ -128,9 +152,20 @@ fn book(app: &AppHandle, booked: &mut Option<Booked>) {
     let current = match booked {
         Some(current) => current,
         None => {
-            if let Err(e) = notification.cancel_all() {
-                eprintln!("friends: couldn't clear the booked reminders: {e}");
-                return;
+            // Cancelled by id: the plugin's `cancel_all` sends no arguments, which its iOS side
+            // refuses, so it never cleared anything (and nothing was ever booked).
+            let pending: Vec<i32> = match notification.pending() {
+                Ok(pending) => pending.iter().map(|p| p.id()).collect(),
+                Err(e) => {
+                    eprintln!("friends: couldn't read the booked reminders: {e}");
+                    return;
+                }
+            };
+            if !pending.is_empty() {
+                if let Err(e) = notification.cancel(pending) {
+                    eprintln!("friends: couldn't clear the booked reminders: {e}");
+                    return;
+                }
             }
             booked.insert(HashMap::new())
         }

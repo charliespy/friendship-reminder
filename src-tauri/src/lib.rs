@@ -74,6 +74,43 @@ fn take_shown_person(app: AppHandle) -> Option<u64> {
         .take()
 }
 
+/// Whether the app may send notifications, as the system answers.
+#[derive(serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum NotificationAccess {
+    Allowed,
+    /// Not asked yet (iPhone): the app asks only when the user taps to turn reminders on.
+    NotAsked,
+    Denied,
+}
+
+/// Whether the app may send notifications. The Mac's always may: macOS asks at launch.
+#[tauri::command]
+async fn notification_access(app: AppHandle) -> Result<NotificationAccess, String> {
+    #[cfg(target_os = "ios")]
+    return mobile::notification_access(&app);
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = app;
+        Ok(NotificationAccess::Allowed)
+    }
+}
+
+/// Asks the system whether the app may send notifications (iOS's question, the first time), and
+/// answers what the user chose.
+#[tauri::command]
+async fn allow_notifications(app: AppHandle) -> Result<NotificationAccess, String> {
+    #[cfg(target_os = "ios")]
+    return tauri::async_runtime::spawn_blocking(move || mobile::allow_notifications(&app))
+        .await
+        .map_err(|e| e.to_string())?;
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = app;
+        Ok(NotificationAccess::Allowed)
+    }
+}
+
 struct State(Mutex<App>);
 
 /// Why the data couldn't be opened, on iPhone, where the app stays up to say so (every command
@@ -238,6 +275,8 @@ pub fn run() {
             contacts::list_contacts,
             contacts::share_more_contacts,
             contacts::import_contacts,
+            notification_access,
+            allow_notifications,
             take_shown_person
         ]);
     #[cfg(target_os = "ios")]
@@ -253,6 +292,8 @@ pub fn run() {
             contacts::list_contacts,
             contacts::share_more_contacts,
             contacts::import_contacts,
+            notification_access,
+            allow_notifications,
             take_shown_person
         ]);
     builder
