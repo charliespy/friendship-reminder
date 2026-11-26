@@ -22,6 +22,19 @@
 	<string>0.1.2</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- The app's link, which it writes on the contact cards of the people added from Contacts:
+	     tapping it in Contacts opens the app on that person. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>io.github.charliespy.friends</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.github.charliespy.friends</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSContactsUsageDescription</key>
 	<string>Friendship Reminder shows your contacts' names so you can pick who to add, and adds a link back to the app on the cards of the people you add.</string>
 	<key>LSRequiresIPhoneOS</key>

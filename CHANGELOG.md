@@ -12,8 +12,9 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 ### New
 
 - **Import from Contacts**: Add person can now add one or several people from Contacts at once.
-  Search, tick who you want, pick how often, and add them. Friendship Reminder reads only their
-  names, and adds a link back to the app on their cards.
+  Search, tick who you want, pick how often for each, and add them. Friendship Reminder reads only
+  their names, and adds a link back to the app on their cards: tap it in Contacts to open
+  Friendship Reminder at that person.
 - A short welcome when you first open Friendship Reminder: sign in with Apple (or choose Not now),
   then pick people from Contacts (or Skip).
 

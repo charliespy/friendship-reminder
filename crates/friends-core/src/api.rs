@@ -95,7 +95,6 @@ struct PersonArgs {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PeopleArgs {
     people: Vec<NewPerson>,
-    frequency_days: u32,
     last_connected: NaiveDate,
 }
 
@@ -342,7 +341,7 @@ impl App {
             }
             "add_people" => {
                 let p: PeopleArgs = args(cmd, a)?;
-                d.add_people(&p.people, p.frequency_days, p.last_connected, today)
+                d.add_people(&p.people, p.last_connected, today)
                     .map_err(invalid)?;
             }
             "finish_guide" => {
@@ -405,15 +404,10 @@ impl App {
     pub fn import_contacts(
         &mut self,
         people: Vec<NewPerson>,
-        frequency_days: u32,
         today: NaiveDate,
     ) -> Result<(View, Vec<(String, String)>), ApiError> {
         let last_id = self.data.last_id;
-        let args = serde_json::json!({
-            "people": people,
-            "frequencyDays": frequency_days,
-            "lastConnected": today,
-        });
+        let args = serde_json::json!({ "people": people, "lastConnected": today });
         let view = self.call("add_people", args, today)?;
         let links = self
             .data

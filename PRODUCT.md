@@ -42,6 +42,8 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 - The first-run guide, on a new Mac or iPhone: a sign-in page (Sign in with Apple, or Not now),
   then picking people from Contacts (or Skip). Each step shows once. Someone already using the app
   never sees it.
+- A person added from Contacts has a link on their contact card; tapping it opens the app at
+  them (Preferences › People on the Mac, the People tab on iPhone).
 - The Preferences window: People (add by name or from Contacts, edit, mark done, select and delete), Blocked dates (add,
   remove), Settings (which days count, notifications, open at login, and Account: sign in with
   Apple, sign out, and how syncing is going).

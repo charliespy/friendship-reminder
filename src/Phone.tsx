@@ -8,6 +8,7 @@ import { WithGuide } from "./Guide";
 import { ReachOut } from "./Dropdown";
 import { PeoplePane } from "./PeoplePane";
 import { SettingsPane } from "./SettingsPane";
+import { useShownPerson } from "./useShownPerson";
 import { useView } from "./useView";
 
 type Tab = "today" | "people" | "blocked" | "settings";
@@ -64,6 +65,8 @@ export function Phone() {
   const { view, loadError } = useView();
   const [tab, setTab] = useState<Tab>("today");
   const due = view?.people.filter((p) => p.due).length ?? 0;
+  // A link from a contact card: the People tab, at that person.
+  const shown = useShownPerson(() => setTab("people"));
 
   // Each tab keeps its own place: the page scrolls as a whole, so leaving a tab saves how far down
   // it was, and coming back puts it there again (the top, the first time).
@@ -110,7 +113,7 @@ export function Phone() {
                   <ReachOut view={view} addHint="Add the people you want to keep up with in People." />
                 </section>
               ) : t.id === "people" ? (
-                <PeoplePane view={view} />
+                <PeoplePane view={view} shown={shown} />
               ) : t.id === "blocked" ? (
                 <BlockedPane view={view} />
               ) : (

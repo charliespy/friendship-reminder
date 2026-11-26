@@ -12,6 +12,8 @@
 //! - `POST /__test/today` with `"YYYY-MM-DD"` (a JSON string) moves the server's clock to that day.
 //! - `POST /__test/contacts` with `"allowed"` or `"denied"` (a JSON string) answers Contacts' "allow
 //!   access?" that way from then on (allowed at first). The address book is a made-up one.
+//! - `POST /__test/open-card` with a made-up card's id (a JSON string) acts as if the app's link on
+//!   that card opened the app: the next window to ask shows that person. Answers their id, or null.
 //!
 //! It only listens on the loopback address and is never part of the app. So that a web page open in
 //! the browser can't drive it, it answers only requests addressed to `127.0.0.1:<port>` or
@@ -23,7 +25,7 @@ use std::path::PathBuf;
 
 use chrono::{Local, NaiveDate};
 use friends_core::api::App;
-use friends_core::contacts::{choices, link_url, Card};
+use friends_core::contacts::{choices, link_url, person_in_link, Card};
 use friends_core::model::NewPerson;
 use friends_core::store::Store;
 use serde_json::{json, Value};
@@ -110,6 +112,8 @@ struct Dev {
     contacts_allowed: bool,
     /// The links the app wrote onto the made-up cards, by card.
     card_links: HashMap<String, Vec<String>>,
+    /// The person a link from a card opened the app on, until a window takes them.
+    shown_person: Option<u64>,
 }
 
 /// A made-up address book: (card id, name). The app reads only names.
@@ -189,15 +193,10 @@ impl Dev {
                 let people: Vec<NewPerson> =
                     serde_json::from_value(args.get("people").cloned().unwrap_or(Value::Null))
                         .map_err(|e| json!(e.to_string()))?;
-                let frequency = args
-                    .get("frequencyDays")
-                    .and_then(Value::as_u64)
-                    .and_then(|f| u32::try_from(f).ok())
-                    .unwrap_or_default();
                 let today = self.today();
                 let (view, links) = self
                     .app
-                    .import_contacts(people, frequency, today)
+                    .import_contacts(people, today)
                     .map_err(|e| serde_json::to_value(e).unwrap_or(Value::Null))?;
                 // As the app does: the link goes onto each card.
                 for (card, uid) in links {
@@ -209,6 +208,7 @@ impl Dev {
                 }
                 to_value(view)
             }
+            "take_shown_person" => Ok(json!(self.shown_person.take())),
             // Window commands have nothing to do in a browser.
             "open_preferences" | "hide_dropdown" | "quit" => Ok(Value::Null),
             _ => Err(json!(format!("unknown command: {cmd}"))),
@@ -248,6 +248,7 @@ impl Dev {
         self.signed_in = false;
         self.contacts_allowed = true;
         self.card_links.clear();
+        self.shown_person = None;
         Ok(())
     }
 }
@@ -279,6 +280,7 @@ fn main() {
         signed_in: false,
         contacts_allowed: true,
         card_links: HashMap::new(),
+        shown_person: None,
     };
     let server = Server::http(("127.0.0.1", opts.port)).unwrap_or_else(|e| {
         eprintln!(
@@ -332,6 +334,16 @@ fn main() {
                     json_response(200, &Value::Null)
                 }
                 None => json_response(400, &json!("send \"YYYY-MM-DD\"")),
+            },
+            (Method::Post, "/__test/open-card") => match serde_json::from_str::<String>(&body) {
+                Ok(card) => {
+                    let links = dev.card_links.get(&card).cloned().unwrap_or_default();
+                    dev.shown_person = links
+                        .iter()
+                        .find_map(|url| person_in_link(dev.app.data(), url));
+                    json_response(200, &json!(dev.shown_person))
+                }
+                Err(_) => json_response(400, &json!("send the card's id as a JSON string")),
             },
             (Method::Post, "/__test/contacts") => {
                 match serde_json::from_str::<String>(&body).as_deref() {

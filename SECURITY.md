@@ -44,7 +44,8 @@ photos. For each person you add, it keeps:
 - a link written onto their card in Contacts, labelled "Friendship Reminder", for example
   `io.github.charliespy.friends://person/3f2a…`. The code at the end is the app's random id for the
   person, which says nothing about them. Contacts syncs the card (with iCloud), so your other
-  devices find the person's card by this link. It's the only change the app makes to your contacts,
+  devices find the person's card by this link, and tapping it opens Friendship Reminder at that
+  person (the app registers this kind of link for that). It's the only change the app makes to your contacts,
   and only on the cards of people you add; you can delete it from the card at any time.
 
 ## Supported versions

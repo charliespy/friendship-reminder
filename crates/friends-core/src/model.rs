@@ -57,13 +57,15 @@ pub struct Person {
     pub contact: Option<String>,
 }
 
-/// Someone to add in a batch (from Contacts): their name, and this device's id for their card.
+/// Someone to add in a batch (from Contacts): their name, this device's id for their card, and how
+/// often to be in touch with them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewPerson {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contact: Option<String>,
+    pub frequency_days: u32,
 }
 
 /// The first-run guide, on this device: which steps are behind you. Each is done once, by doing it
@@ -452,20 +454,21 @@ impl Data {
         Ok(id)
     }
 
-    /// Adds several people at once (from Contacts), all with the same frequency and last time in
-    /// touch. Someone whose card is already in the list (or twice in the batch) is left out. When any
+    /// Adds several people at once (from Contacts), each with their own frequency, all with the
+    /// same last time in touch. Someone whose card is already in the list (or twice in the batch) is left out. When any
     /// name can't be used, nobody is added. Returns the ids of the people added.
     pub fn add_people(
         &mut self,
         people: &[NewPerson],
-        frequency_days: u32,
         last_connected: NaiveDate,
         today: NaiveDate,
     ) -> Result<Vec<u64>, Invalid> {
         if people.is_empty() {
             return invalid("Pick at least one person.");
         }
-        check_frequency(frequency_days)?;
+        for p in people {
+            check_frequency(p.frequency_days)?;
+        }
         check_last_connected(last_connected, today)?;
         let names = people
             .iter()
@@ -483,7 +486,7 @@ impl Data {
             if listed {
                 continue;
             }
-            let id = self.add_person(&name, frequency_days, last_connected, today)?;
+            let id = self.add_person(&name, p.frequency_days, last_connected, today)?;
             if let Some(person) = self.people.last_mut() {
                 person.contact = p.contact.clone();
             }

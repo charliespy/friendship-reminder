@@ -107,6 +107,9 @@ export type Account =
 /** Sent to every window after any change, with the new view. */
 export const VIEW_CHANGED = "view-changed";
 
+/** Sent to the windows when a link from a contact card opened the app on someone. */
+export const SHOW_PERSON = "show-person";
+
 /** Sent to every window when the account changes, with the new account. */
 export const ACCOUNT_CHANGED = "account-changed";
 
@@ -134,11 +137,11 @@ export const api = {
   /** The cards in Contacts. Asks for access the first time. */
   listContacts: () => invoke<ContactList>("list_contacts"),
   /**
-   * Adds the people picked in Contacts, in touch today, and links each to their card (on this device,
+   * Adds the people picked in Contacts, each with their own frequency, in touch today, and links each to their card (on this device,
    * and with a link on the card the other devices find).
    */
-  importContacts: (people: { name: string; contact: string }[], frequencyDays: number) =>
-    invoke<View>("import_contacts", { people, frequencyDays }),
+  importContacts: (people: { name: string; contact: string; frequencyDays: number }[]) =>
+    invoke<View>("import_contacts", { people }),
   getLaunchAtLogin: () => invoke<boolean>("get_launch_at_login"),
   setLaunchAtLogin: (on: boolean) => invoke<boolean>("set_launch_at_login", { on }),
   openPreferences: () => invoke<void>("open_preferences"),
@@ -154,6 +157,9 @@ export const api = {
   /** Stops sign-in `attempt`, even one that hasn't started waiting for the browser yet. */
   cancelSignIn: (attempt: string) => invoke<Account>("cancel_sign_in", { attempt }),
   signOut: () => invoke<Account>("sign_out"),
+  /** The person a link from a contact card opened the app on, once (null when none is waiting). */
+  takeShownPerson: () => invoke<number | null>("take_shown_person"),
+  onShowPerson: (f: () => void): Promise<UnlistenFn> => listen(SHOW_PERSON, () => f()),
   onAccountChanged: (f: (a: Account) => void): Promise<UnlistenFn> =>
     listen<Account>(ACCOUNT_CHANGED, (e) => f(e.payload)),
 };

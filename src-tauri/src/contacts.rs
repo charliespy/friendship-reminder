@@ -219,14 +219,8 @@ pub async fn list_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
 /// Adds the people picked in Contacts, then writes the app's link onto the card of each one added.
 /// A card that can't take the link (a read-only account, say) still gets its person added.
 #[tauri::command]
-pub async fn import_contacts(
-    app: AppHandle,
-    people: Vec<NewPerson>,
-    frequency_days: u32,
-) -> Result<View, ApiError> {
-    let (view, links) = crate::with_core(&app, |core, day| {
-        core.import_contacts(people, frequency_days, day)
-    })?;
+pub async fn import_contacts(app: AppHandle, people: Vec<NewPerson>) -> Result<View, ApiError> {
+    let (view, links) = crate::with_core(&app, |core, day| core.import_contacts(people, day))?;
     let _ = tauri::async_runtime::spawn_blocking(move || {
         // SAFETY: as in list_contacts.
         let store = unsafe { CNContactStore::new() };

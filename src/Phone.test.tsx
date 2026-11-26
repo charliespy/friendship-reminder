@@ -13,6 +13,8 @@ vi.mock("./api", async (orig) => ({
     getLaunchAtLogin: () => getLaunchAtLogin(),
     getAccount: () => Promise.resolve({ status: "signedOut", warning: null }),
     onAccountChanged: () => Promise.resolve(() => {}),
+    takeShownPerson: () => Promise.resolve(null),
+    onShowPerson: () => Promise.resolve(() => {}),
   },
 }));
 

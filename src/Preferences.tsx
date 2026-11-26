@@ -4,6 +4,7 @@ import { BlockedPane } from "./BlockedPane";
 import { WithGuide } from "./Guide";
 import { PeoplePane } from "./PeoplePane";
 import { SettingsPane } from "./SettingsPane";
+import { useShownPerson } from "./useShownPerson";
 import { useView } from "./useView";
 
 type Tab = "people" | "blocked" | "settings";
@@ -17,6 +18,8 @@ const TABS: { id: Tab; title: string }[] = [
 export function Preferences() {
   const { view, loadError } = useView();
   const [tab, setTab] = useState<Tab>("people");
+  // A link from a contact card: People, at that person.
+  const shown = useShownPerson(() => setTab("people"));
   const due = view?.people.filter((p) => p.due).length ?? 0;
 
   const prefs = (
@@ -61,7 +64,7 @@ export function Preferences() {
               hidden={tab !== t.id}
             >
               {t.id === "people" ? (
-                <PeoplePane view={view} />
+                <PeoplePane view={view} shown={shown} />
               ) : t.id === "blocked" ? (
                 <BlockedPane view={view} />
               ) : (

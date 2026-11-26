@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use chrono::NaiveDate;
 use friends_core::api::App;
-use friends_core::contacts::{choices, link_url, uid_in_link, Card};
+use friends_core::contacts::{choices, link_url, person_in_link, uid_in_link, Card};
 use friends_core::model::{Data, NewPerson};
 use friends_core::store::Store;
 use serde_json::json;
@@ -42,10 +42,16 @@ fn card(id: &str, name: &str) -> Card {
     }
 }
 
+/// Someone to add, monthly.
 fn new_person(name: &str, contact: Option<&str>) -> NewPerson {
+    every(30, name, contact)
+}
+
+fn every(frequency_days: u32, name: &str, contact: Option<&str>) -> NewPerson {
     NewPerson {
         name: name.to_string(),
         contact: contact.map(str::to_string),
+        frequency_days,
     }
 }
 
@@ -54,20 +60,22 @@ fn adding_several_people_schedules_each_from_the_day_given() {
     let mut data = Data::default();
     let ids = data
         .add_people(
-            &[new_person("Ada", Some("card-1")), new_person("Bo", None)],
-            90,
+            &[every(90, "Ada", Some("card-1")), every(365, "Bo", None)],
             today(),
             today(),
         )
         .unwrap();
     assert_eq!(ids.len(), 2);
     assert_eq!(data.people.len(), 2);
+    // Each keeps the frequency picked for them.
+    assert_eq!(data.people[0].frequency_days, 90);
+    assert_eq!(data.people[1].frequency_days, 365);
     for p in &data.people {
-        assert_eq!(p.frequency_days, 90);
         assert_eq!(p.last_connected, today());
         // The same schedule adding them one at a time gives.
         let mut one = Data::default();
-        one.add_person(&p.name, 90, today(), today()).unwrap();
+        one.add_person(&p.name, p.frequency_days, today(), today())
+            .unwrap();
         assert_eq!(p.next_target, one.people[0].next_target);
         assert_eq!(p.notification_date, one.people[0].notification_date);
     }
@@ -80,7 +88,7 @@ fn adding_several_people_schedules_each_from_the_day_given() {
 #[test]
 fn adding_nobody_is_refused() {
     let mut data = Data::default();
-    let err = data.add_people(&[], 30, today(), today()).unwrap_err();
+    let err = data.add_people(&[], today(), today()).unwrap_err();
     assert_eq!(err.0, "Pick at least one person.");
 }
 
@@ -91,8 +99,10 @@ fn a_bad_name_in_the_batch_adds_nobody() {
         .call(
             "add_people",
             json!({
-                "people": [{"name": "Ada", "contact": "card-1"}, {"name": "   "}],
-                "frequencyDays": 30,
+                "people": [
+                    {"name": "Ada", "contact": "card-1", "frequencyDays": 30},
+                    {"name": "   ", "frequencyDays": 30},
+                ],
                 "lastConnected": "2026-08-19",
             }),
             today(),
@@ -105,7 +115,7 @@ fn a_bad_name_in_the_batch_adds_nobody() {
 #[test]
 fn a_card_already_in_the_list_isnt_added_twice() {
     let mut data = Data::default();
-    data.add_people(&[new_person("Ada", Some("card-1"))], 30, today(), today())
+    data.add_people(&[new_person("Ada", Some("card-1"))], today(), today())
         .unwrap();
     let ids = data
         .add_people(
@@ -114,7 +124,6 @@ fn a_card_already_in_the_list_isnt_added_twice() {
                 new_person("Bo", Some("card-2")),
                 new_person("Bo", Some("card-2")),
             ],
-            30,
             today(),
             today(),
         )
@@ -131,8 +140,7 @@ fn the_add_people_command_saves_the_link_on_this_device() {
         .call(
             "add_people",
             json!({
-                "people": [{"name": "Ada Park", "contact": "card-1"}],
-                "frequencyDays": 180,
+                "people": [{"name": "Ada Park", "contact": "card-1", "frequencyDays": 180}],
                 "lastConnected": "2026-08-19",
             }),
             today(),
@@ -149,7 +157,6 @@ fn the_link_to_the_card_never_goes_to_the_account() {
     let mut data = Data::default();
     data.add_people(
         &[new_person("Ada", Some("card-secret-id"))],
-        30,
         today(),
         today(),
     )
@@ -164,7 +171,7 @@ fn the_link_to_the_card_never_goes_to_the_account() {
 fn the_link_stays_when_another_device_changes_the_person() {
     use friends_core::sync::{Changes, RemotePerson};
     let mut data = Data::default();
-    data.add_people(&[new_person("Ada", Some("card-1"))], 30, today(), today())
+    data.add_people(&[new_person("Ada", Some("card-1"))], today(), today())
         .unwrap();
     let uid = data.people[0].uid.clone();
     data.sync_start("11111111-1111-1111-1111-111111111111");
@@ -203,13 +210,8 @@ fn a_link_on_the_card_names_the_person_every_device_knows() {
 #[test]
 fn the_picker_lists_cards_by_name_and_marks_who_is_already_added() {
     let mut data = Data::default();
-    data.add_people(
-        &[new_person("Ada Park", Some("card-1"))],
-        30,
-        today(),
-        today(),
-    )
-    .unwrap();
+    data.add_people(&[new_person("Ada Park", Some("card-1"))], today(), today())
+        .unwrap();
     data.add_person("bo  chen", 30, today(), today()).unwrap();
     data.add_person("Kit", 30, today(), today()).unwrap();
     let kit = data.people[2].uid.clone();
@@ -317,7 +319,6 @@ fn someone_with_the_same_name_isnt_added_again_from_contacts() {
                 new_person("Ana Torres", Some("card-1")),
                 new_person("Bo", Some("card-2")),
             ],
-            30,
             today(),
             today(),
         )
@@ -367,7 +368,7 @@ fn importing_answers_which_cards_take_a_link() {
     let (mut app, _) = app("import-links");
     app.call(
         "add_people",
-        json!({"people": [{"name": "Ada", "contact": "card-1"}], "frequencyDays": 30, "lastConnected": "2026-08-19"}),
+        json!({"people": [{"name": "Ada", "contact": "card-1", "frequencyDays": 30}], "lastConnected": "2026-08-19"}),
         today(),
     )
     .unwrap();
@@ -377,7 +378,6 @@ fn importing_answers_which_cards_take_a_link() {
                 new_person("Ada", Some("card-1")),
                 new_person("Bo", Some("card-2")),
             ],
-            30,
             today(),
         )
         .unwrap();
@@ -385,4 +385,34 @@ fn importing_answers_which_cards_take_a_link() {
     let bo = app.data().people.iter().find(|p| p.name == "Bo").unwrap();
     // Only the person added now: Ada's card has its link already.
     assert_eq!(links, vec![("card-2".to_string(), bo.uid.clone())]);
+}
+
+#[test]
+fn a_frequency_the_app_doesnt_offer_adds_nobody() {
+    let mut data = Data::default();
+    let err = data
+        .add_people(
+            &[every(30, "Ada", None), every(45, "Bo", None)],
+            today(),
+            today(),
+        )
+        .unwrap_err();
+    assert_eq!(err.0, "Pick how often to be in touch.");
+    assert!(data.people.is_empty());
+}
+
+#[test]
+fn a_link_from_a_card_finds_the_person_on_this_device() {
+    let mut data = Data::default();
+    data.add_people(&[new_person("Ada", Some("card-1"))], today(), today())
+        .unwrap();
+    let (id, uid) = (data.people[0].id, data.people[0].uid.clone());
+    assert_eq!(person_in_link(&data, &link_url(&uid)), Some(id));
+    // Someone deleted since, another app's link, or a link with nothing after it.
+    assert_eq!(person_in_link(&data, &link_url("gone")), None);
+    assert_eq!(person_in_link(&data, "https://example.com"), None);
+    assert_eq!(
+        person_in_link(&data, "io.github.charliespy.friends://auth/callback?code=x"),
+        None
+    );
 }

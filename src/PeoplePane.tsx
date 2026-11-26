@@ -6,6 +6,7 @@ import { ContactPicker } from "./ContactPicker";
 import { DoneButton } from "./DoneButton";
 import { aimDay, formatDay, relativeDay } from "./date";
 import { FREQUENCIES, frequencyLabel } from "./format";
+import type { Shown } from "./useShownPerson";
 import { useAction } from "./useView";
 
 interface Draft {
@@ -115,6 +116,7 @@ function PersonForm({
 function PersonRow({
   person,
   today,
+  highlighted,
   selected,
   onSelect,
   onEdit,
@@ -126,6 +128,8 @@ function PersonRow({
 }: {
   person: Person;
   today: string;
+  /** Just opened from their contact card. */
+  highlighted: boolean;
   selected: boolean;
   onSelect: (on: boolean) => void;
   onEdit: () => void;
@@ -143,7 +147,12 @@ function PersonRow({
       : `Due · aim for ${aimDay(person.nextTarget, today)}`
     : `Reminder ${relativeDay(person.notificationDate, today)}, ${formatDay(person.notificationDate, today)}`;
   return (
-    <li className="list-row" data-testid="person-row" data-overdue={person.overdue}>
+    <li
+      className={highlighted ? "list-row is-highlighted" : "list-row"}
+      data-testid="person-row"
+      data-person-id={person.id}
+      data-overdue={person.overdue}
+    >
       <input
         ref={selectRef}
         type="checkbox"
@@ -169,7 +178,11 @@ function PersonRow({
   );
 }
 
-export function PeoplePane({ view }: { view: View }) {
+/** How long a person opened from their contact card stays highlighted. */
+const HIGHLIGHT_MS = 2500;
+
+/** `shown`: a person to bring into view, opened from their contact card. */
+export function PeoplePane({ view, shown = null }: { view: View; shown?: Shown | null }) {
   const [adding, setAdding] = useState(false);
   // Add person's "Import from Contacts": the picker in place of the form.
   const [importing, setImporting] = useState(false);
@@ -177,6 +190,7 @@ export function PeoplePane({ view }: { view: View }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const del = useAction();
+
 
   // Forget selections of people who are gone.
   const present = new Set(view.people.map((p) => p.id));
@@ -190,6 +204,18 @@ export function PeoplePane({ view }: { view: View }) {
   // their Done button in its new place. After Deselect all, the selection bar goes away with the
   // focused button: focus goes to the checkbox of the first person who was selected.
   const section = useRef<HTMLElement>(null);
+
+  // Opened from a contact card: scroll to the person and light up their row for a moment.
+  const [faded, setFaded] = useState<Shown | null>(null);
+  const highlighted = shown && shown !== faded ? shown.id : null;
+  useEffect(() => {
+    if (!shown) return;
+    section.current
+      ?.querySelector<HTMLElement>(`[data-person-id="${shown.id}"]`)
+      ?.scrollIntoView?.({ block: "center" });
+    const timer = setTimeout(() => setFaded(shown), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [shown]);
   const addButton = useRef<HTMLButtonElement>(null);
   const editButtons = useRef(new Map<number, HTMLButtonElement>());
   const checkboxes = useRef(new Map<number, HTMLInputElement>());
@@ -376,6 +402,7 @@ export function PeoplePane({ view }: { view: View }) {
               key={p.id}
               person={p}
               today={view.today}
+              highlighted={highlighted === p.id}
               selected={chosen.includes(p.id)}
               onSelect={(on) => select(p.id, on)}
               onEdit={() => (setEditing(p.id), setAdding(false))}

@@ -1,5 +1,6 @@
 /**
- * Picking people from Contacts: search the cards, tick one or several, pick how often, and add them.
+ * Picking people from Contacts: search the cards, tick one or several, pick how often for each, and
+ * add them.
  * Used from Add person and from the first-run guide. The app reads only names (see SECURITY.md).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +25,9 @@ function matches(name: string, query: string): boolean {
   return fold(query).split(/\s+/).filter(Boolean).every((w) => n.includes(w));
 }
 
+/** How often to be in touch with someone just ticked: monthly, as in Add person. */
+const DEFAULT_FREQUENCY = 30;
+
 /** The iPhone app (its entry marks the page). */
 function onPhone(): boolean {
   return document.documentElement.classList.contains("phone-app");
@@ -43,8 +47,8 @@ export function ContactPicker({
   const phone = onPhone();
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [frequencyDays, setFrequencyDays] = useState(30);
+  // Who's ticked, by card, with how often to be in touch with each (monthly to start with).
+  const [picked, setPicked] = useState<Map<string, number>>(new Map());
   const add = useAction();
   const live = useRef(true);
 
@@ -70,15 +74,19 @@ export function ContactPicker({
   const count = picked.size;
 
   const flip = (id: string, on: boolean) => {
-    const next = new Set(picked);
-    if (on) next.add(id);
+    const next = new Map(picked);
+    if (on) next.set(id, DEFAULT_FREQUENCY);
     else next.delete(id);
     setPicked(next);
   };
 
+  const setFrequency = (id: string, days: number) => setPicked(new Map(picked).set(id, days));
+
   const submit = async () => {
-    const people = contacts.filter((c) => picked.has(c.id)).map((c) => ({ name: c.name, contact: c.id }));
-    if (await add.run(() => api.importContacts(people, frequencyDays))) {
+    const people = contacts
+      .filter((c) => picked.has(c.id))
+      .map((c) => ({ name: c.name, contact: c.id, frequencyDays: picked.get(c.id) ?? DEFAULT_FREQUENCY }));
+    if (await add.run(() => api.importContacts(people))) {
       if (live.current) onAdded(people.length);
     }
   };
@@ -162,25 +170,29 @@ export function ContactPicker({
                   </span>
                 )}
               </label>
+              {picked.has(c.id) && (
+                <select
+                  className="input picker-frequency"
+                  aria-label={`How often for ${c.name}`}
+                  value={picked.get(c.id)}
+                  onChange={(e) => setFrequency(c.id, Number(e.target.value))}
+                >
+                  {FREQUENCIES.map((f) => (
+                    <option key={f.days} value={f.days}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </li>
           ))}
         </ul>
       )}
       <div className="picker-footer">
-        <label className="field">
-          <span>How often</span>
-          <select className="input" value={frequencyDays} onChange={(e) => setFrequencyDays(Number(e.target.value))}>
-            {FREQUENCIES.map((f) => (
-              <option key={f.days} value={f.days}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </label>
         <p className="hint picker-hint">
           {free === 0 && contacts.length > 0
             ? "Everyone in Contacts is in your list already."
-            : "Each person counts as in touch today, so their first reminder comes one round from now. You can change anyone later."}
+            : "Pick how often for each person you tick. Each counts as in touch today, so their first reminder comes one round from now."}
         </p>
         {add.error && (
           <p className="error" role="alert">

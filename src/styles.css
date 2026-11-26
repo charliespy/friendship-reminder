@@ -1694,8 +1694,10 @@ html.in-browser #root {
   border-top: 0.5px solid var(--separator);
 }
 
-.picker-footer .field {
-  max-width: 200px;
+.picker-row .picker-frequency {
+  flex: none;
+  width: auto;
+  margin-right: var(--space-3);
 }
 
 .picker-hint {
@@ -1732,8 +1734,15 @@ html.in-browser #root {
   opacity: 0.4;
 }
 
-.phone .picker-footer .field {
-  max-width: none;
+/* On iPhone the dropdown sits under the name, lined up with it, so long names keep their room. */
+.phone .picker-row {
+  flex-wrap: wrap;
+  padding-bottom: 0;
+}
+
+.phone .picker-row .picker-frequency {
+  width: calc(100% - var(--space-4) - 22px - var(--space-3));
+  margin: 0 var(--space-4) var(--space-3) calc(var(--space-4) + 22px + var(--space-3));
 }
 
 .phone .import-row {
@@ -1751,4 +1760,14 @@ html.in-browser #root {
   bottom: var(--space-4);
   left: 0;
   text-align: center;
+}
+
+/* A person opened from their contact card: their row lights up for a moment. */
+.list-row.is-highlighted {
+  background: var(--accent-tint);
+  transition: background 0.6s var(--ease-out);
+}
+
+.list-row {
+  transition: background 1.2s var(--ease-out);
 }

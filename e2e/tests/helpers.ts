@@ -70,3 +70,13 @@ export async function setContactsAccess(request: APIRequestContext, answer: "all
   const res = await request.post(`${server}/__test/contacts`, { data: JSON.stringify(answer), headers: JSON_HEADERS });
   expect(res.ok()).toBeTruthy();
 }
+
+/**
+ * Acts as if the app's link on a made-up contact card opened the app; answers the person's id, or
+ * null when the card has no link to someone in the list.
+ */
+export async function openCard(request: APIRequestContext, card: string): Promise<number | null> {
+  const res = await request.post(`${server}/__test/open-card`, { data: JSON.stringify(card), headers: JSON_HEADERS });
+  expect(res.ok()).toBeTruthy();
+  return res.json();
+}

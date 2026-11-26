@@ -24,6 +24,56 @@ use tauri::{AppHandle, Emitter, Manager};
 
 const VIEW_CHANGED: &str = "view-changed";
 
+/// Sent to the windows when a link from a contact card opened the app on someone: take them with
+/// `take_shown_person`.
+const SHOW_PERSON: &str = "show-person";
+
+/// The person a link from a contact card opened the app on, until a window shows them. Kept, not
+/// only sent, since the window may still be loading.
+struct ShownPerson(Mutex<Option<u64>>);
+
+/// The app was opened from a link: the line Friendship Reminder writes on a contact card. Shows the
+/// app (Preferences on the Mac), and the person, if they're still in the list. Other links (the
+/// iPhone's sign-in comes back on the same address) are left alone.
+fn open_links(app: &AppHandle, urls: &[tauri::Url]) {
+    let Some(state) = app.try_state::<State>() else {
+        return;
+    };
+    let person = {
+        let core = lock(&state);
+        let data = core.data();
+        let ours = urls
+            .iter()
+            .any(|u| friends_core::contacts::uid_in_link(u.as_str()).is_some());
+        if !ours {
+            return;
+        }
+        urls.iter()
+            .find_map(|u| friends_core::contacts::person_in_link(data, u.as_str()))
+    };
+    if let Some(id) = person {
+        *app.state::<ShownPerson>()
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(id);
+    }
+    #[cfg(target_os = "macos")]
+    let _ = desktop::show_preferences(app);
+    if let Some(id) = person {
+        let _ = app.emit(SHOW_PERSON, id);
+    }
+}
+
+/// The person a link opened the app on, once: the window that asks first shows them.
+#[tauri::command]
+fn take_shown_person(app: AppHandle) -> Option<u64> {
+    app.state::<ShownPerson>()
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+}
+
 struct State(Mutex<App>);
 
 /// Why the data couldn't be opened, on iPhone, where the app stays up to say so (every command
@@ -186,7 +236,8 @@ pub fn run() {
             account::cancel_sign_in,
             account::sign_out,
             contacts::list_contacts,
-            contacts::import_contacts
+            contacts::import_contacts,
+            take_shown_person
         ]);
     #[cfg(target_os = "ios")]
     let builder = tauri::Builder::default()
@@ -199,12 +250,14 @@ pub fn run() {
             account::cancel_sign_in,
             account::sign_out,
             contacts::list_contacts,
-            contacts::import_contacts
+            contacts::import_contacts,
+            take_shown_person
         ]);
     builder
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(LastPublished(Mutex::new(None)));
+            app.manage(ShownPerson(Mutex::new(None)));
             app.manage(account::Account::new());
             app.manage(sync::Syncer::new());
             let core = match open_data(&handle) {
@@ -235,6 +288,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the Friendship Reminder app")
         .run(|app, event| {
+            if let tauri::RunEvent::Opened { urls } = &event {
+                open_links(app, urls);
+            }
             #[cfg(target_os = "macos")]
             desktop::on_event(app, &event);
             #[cfg(target_os = "ios")]

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openPreferences, seed, seedNewUser, setContactsAccess } from "./helpers";
+import { SAMPLE, openCard, openPreferences, seed, seedNewUser, setContactsAccess } from "./helpers";
 
 test("a new user signs in or not, then picks people from Contacts", async ({ page, request }) => {
   await seedNewUser(request);
@@ -15,14 +15,18 @@ test("a new user signs in or not, then picks people from Contacts", async ({ pag
   await page.getByRole("checkbox", { name: "Chloé Martin" }).check();
   await page.getByLabel("Search contacts").fill("");
   await page.getByRole("checkbox", { name: "Kofi Mensah" }).check();
-  await page.getByLabel("How often").selectOption({ label: "Quarterly" });
+  // Each person ticked gets their own "how often", monthly to start with.
+  await expect(page.getByLabel("How often for Chloé Martin")).toHaveValue("30");
+  await page.getByLabel("How often for Kofi Mensah").selectOption({ label: "Quarterly" });
   await expect(add).toHaveText("Add 2 people");
   await add.click();
 
   const rows = page.getByTestId("person-row");
   await expect(rows).toHaveCount(2);
-  // In touch today (Wed Nov 18) + 90 = Tue Feb 16 → Sat Feb 20; reminder Mon Feb 15.
-  await expect(rows.first()).toContainText("Quarterly · Reminder in 3 months, Mon, Feb 15, 2027");
+  // In touch today (Wed Nov 18) + 30 = Fri Dec 18 → Sat Dec 19; reminder Mon Dec 14.
+  await expect(rows.filter({ hasText: "Chloé Martin" })).toContainText("Monthly · Reminder in 4 weeks, Mon, Dec 14");
+  // + 90 = Tue Feb 16 → Sat Feb 20; reminder Mon Feb 15.
+  await expect(rows.filter({ hasText: "Kofi Mensah" })).toContainText("Quarterly · Reminder in 3 months, Mon, Feb 15, 2027");
 
   // Done once: the guide doesn't come back.
   await page.reload();
@@ -87,4 +91,27 @@ test("on iPhone the guide fills the screen, without the tab bar", async ({ page,
   await page.getByRole("button", { name: "Not now" }).click();
   await page.getByRole("button", { name: "Skip" }).click();
   await expect(page.getByRole("tab", { name: /Today/ })).toBeVisible();
+});
+
+test("the link on a contact card opens the app at that person", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE });
+  await openPreferences(page);
+  await page.getByRole("button", { name: "Add person" }).click();
+  await page.getByRole("button", { name: "Import from Contacts…" }).click();
+  await page.getByRole("checkbox", { name: "Iris Novak" }).check();
+  await page.getByRole("button", { name: "Add 1 person" }).click();
+  const iris = page.getByTestId("person-row").filter({ hasText: "Iris Novak" });
+  await expect(iris).toHaveCount(1);
+
+  // A card without the app's link, then Iris's card (card-09), which got it when she was added.
+  expect(await openCard(request, "card-01")).toBeNull();
+  const id = await openCard(request, "card-09");
+  expect(String(id)).toBe(await iris.getAttribute("data-person-id"));
+
+  // The app comes forward on People, at Iris, lit up for a moment.
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.reload();
+  await expect(page.getByRole("tab", { name: /People/ })).toHaveAttribute("aria-selected", "true");
+  await expect(iris).toHaveClass(/is-highlighted/);
+  await expect(iris).not.toHaveClass(/is-highlighted/, { timeout: 5000 });
 });

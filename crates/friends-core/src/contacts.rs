@@ -94,3 +94,11 @@ pub fn choices(data: &Data, cards: Vec<Card>) -> Vec<Choice> {
 fn fold(name: &str) -> String {
     squeeze(name).to_lowercase()
 }
+
+/// The person (their id on this device) a link opened from a card points at: the app's own link
+/// with the `uid` of someone in the list. Anything else (a sign-in address, someone deleted since)
+/// is `None`.
+pub fn person_in_link(data: &Data, url: &str) -> Option<u64> {
+    let uid = uid_in_link(url)?;
+    data.people.iter().find(|p| p.uid == uid).map(|p| p.id)
+}
