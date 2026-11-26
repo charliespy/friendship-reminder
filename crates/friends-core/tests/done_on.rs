@@ -1,8 +1,9 @@
 //! Marking someone done on the day you were really in touch, which may not be today.
 
-use chrono::NaiveDate;
+use chrono::{Days, NaiveDate, Weekday};
 use friends_core::api::App;
 use friends_core::model::Data;
+use friends_core::schedule::{DaySet, DayToggle};
 use friends_core::store::Store;
 use serde_json::json;
 
@@ -208,4 +209,171 @@ fn the_view_says_when_today_is_the_day_suggested() {
         serde_json::Value::Null
     );
     assert_eq!(json["people"][0]["suggestedToday"], true);
+}
+
+/// Ada, monthly, last in touch Tue Sep 1 2026, under `toggle` (and `custom` days) with `blocked`
+/// ranges: one list caught up only on `today`, after the app didn't run for weeks, and one caught
+/// up every day from Oct 1, as on a Mac that's always on. Both should plan the same.
+fn away_and_every_day(
+    toggle: DayToggle,
+    custom: Option<DaySet>,
+    blocked: &[(NaiveDate, NaiveDate)],
+    today: NaiveDate,
+) -> (Data, Data, u64) {
+    let start = date(2026, 9, 1);
+    let make = || {
+        let mut data = Data::default();
+        data.set_day_setting(toggle, custom, start).unwrap();
+        for (from, to) in blocked {
+            data.add_blocked(*from, *to, "Away", start).unwrap();
+        }
+        let id = data.add_person("Ada", 30, start, start).unwrap();
+        (data, id)
+    };
+    let (mut away, id) = make();
+    away.catch_up(today);
+    let (mut daily, _) = make();
+    let mut day = date(2026, 10, 1);
+    while day <= today {
+        daily.catch_up(day);
+        day = day.checked_add_days(Days::new(1)).unwrap();
+    }
+    (away, daily, id)
+}
+
+fn plan(data: &Data, id: u64) -> (NaiveDate, bool, Option<NaiveDate>) {
+    let p = data.person(id).unwrap();
+    (p.next_target, p.overdue, p.missed_target)
+}
+
+#[test]
+fn after_weeks_away_the_day_suggested_is_the_latest_missed_weekday() {
+    // Sep 1 + 30 = Thu Oct 1; Thu Nov 26 is the first day the app runs again.
+    let thursday = date(2026, 11, 26);
+    let (mut away, daily, id) = away_and_every_day(DayToggle::WeekdaysOnly, None, &[], thursday);
+    assert_eq!(
+        plan(&away, id),
+        (date(2026, 11, 23), true, Some(date(2026, 11, 16)))
+    );
+    assert_eq!(plan(&away, id), plan(&daily, id));
+    // Done on the day suggested clears the reminder: Nov 16 + 30 = Wed Dec 16.
+    away.mark_done(id, Some(date(2026, 11, 16)), thursday)
+        .unwrap();
+    assert_eq!(plan(&away, id), (date(2026, 12, 16), false, None));
+}
+
+#[test]
+fn after_weeks_away_the_day_suggested_is_the_latest_missed_weekend() {
+    let sunday = date(2026, 11, 29);
+    let (mut away, daily, id) = away_and_every_day(DayToggle::WeekendsOnly, None, &[], sunday);
+    assert_eq!(
+        plan(&away, id),
+        (date(2026, 11, 28), true, Some(date(2026, 11, 21)))
+    );
+    assert_eq!(plan(&away, id), plan(&daily, id));
+    away.mark_done(id, Some(date(2026, 11, 21)), sunday)
+        .unwrap();
+    assert!(!away.person(id).unwrap().overdue);
+}
+
+#[test]
+fn after_weeks_away_the_day_suggested_is_the_latest_missed_picked_day() {
+    // Thursdays only, and today is a Thursday: last Thursday is the day missed.
+    let thursday = date(2026, 11, 26);
+    let thursdays = Some(DaySet::of(&[Weekday::Thu]));
+    let (away, daily, id) = away_and_every_day(DayToggle::Custom, thursdays, &[], thursday);
+    assert_eq!(plan(&away, id), (thursday, true, Some(date(2026, 11, 19))));
+    assert_eq!(plan(&away, id), plan(&daily, id));
+}
+
+#[test]
+fn after_weeks_away_a_blocked_range_still_leaves_the_latest_missed_day() {
+    let thursday = date(2026, 11, 26);
+    // A week off just before today, and a long range that ends close to it.
+    for blocked in [
+        [(date(2026, 11, 16), date(2026, 11, 20))],
+        [(date(2026, 10, 20), date(2026, 11, 17))],
+    ] {
+        let (away, daily, id) =
+            away_and_every_day(DayToggle::WeekdaysOnly, None, &blocked, thursday);
+        assert_eq!(plan(&away, id), plan(&daily, id), "blocked {blocked:?}");
+        assert!(away.person(id).unwrap().overdue);
+    }
+}
+
+#[test]
+fn after_weeks_away_blocked_days_a_few_weeks_apart_still_leave_the_latest_missed_day() {
+    // Every day allowed, single blocked days three weeks apart, and the app runs again on Tue Jun 16.
+    let mut data = Data::default();
+    let start = date(2026, 1, 1);
+    let all = Some(DaySet::ALL);
+    data.set_day_setting(DayToggle::Custom, all, start).unwrap();
+    for (m, d) in [(2, 10), (3, 3), (3, 24), (4, 14), (5, 5), (5, 26)] {
+        data.add_blocked(date(2026, m, d), date(2026, m, d), "Away", start)
+            .unwrap();
+    }
+    let id = data.add_person("Ada", 30, start, start).unwrap();
+    data.catch_up(date(2026, 6, 16));
+    assert_eq!(
+        plan(&data, id),
+        (date(2026, 6, 16), true, Some(date(2026, 6, 15)))
+    );
+}
+
+#[test]
+fn after_months_away_a_long_blocked_range_still_leaves_the_latest_missed_day() {
+    // Weekdays only, Jul 1 + 30 = Fri Jul 31, then blocked from Sep 1 to Nov 20 (one range, or two
+    // back to back). Every day from Aug 1 the app would have pushed Jul 31 to Mon Aug 3, ... Mon
+    // Aug 31, then past the range to Mon Nov 23: Aug 31 is the day missed.
+    let start = date(2026, 7, 1);
+    let thursday = date(2026, 11, 26);
+    for blocked in [
+        vec![(date(2026, 9, 1), date(2026, 11, 20))],
+        vec![
+            (date(2026, 9, 1), date(2026, 10, 20)),
+            (date(2026, 10, 21), date(2026, 11, 20)),
+        ],
+    ] {
+        let mut data = Data::default();
+        data.set_day_setting(DayToggle::WeekdaysOnly, None, start)
+            .unwrap();
+        for (from, to) in &blocked {
+            data.add_blocked(*from, *to, "Away", start).unwrap();
+        }
+        let id = data.add_person("Ada", 30, start, start).unwrap();
+        data.catch_up(thursday);
+        assert_eq!(
+            plan(&data, id),
+            (date(2026, 11, 23), true, Some(date(2026, 8, 31))),
+            "blocked {blocked:?}"
+        );
+    }
+}
+
+#[test]
+fn after_weeks_away_the_order_of_blocked_ranges_does_not_change_the_plan() {
+    // The same ranges, listed in both orders (another device may hold them the other way round).
+    let start = date(2026, 7, 1);
+    let thursday = date(2026, 11, 26);
+    let ranges = [
+        (date(2026, 9, 1), date(2026, 10, 20)),
+        (date(2026, 10, 21), date(2026, 11, 20)),
+        (date(2026, 11, 23), date(2026, 11, 23)),
+    ];
+    let plan_with = |ranges: &[(NaiveDate, NaiveDate)]| {
+        let mut data = Data::default();
+        data.set_day_setting(DayToggle::WeekdaysOnly, None, start)
+            .unwrap();
+        for (from, to) in ranges {
+            data.add_blocked(*from, *to, "Away", start).unwrap();
+        }
+        let id = data.add_person("Ada", 30, start, start).unwrap();
+        data.catch_up(thursday);
+        plan(&data, id)
+    };
+    let reversed: Vec<_> = ranges.iter().rev().copied().collect();
+    // Mon Aug 31 was the day missed; Mon Nov 23 is blocked, so Tue Nov 24 is the target.
+    let expected = (date(2026, 11, 24), true, Some(date(2026, 8, 31)));
+    assert_eq!(plan_with(&ranges), expected);
+    assert_eq!(plan_with(&reversed), expected);
 }

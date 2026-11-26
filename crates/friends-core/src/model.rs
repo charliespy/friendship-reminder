@@ -15,9 +15,13 @@ pub const FREQUENCIES: [u32; 4] = [30, 90, 180, 365];
 /// The longest name the app stores, in characters.
 pub const MAX_NAME_CHARS: usize = 100;
 
-/// Most times a missed target is pushed in one catch-up. A long backlog first jumps to the week before
-/// today, so a few pushes always suffice; the cap only guards against a future bug looping forever.
+/// Most times a missed target is pushed in one catch-up. A long backlog first jumps to a day that
+/// takes at most `SKIP_PUSHES` pushes to catch up from, so fewer always suffice; the cap only guards
+/// against a future bug looping forever.
 const MAX_PUSHES: usize = 100;
+
+/// Most pushes a catch-up may take after jumping back before a blocked range near today.
+const SKIP_PUSHES: usize = 60;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -354,13 +358,13 @@ impl Data {
     ) -> bool {
         let mut moved = false;
         let mut pushes = 0;
-        // Pushing from a target years back would take one step per missed run; start from the week
-        // before today instead, which lands on the same day.
-        let week_ago = today.checked_sub_days(Days::new(7)).unwrap_or(today);
+        // Worked out only for someone behind: the same for everyone, but it takes a few pushes.
+        let mut cached_start = None;
         let mut last_missed = None;
         while last_day_of_run(person.next_target, rule) < today && pushes < MAX_PUSHES {
             last_missed = Some(person.next_target);
-            let from = person.next_target.max(week_ago);
+            let start = *cached_start.get_or_insert_with(|| Self::skip_from(rule, ranges, today));
+            let from = person.next_target.max(start);
             person.apply(push_missed_schedule(from, rule, ranges));
             pushes += 1;
             moved = true;
@@ -371,6 +375,49 @@ impl Data {
             person.missed_target = last_missed;
         }
         moved
+    }
+
+    /// Where to push a target from when it is further back. Pushing from a target years back would
+    /// take one step per missed run; pushing from two weeks before today instead lands on a run of
+    /// allowed days that went by, and the pushes after it on the same days as pushing every day
+    /// would. So the target comes out the same, and so does the day missed: the target before it.
+    /// A blocked range near that day could carry the first push past the day missed, so it starts
+    /// two weeks before every such range instead, as long as catching up from there takes at most
+    /// `SKIP_PUSHES` pushes (going past a whole range takes one), well under `MAX_PUSHES`.
+    fn skip_from(rule: DayRule, ranges: &[BlockedRange], today: NaiveDate) -> NaiveDate {
+        let back =
+            |date: NaiveDate, days: u64| date.checked_sub_days(Days::new(days)).unwrap_or(date);
+        let too_many_pushes = |from: NaiveDate| {
+            let (mut target, mut pushes) = (from, 0);
+            while last_day_of_run(target, rule) < today {
+                if pushes == SKIP_PUSHES {
+                    return true;
+                }
+                target = push_missed_schedule(target, rule, ranges).next_target_date;
+                pushes += 1;
+            }
+            false
+        };
+        let mut from = back(today, 14);
+        // Each step moves `from` earlier, to two weeks before a range that no step used yet, so this
+        // ends after at most one step per range. It takes the nearby range that starts latest, the
+        // smallest step back, so the order the ranges are listed in doesn't change where it stops.
+        while let Some(range) = ranges
+            .iter()
+            .filter(|r| {
+                r.first_day() <= today
+                    && r.last_day() >= back(from, 7)
+                    && back(r.first_day(), 14) < from
+            })
+            .max_by_key(|r| r.first_day())
+        {
+            let earlier = back(range.first_day(), 14);
+            if too_many_pushes(earlier) {
+                break;
+            }
+            from = earlier;
+        }
+        from
     }
 
     pub fn add_person(
