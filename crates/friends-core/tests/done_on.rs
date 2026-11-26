@@ -300,3 +300,22 @@ fn after_weeks_away_a_blocked_range_still_leaves_the_latest_missed_day() {
         assert!(away.person(id).unwrap().overdue);
     }
 }
+
+#[test]
+fn after_weeks_away_blocked_days_a_few_weeks_apart_still_leave_the_latest_missed_day() {
+    // Every day allowed, single blocked days three weeks apart, and the app runs again on Tue Jun 16.
+    let mut data = Data::default();
+    let start = date(2026, 1, 1);
+    let all = Some(DaySet::ALL);
+    data.set_day_setting(DayToggle::Custom, all, start).unwrap();
+    for (m, d) in [(2, 10), (3, 3), (3, 24), (4, 14), (5, 5), (5, 26)] {
+        data.add_blocked(date(2026, m, d), date(2026, m, d), "Away", start)
+            .unwrap();
+    }
+    let id = data.add_person("Ada", 30, start, start).unwrap();
+    data.catch_up(date(2026, 6, 16));
+    assert_eq!(
+        plan(&data, id),
+        (date(2026, 6, 16), true, Some(date(2026, 6, 15)))
+    );
+}

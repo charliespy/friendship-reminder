@@ -15,8 +15,9 @@ pub const FREQUENCIES: [u32; 4] = [30, 90, 180, 365];
 /// The longest name the app stores, in characters.
 pub const MAX_NAME_CHARS: usize = 100;
 
-/// Most times a missed target is pushed in one catch-up. A long backlog first jumps to the week before
-/// today, so a few pushes always suffice; the cap only guards against a future bug looping forever.
+/// Most times a missed target is pushed in one catch-up. A long backlog first jumps to at most nine
+/// weeks before today, and each push moves at least a day, so fewer pushes always suffice; the cap
+/// only guards against a future bug looping forever.
 const MAX_PUSHES: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -376,10 +377,12 @@ impl Data {
     /// allowed days that went by, and the pushes after it on the same days as pushing every day
     /// would. So the target comes out the same, and so does the day missed: the target before it.
     /// A blocked range near that day could carry the first push past the day missed, so it starts
-    /// two weeks before every such range instead.
+    /// two weeks before every such range instead, but never more than nine weeks before today:
+    /// each push moves at least a day, so a catch-up stays well under `MAX_PUSHES`.
     fn skip_from(ranges: &[BlockedRange], today: NaiveDate) -> NaiveDate {
         let back =
             |date: NaiveDate, days: u64| date.checked_sub_days(Days::new(days)).unwrap_or(date);
+        let earliest = back(today, 63);
         let mut from = back(today, 14);
         // Each step moves `from` earlier, to two weeks before a range that no step used yet, so this
         // ends after at most one step per range.
@@ -389,6 +392,9 @@ impl Data {
                 && back(r.first_day(), 14) < from
         }) {
             from = back(range.first_day(), 14);
+            if from <= earliest {
+                return earliest;
+            }
         }
         from
     }
