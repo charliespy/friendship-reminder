@@ -14,6 +14,7 @@ use chrono::{Datelike, Local, NaiveDateTime, Timelike};
 use friends_core::api::bookings;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::{NotificationExt, PermissionState, Schedule};
+use tauri_plugin_phone_sheets::PhoneSheetsExt;
 
 use crate::{lock, publish_if_changed, today, NotificationAccess, State};
 
@@ -152,20 +153,11 @@ fn book(app: &AppHandle, booked: &mut Option<Booked>) {
     let current = match booked {
         Some(current) => current,
         None => {
-            // Cancelled by id: the plugin's `cancel_all` sends no arguments, which its iOS side
-            // refuses, so it never cleared anything (and nothing was ever booked).
-            let pending: Vec<i32> = match notification.pending() {
-                Ok(pending) => pending.iter().map(|p| p.id()).collect(),
-                Err(e) => {
-                    eprintln!("friends: couldn't read the booked reminders: {e}");
-                    return;
-                }
-            };
-            if !pending.is_empty() {
-                if let Err(e) = notification.cancel(pending) {
-                    eprintln!("friends: couldn't clear the booked reminders: {e}");
-                    return;
-                }
+            // Not the notification plugin's `cancel_all`: on iOS it never clears anything (see
+            // phone-sheets), so nothing was ever booked.
+            if let Err(e) = app.phone_sheets().clear_booked_reminders() {
+                eprintln!("friends: couldn't clear the booked reminders: {e}");
+                return;
             }
             booked.insert(HashMap::new())
         }

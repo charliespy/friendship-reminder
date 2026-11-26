@@ -87,8 +87,11 @@ pub enum NotificationAccess {
 /// Whether the app may send notifications. The Mac's always may: macOS asks at launch.
 #[tauri::command]
 async fn notification_access(app: AppHandle) -> Result<NotificationAccess, String> {
+    // Off the async runtime: the plugin's call waits on the main thread.
     #[cfg(target_os = "ios")]
-    return mobile::notification_access(&app);
+    return tauri::async_runtime::spawn_blocking(move || mobile::notification_access(&app))
+        .await
+        .map_err(|e| e.to_string())?;
     #[cfg(not(target_os = "ios"))]
     {
         let _ = app;

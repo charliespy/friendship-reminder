@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errorMessage, type NotificationAccess } from "./api";
 
 /**
@@ -9,13 +9,18 @@ export function useNotificationAccess() {
   const [access, setAccess] = useState<NotificationAccess | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Each read and each ask takes a number; an answer older than the latest is dropped, so a slow
+  // read can't undo what the user just allowed.
+  const latest = useRef(0);
 
   useEffect(() => {
     let live = true;
     const read = () => {
       if (document.visibilityState !== "visible") return;
+      const n = ++latest.current;
       api.notificationAccess().then(
-        (a) => live && setAccess(a),
+        (a) => live && n === latest.current && setAccess(a),
+        // Unknown: the card stays hidden, and turning reminders on in Settings still asks.
         () => {},
       );
     };
@@ -31,8 +36,10 @@ export function useNotificationAccess() {
   const allow = useCallback(async () => {
     setBusy(true);
     setError(null);
+    const n = ++latest.current;
     try {
-      setAccess(await api.allowNotifications());
+      const answer = await api.allowNotifications();
+      if (n === latest.current) setAccess(answer);
     } catch (e) {
       setError(errorMessage(e));
     } finally {

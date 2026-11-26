@@ -10,6 +10,7 @@ import Contacts
 import SwiftRs
 import Tauri
 import UIKit
+import UserNotifications
 
 class SignInArgs: Decodable {
   /// The SHA-256 of the sign-in's nonce, in hex: Apple puts it into the identity token.
@@ -161,6 +162,12 @@ class PhoneSheetsPlugin: Plugin {
       controller.presentationContextProvider = signIn
       controller.performRequests()
     }
+  }
+
+  /// Cancels every reminder booked with iOS (see the Rust side for why it's here).
+  @objc public func clearBookedReminders(_ invoke: Invoke) {
+    UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    invoke.resolve()
   }
 
   /// The ids of the cards the app can see now.

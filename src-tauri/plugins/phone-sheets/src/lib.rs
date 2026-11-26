@@ -5,6 +5,8 @@
 //!   iOS Settings, and once the user is back hands back the cards shared meanwhile. (Apple's sheet
 //!   for this, `contactAccessPicker`, opens blank on iPhones from iOS 26 on.)
 //!
+//! Also one call the notification plugin gets wrong on iOS: clearing every booked reminder.
+//!
 //! It is only the sheets; what their answers mean is the app's business. On other platforms the
 //! plugin is empty: the Mac signs in through the browser and can't share only some contacts.
 
@@ -76,6 +78,23 @@ impl<R: Runtime> PhoneSheets<R> {
             self.handle
                 .run_mobile_plugin::<ShareResponse>("shareMoreContacts", ())
                 .map(|r| r.ids)
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(not(target_os = "ios"))]
+        {
+            Err(ONLY_ON_IPHONE.into())
+        }
+    }
+}
+
+impl<R: Runtime> PhoneSheets<R> {
+    /// Cancels every reminder booked with iOS. (tauri-plugin-notification's `cancel_all` sends no
+    /// arguments, which its iOS side refuses, and its `pending` can't read iOS's answer.)
+    pub fn clear_booked_reminders(&self) -> Result<(), String> {
+        #[cfg(target_os = "ios")]
+        {
+            self.handle
+                .run_mobile_plugin::<()>("clearBookedReminders", ())
                 .map_err(|e| e.to_string())
         }
         #[cfg(not(target_os = "ios"))]

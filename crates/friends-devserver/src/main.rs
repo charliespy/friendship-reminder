@@ -121,7 +121,7 @@ struct Dev {
     /// The cards shared with the app when it may see only some.
     shared: Vec<String>,
     /// Stands in for the iPhone's notification permission: as `POST /__test/notifications` sets it.
-    notifications: &'static str,
+    notifications: Notifications,
     /// The links the app wrote onto the made-up cards, by card.
     card_links: HashMap<String, Vec<String>>,
     /// The person a link from a card opened the app on, until a window takes them.
@@ -138,6 +138,28 @@ enum Access {
     Allowed,
     Limited,
     Denied,
+}
+
+/// The iPhone's notification permission, as the test sets it up (and as `notification_access`
+/// answers it).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Notifications {
+    Allowed,
+    NotAsked,
+    Denied,
+}
+
+impl Notifications {
+    const ALL: [Notifications; 3] = [Self::Allowed, Self::NotAsked, Self::Denied];
+
+    /// As the app's command answers it.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Allowed => "allowed",
+            Self::NotAsked => "notAsked",
+            Self::Denied => "denied",
+        }
+    }
 }
 
 /// Who a user shares when they share only some contacts, and who "share more" adds.
@@ -247,12 +269,12 @@ impl Dev {
                 }
                 to_value(view)
             }
-            "notification_access" => Ok(json!(self.notifications)),
+            "notification_access" => Ok(json!(self.notifications.name())),
             "allow_notifications" => {
-                if self.notifications == "notAsked" {
-                    self.notifications = "allowed";
+                if self.notifications == Notifications::NotAsked {
+                    self.notifications = Notifications::Allowed;
                 }
-                Ok(json!(self.notifications))
+                Ok(json!(self.notifications.name()))
             }
             "take_shown_person" => Ok(json!(self.shown_person.take())),
             // Window commands have nothing to do in a browser.
@@ -325,7 +347,7 @@ impl Dev {
         self.launch_at_login = false;
         self.signed_in = false;
         self.set_access(Access::NotAsked { limited: false });
-        self.notifications = "allowed";
+        self.notifications = Notifications::Allowed;
         self.card_links.clear();
         self.shown_person = None;
         Ok(())
@@ -359,7 +381,7 @@ fn main() {
         signed_in: false,
         contacts: Access::NotAsked { limited: false },
         shared: Vec::new(),
-        notifications: "allowed",
+        notifications: Notifications::Allowed,
         card_links: HashMap::new(),
         shown_person: None,
     };
@@ -447,19 +469,19 @@ fn main() {
                 }
             }
             (Method::Post, "/__test/notifications") => {
-                match serde_json::from_str::<String>(&body).as_deref() {
-                    Ok("allowed") => Some("allowed"),
-                    Ok("notAsked") => Some("notAsked"),
-                    Ok("denied") => Some("denied"),
-                    _ => None,
-                }
-                .map_or_else(
-                    || json_response(400, &json!("send \"allowed\", \"notAsked\" or \"denied\"")),
-                    |answer| {
+                let asked = serde_json::from_str::<String>(&body).ok();
+                match Notifications::ALL
+                    .into_iter()
+                    .find(|n| asked.as_deref() == Some(n.name()))
+                {
+                    Some(answer) => {
                         dev.notifications = answer;
                         json_response(200, &Value::Null)
-                    },
-                )
+                    }
+                    None => {
+                        json_response(400, &json!("send \"allowed\", \"notAsked\" or \"denied\""))
+                    }
+                }
             }
             _ => json_response(404, &json!("not found")),
         };
