@@ -46,6 +46,8 @@ targets:
       properties:
         # The name under the home-screen icon: iOS cuts "Friendship Reminder" short.
         CFBundleDisplayName: Friendship
+        # Encryption only to secure HTTPS connections, which is exempt: no export questions in App Store Connect.
+        ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
