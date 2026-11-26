@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { type SyncStatus } from "./api";
 import { timeAgo } from "./format";
+import { CancelSignInButton, SignInWithAppleButton, waitingText } from "./SignInButtons";
 import { useAccount } from "./useAccount";
 
 /** The line under the account about syncing. */
@@ -24,7 +25,8 @@ function useNow(): number {
 
 /** `phone`: signing in happens in a sheet over the app, not the browser. */
 export function AccountSection({ phone = false }: { phone?: boolean }) {
-  const { account, loadError, cancelError, attempt, busy, error, signIn, cancel, signOut } = useAccount();
+  const signIn = useAccount();
+  const { account, loadError, cancelError, attempt, busy, error, signOut } = signIn;
   const now = useNow();
 
   return (
@@ -33,20 +35,8 @@ export function AccountSection({ phone = false }: { phone?: boolean }) {
       <div className="choice-list">
         {attempt ? (
           <div className="account-row">
-            <span className="choice-text">
-              {phone ? "Finish signing in with Apple." : "Finish signing in with Apple in your browser."}
-            </span>
-            {/* Cancelling makes the waiting sign-in stop, which ends the busy state. */}
-            <button
-              className="btn btn-outline"
-              onClick={(e) => {
-                // The second click of a double-click on Sign in lands here: not a Cancel.
-                if (e.detail > 1) return;
-                cancel();
-              }}
-            >
-              Cancel
-            </button>
+            <span className="choice-text">{waitingText(phone)}</span>
+            <CancelSignInButton signIn={signIn} />
           </div>
         ) : account?.status === "signedIn" ? (
           <div className="account-row">
@@ -68,15 +58,7 @@ export function AccountSection({ phone = false }: { phone?: boolean }) {
             <span className="choice-text">
               Sign in to keep your list in your Friendship Reminder account, ready for your other devices.
             </span>
-            <button
-              className="btn btn-apple"
-              disabled={busy || account?.status !== "signedOut"}
-              onClick={signIn}
-            >
-              {/* U+F8FF is the Apple logo in Apple's system font. */}
-              <span aria-hidden="true" className="apple-logo">{"\uF8FF"}</span>
-              Sign in with Apple
-            </button>
+            <SignInWithAppleButton signIn={signIn} />
           </div>
         )}
       </div>

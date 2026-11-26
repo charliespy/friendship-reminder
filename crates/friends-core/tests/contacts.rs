@@ -293,3 +293,96 @@ fn finishing_the_guide_isnt_a_change_to_sync() {
     data.stamp(&before, 1_000);
     assert!(!data.has_unsynced());
 }
+
+#[test]
+fn a_list_started_over_after_a_damaged_file_skips_the_guide() {
+    // Someone who used the app before: the "couldn't be read" notice must show, not the guide.
+    let path = temp_file("guide-damaged");
+    fs::write(&path, "not json").unwrap();
+    let app = App::open(Store::new(&path)).unwrap();
+    let view = serde_json::to_value(app.view(today())).unwrap();
+    assert!(view["unreadableFile"].is_string());
+    assert_eq!(view["guide"], json!({"signIn": true, "import": true}));
+}
+
+#[test]
+fn someone_with_the_same_name_isnt_added_again_from_contacts() {
+    // The picker can be behind: a person synced down meanwhile, whose card it didn't mark.
+    let mut data = Data::default();
+    data.add_person("Ana  torres", 30, today(), today())
+        .unwrap();
+    let ids = data
+        .add_people(
+            &[
+                new_person("Ana Torres", Some("card-1")),
+                new_person("Bo", Some("card-2")),
+            ],
+            30,
+            today(),
+            today(),
+        )
+        .unwrap();
+    assert_eq!(ids.len(), 1);
+    assert_eq!(data.people.len(), 2);
+}
+
+#[test]
+fn people_in_the_list_finish_the_import_step() {
+    let (mut app, _) = app("guide-people");
+    let view = app
+        .call(
+            "add_person",
+            json!({"name": "Ada", "frequencyDays": 30, "lastConnected": "2026-08-19"}),
+            today(),
+        )
+        .unwrap();
+    assert!(view.guide.import);
+    assert!(!view.guide.sign_in);
+}
+
+#[test]
+fn people_synced_down_finish_the_import_step() {
+    use friends_core::sync::{Changes, RemotePerson};
+    let (mut app, _) = app("guide-synced");
+    app.sync_start("11111111-1111-1111-1111-111111111111")
+        .unwrap();
+    let got = Changes {
+        people: vec![RemotePerson {
+            id: "3f2a9c4e-0000-4000-8000-000000000001".into(),
+            name: Some("Ada".into()),
+            frequency_days: Some(30),
+            last_connected: Some(today()),
+            deleted: false,
+            modified_at: 5,
+            updated_ms: 5,
+        }],
+        ..Default::default()
+    };
+    app.sync_pulled(&got, 5, today()).unwrap();
+    assert!(app.view(today()).guide.import);
+}
+
+#[test]
+fn importing_answers_which_cards_take_a_link() {
+    let (mut app, _) = app("import-links");
+    app.call(
+        "add_people",
+        json!({"people": [{"name": "Ada", "contact": "card-1"}], "frequencyDays": 30, "lastConnected": "2026-08-19"}),
+        today(),
+    )
+    .unwrap();
+    let (view, links) = app
+        .import_contacts(
+            vec![
+                new_person("Ada", Some("card-1")),
+                new_person("Bo", Some("card-2")),
+            ],
+            30,
+            today(),
+        )
+        .unwrap();
+    assert_eq!(view.people.len(), 2);
+    let bo = app.data().people.iter().find(|p| p.name == "Bo").unwrap();
+    // Only the person added now: Ada's card has its link already.
+    assert_eq!(links, vec![("card-2".to_string(), bo.uid.clone())]);
+}

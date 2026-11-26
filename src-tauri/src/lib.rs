@@ -112,6 +112,15 @@ fn send(app: &AppHandle, view: &View, json: Option<String>) {
 /// Async, so Tauri runs it off the main thread and a slow save never freezes the window.
 #[tauri::command]
 async fn call(app: AppHandle, cmd: String, args: Value) -> Result<View, ApiError> {
+    with_core(&app, |core, day| Ok((core.call(&cmd, args, day)?, ()))).map(|(view, ())| view)
+}
+
+/// Runs `f` on the data and tells every window the new view, even when `f` fails (it may have
+/// caught up missed targets first), then nudges sync when a change waits to upload.
+fn with_core<T>(
+    app: &AppHandle,
+    f: impl FnOnce(&mut App, NaiveDate) -> Result<(View, T), ApiError>,
+) -> Result<(View, T), ApiError> {
     let Some(state) = app.try_state::<State>() else {
         #[cfg(target_os = "ios")]
         let reason = app
@@ -126,20 +135,37 @@ async fn call(app: AppHandle, cmd: String, args: Value) -> Result<View, ApiError
     };
     let mut core = lock(&state);
     let day = today();
-    let result = core.call(&cmd, args, day);
-    // Every command (get_view too, and one that fails) may have caught up missed targets first, so
-    // every one tells the windows. Sent while the lock is held, so two commands' views reach the
-    // windows in the order they ran.
+    let result = f(&mut core, day);
+    // Sent while the lock is held, so two commands' views reach the windows in the order they ran.
     match &result {
-        Ok(view) => publish(&app, view),
-        Err(_) => publish(&app, &core.view(day)),
+        Ok((view, _)) => publish(app, view),
+        Err(_) => publish(app, &core.view(day)),
     }
     let unsynced = core.has_unsynced();
     drop(core);
     if unsynced {
-        sync::nudge(&app, sync::Nudge::Soon);
+        sync::nudge(app, sync::Nudge::Soon);
     }
     result
+}
+
+/// The first-run guide's sign-in step is behind you: signed in, or there's no account server to
+/// sign in to. Runs on its own task, so it never waits on a lock its caller holds.
+fn finish_guide_sign_in(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let done = app
+            .try_state::<State>()
+            .is_some_and(|s| lock(&s).data().guide.sign_in);
+        if !done {
+            let finish = serde_json::json!({ "step": "signIn" });
+            if let Err(e) = with_core(&app, |core, day| {
+                Ok((core.call("finish_guide", finish, day)?, ()))
+            }) {
+                eprintln!("friends: couldn't save the guide's progress: {e}");
+            }
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -195,6 +221,10 @@ pub fn run() {
                 }
             };
             app.manage(State(Mutex::new(core)));
+            // Without an account server there's no sign-in step in the guide.
+            if app.state::<account::Account>().config().is_none() {
+                finish_guide_sign_in(&handle);
+            }
             #[cfg(target_os = "macos")]
             desktop::setup(app)?;
             #[cfg(target_os = "ios")]

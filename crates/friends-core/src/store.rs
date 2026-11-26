@@ -107,7 +107,13 @@ impl Store {
             n += 1;
         };
         fs::rename(&self.path, &aside)?;
-        Ok(Loaded::MovedAside(Data::default(), aside))
+        // Someone who used the app before: they need the notice about the old file, not the
+        // first-run guide.
+        let data = Data {
+            guide: crate::model::Guide::finished(),
+            ..Data::default()
+        };
+        Ok(Loaded::MovedAside(data, aside))
     }
 
     /// Saves `data` to a new file next to this one, `<name>.<label>-<n>`, and returns its path.
@@ -223,7 +229,8 @@ mod tests {
         let store = Store::new(&path);
         match store.load().unwrap() {
             Loaded::MovedAside(data, aside) => {
-                assert_eq!(data, Data::default());
+                // An empty list, past the first-run guide (see the contacts tests).
+                assert!(data.people.is_empty() && data.guide.is_done());
                 assert_eq!(aside, dir.join("friends.json.unreadable-2"));
                 assert_eq!(fs::read_to_string(&aside).unwrap(), "{ not json");
                 assert_eq!(

@@ -2,43 +2,30 @@
  * The first-run guide, on a new Mac or iPhone: a sign-in page (with "Not now"), then adding people from
  * Contacts (with "Skip"). Each step is shown once; the core remembers which are behind you.
  */
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { api, type Account, type GuideStep, type View } from "./api";
 import { ContactPicker } from "./ContactPicker";
+import { CancelSignInButton, SignInWithAppleButton, waitingText } from "./SignInButtons";
 import { useAccount } from "./useAccount";
+import { useAction } from "./useView";
 import appIcon from "../assets/icon.svg";
 
 type Step = "signIn" | "waitForList" | "import";
 
-/** The step to show now, or null for the app itself. `null` account: not known yet. */
+/**
+ * The step to show now, or null for the app itself. The core keeps which steps are behind you, and
+ * the app marks them itself when they don't apply (signed in already, or no account server; people
+ * in the list): this only picks the page. `null` account: not known yet.
+ */
 export function guideStep(view: View, account: Account | null): Step | null {
   const { guide } = view;
-  if (guide.signIn && guide.import) return null;
-  if (!guide.signIn) {
-    // Without an account server there's nothing to sign in to: that step is skipped.
-    return account?.status === "signedOut" ? "signIn" : null;
-  }
-  if (view.people.length > 0) return null;
+  if (!guide.signIn && account?.status === "signedOut") return "signIn";
+  if (guide.import || view.people.length > 0) return null;
   // Signed in on a second device: the list may be on its way down from the account.
   if (account?.status === "signedIn" && account.sync?.lastSynced == null && !account.sync?.error) {
     return "waitForList";
   }
   return "import";
-}
-
-/** Marks the steps that are behind you without a choice: signed in already, people already listed. */
-function useFinishQuietly(view: View | null, account: Account | null) {
-  const sent = useRef(new Set<GuideStep>());
-  useEffect(() => {
-    if (!view || !account) return;
-    const finish = (step: GuideStep) => {
-      if (sent.current.has(step)) return;
-      sent.current.add(step);
-      api.finishGuide(step).catch(() => sent.current.delete(step));
-    };
-    if (!view.guide.signIn && account.status !== "signedOut") finish("signIn");
-    if (view.guide.signIn && !view.guide.import && view.people.length > 0) finish("import");
-  });
 }
 
 /**
@@ -48,7 +35,9 @@ function useFinishQuietly(view: View | null, account: Account | null) {
 export function WithGuide({ view, phone = false, children }: { view: View; phone?: boolean; children: ReactNode }) {
   const signIn = useAccount();
   const { account } = signIn;
-  useFinishQuietly(view, account);
+  // "Not now" and "Skip": saved by the core, with an error shown if that fails.
+  const finish = useAction();
+  const done = (step: GuideStep) => finish.run(() => api.finishGuide(step));
   const finished = view.guide.signIn && view.guide.import;
   if (finished) return <>{children}</>;
   // The account answers at once; if it can't be read, the guide stays out of the way.
@@ -59,31 +48,32 @@ export function WithGuide({ view, phone = false, children }: { view: View; phone
     <div className={phone ? "phone guide guide-phone" : "guide"}>
       <div className="guide-body">
         {step === "signIn" ? (
-          <SignInStep phone={phone} {...signIn} />
+          <SignInStep phone={phone} signIn={signIn} onSkip={() => done("signIn")} />
         ) : step === "waitForList" ? (
-          <WaitStep />
+          <WaitStep onSkip={() => done("import")} />
         ) : (
-          <ImportStep />
+          <ImportStep onSkip={() => done("import")} />
+        )}
+        {finish.error && (
+          <p className="error guide-error" role="alert">
+            {finish.error}
+          </p>
         )}
       </div>
     </div>
   );
 }
 
-function skip(step: GuideStep) {
-  api.finishGuide(step).catch(() => {});
-}
-
 function SignInStep({
   phone,
-  account,
-  attempt,
-  busy,
-  error,
-  cancelError,
   signIn,
-  cancel,
-}: { phone: boolean } & ReturnType<typeof useAccount>) {
+  onSkip,
+}: {
+  phone: boolean;
+  signIn: ReturnType<typeof useAccount>;
+  onSkip: () => void;
+}) {
+  const { attempt, busy, error, cancelError } = signIn;
   return (
     <section className="guide-step" aria-labelledby="guide-title">
       <img className="guide-icon" src={appIcon} alt="" width={64} height={64} />
@@ -96,24 +86,14 @@ function SignInStep({
         {attempt ? (
           <>
             <p className="muted" role="status">
-              {phone ? "Finish signing in with Apple." : "Finish signing in with Apple in your browser."}
+              {waitingText(phone)}
             </p>
-            <button className="btn btn-outline guide-button" onClick={(e) => e.detail <= 1 && cancel()}>
-              Cancel
-            </button>
+            <CancelSignInButton signIn={signIn} className="guide-button" />
           </>
         ) : (
           <>
-            <button
-              className="btn btn-apple guide-button"
-              disabled={busy || account?.status !== "signedOut"}
-              onClick={signIn}
-            >
-              {/* U+F8FF is the Apple logo in Apple's system font. */}
-              <span aria-hidden="true" className="apple-logo">{""}</span>
-              Sign in with Apple
-            </button>
-            <button className="btn btn-quiet guide-button" disabled={busy} onClick={() => skip("signIn")}>
+            <SignInWithAppleButton signIn={signIn} className="guide-button" />
+            <button className="btn btn-quiet guide-button" disabled={busy} onClick={onSkip}>
               Not now
             </button>
           </>
@@ -128,7 +108,7 @@ function SignInStep({
   );
 }
 
-function WaitStep() {
+function WaitStep({ onSkip }: { onSkip: () => void }) {
   return (
     <section className="guide-step" aria-labelledby="guide-title">
       <h1 id="guide-title">Getting your list</h1>
@@ -136,7 +116,7 @@ function WaitStep() {
         Friendship Reminder is bringing down the people you added on your other devices.
       </p>
       <div className="guide-actions">
-        <button className="btn btn-quiet guide-button" onClick={() => skip("import")}>
+        <button className="btn btn-quiet guide-button" onClick={onSkip}>
           Skip
         </button>
       </div>
@@ -144,7 +124,7 @@ function WaitStep() {
   );
 }
 
-function ImportStep() {
+function ImportStep({ onSkip }: { onSkip: () => void }) {
   return (
     <section className="guide-step guide-step-wide" aria-labelledby="guide-title">
       <h1 id="guide-title">Who do you want to keep up with?</h1>
@@ -152,7 +132,8 @@ function ImportStep() {
         Pick people from your contacts. Friendship Reminder reads only their names, and adds a link back to the app on
         their cards.
       </p>
-      <ContactPicker closeLabel="Skip" onClose={() => skip("import")} onAdded={() => skip("import")} />
+      {/* Adding people finishes this step by itself (the core marks it once the list has people). */}
+      <ContactPicker closeLabel="Skip" onClose={onSkip} onAdded={() => {}} />
     </section>
   );
 }

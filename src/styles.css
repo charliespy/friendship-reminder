@@ -1744,3 +1744,11 @@ html.in-browser #root {
 .picker-footer .hint {
   padding: 0;
 }
+
+.guide-error {
+  position: fixed;
+  right: 0;
+  bottom: var(--space-4);
+  left: 0;
+  text-align: center;
+}

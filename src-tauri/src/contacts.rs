@@ -23,7 +23,6 @@ use objc2_contacts::{
 };
 use objc2_foundation::{NSArray, NSCopying, NSError, NSMutableCopying, NSString};
 use serde::Serialize;
-use serde_json::json;
 use tauri::{AppHandle, Manager};
 
 /// What the picker gets: the cards, or why there are none.
@@ -40,13 +39,14 @@ pub enum ContactList {
 /// How long to wait for the user to answer "allow access to your contacts?".
 const ANSWER_WITHIN: Duration = Duration::from_secs(600);
 
-/// Whether the app may read the address book, asking the user the first time.
-fn allowed(store: &CNContactStore) -> bool {
+/// Whether the app may read the address book, asking the user the first time. An `Err` when the
+/// question went unanswered: nothing was decided, so it isn't a "no".
+fn allowed(store: &CNContactStore) -> Result<bool, String> {
     // SAFETY: plain calls into the Contacts framework, which is thread safe.
     let status =
         unsafe { CNContactStore::authorizationStatusForEntityType(CNEntityType::Contacts) };
     match status {
-        CNAuthorizationStatus::Authorized | CNAuthorizationStatus::Limited => true,
+        CNAuthorizationStatus::Authorized | CNAuthorizationStatus::Limited => Ok(true),
         CNAuthorizationStatus::NotDetermined => {
             let (tx, rx) = mpsc::channel();
             let answer = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
@@ -56,9 +56,11 @@ fn allowed(store: &CNContactStore) -> bool {
             unsafe {
                 store.requestAccessForEntityType_completionHandler(CNEntityType::Contacts, &answer)
             };
-            rx.recv_timeout(ANSWER_WITHIN).unwrap_or(false)
+            rx.recv_timeout(ANSWER_WITHIN).map_err(|_| {
+                "The question about Contacts wasn't answered. Try again to see it.".to_string()
+            })
         }
-        _ => false,
+        _ => Ok(false),
     }
 }
 
@@ -136,29 +138,50 @@ unsafe fn card(contact: &CNContact) -> Option<Card> {
     })
 }
 
-/// Adds the app's link for `uid` to the card `id`, unless it's on it already.
-fn write_link(store: &CNContactStore, id: &str, uid: &str) -> Result<(), String> {
-    let url = link_url(uid);
-    // SAFETY: plain calls into the Contacts framework; the card is fetched with the key it changes.
+/// Adds the app's link to each card (card id, person's `uid`) that doesn't have it yet, in one
+/// save.
+fn write_links(store: &CNContactStore, links: &[(String, String)]) -> Result<(), String> {
+    if links.is_empty() {
+        return Ok(());
+    }
+    // SAFETY: plain calls into the Contacts framework; the cards are fetched with the key they change.
     unsafe {
         let wanted = NSArray::from_retained_slice(&[ProtocolObject::from_retained(
             CNContactUrlAddressesKey.copy(),
         )]);
-        let contact = store
-            .unifiedContactWithIdentifier_keysToFetch_error(&NSString::from_str(id), &wanted)
+        let ids: Vec<Retained<NSString>> = links
+            .iter()
+            .map(|(card, _)| NSString::from_str(card))
+            .collect();
+        let which =
+            CNContact::predicateForContactsWithIdentifiers(&NSArray::from_retained_slice(&ids));
+        let cards = store
+            .unifiedContactsMatchingPredicate_keysToFetch_error(&which, &wanted)
             .map_err(|e| e.localizedDescription().to_string())?;
-        let mut links = contact.urlAddresses().to_vec();
-        if links.iter().any(|l| l.value().to_string() == url) {
+        let save = CNSaveRequest::new();
+        let mut changes = 0;
+        for contact in cards.iter() {
+            let card = contact.identifier().to_string();
+            let Some((_, uid)) = links.iter().find(|(id, _)| *id == card) else {
+                continue;
+            };
+            let url = link_url(uid);
+            let mut on_card = contact.urlAddresses().to_vec();
+            if on_card.iter().any(|l| l.value().to_string() == url) {
+                continue;
+            }
+            on_card.push(CNLabeledValue::labeledValueWithLabel_value(
+                Some(&NSString::from_str(LINK_LABEL)),
+                &NSString::from_str(&url),
+            ));
+            let changed = contact.mutableCopy();
+            changed.setUrlAddresses(&NSArray::from_retained_slice(&on_card));
+            save.updateContact(&changed);
+            changes += 1;
+        }
+        if changes == 0 {
             return Ok(());
         }
-        links.push(CNLabeledValue::labeledValueWithLabel_value(
-            Some(&NSString::from_str(LINK_LABEL)),
-            &NSString::from_str(&url),
-        ));
-        let changed = contact.mutableCopy();
-        changed.setUrlAddresses(&NSArray::from_retained_slice(&links));
-        let save = CNSaveRequest::new();
-        save.updateContact(&changed);
         store
             .executeSaveRequest_error(&save)
             .map_err(|e| e.localizedDescription().to_string())
@@ -176,7 +199,7 @@ pub async fn list_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
     tauri::async_runtime::spawn_blocking(move || {
         // SAFETY: a new store, as the framework's documentation shows.
         let store = unsafe { CNContactStore::new() };
-        if !allowed(&store) {
+        if !allowed(&store).map_err(storage_error)? {
             return Ok(ContactList::Denied);
         }
         let cards = read_cards(&store)
@@ -193,37 +216,22 @@ pub async fn list_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
     .map_err(|e| storage_error(e.to_string()))?
 }
 
-/// Adds the people picked in Contacts, then writes the app's link onto each one's card. A card
-/// that can't take the link (a read-only account, say) still gets its person added.
+/// Adds the people picked in Contacts, then writes the app's link onto the card of each one added.
+/// A card that can't take the link (a read-only account, say) still gets its person added.
 #[tauri::command]
 pub async fn import_contacts(
     app: AppHandle,
     people: Vec<NewPerson>,
     frequency_days: u32,
 ) -> Result<View, ApiError> {
-    let today = crate::today();
-    let args = json!({ "people": people, "frequencyDays": frequency_days, "lastConnected": today });
-    let view = crate::call(app.clone(), "add_people".into(), args).await?;
-    let links: Vec<(String, String)> = {
-        let Some(state) = app.try_state::<crate::State>() else {
-            return Ok(view);
-        };
-        let core = crate::lock(&state);
-        let picked: Vec<&str> = people.iter().filter_map(|p| p.contact.as_deref()).collect();
-        core.data()
-            .people
-            .iter()
-            .filter_map(|p| Some((p.contact.clone()?, p.uid.clone())))
-            .filter(|(card, _)| picked.contains(&card.as_str()))
-            .collect()
-    };
+    let (view, links) = crate::with_core(&app, |core, day| {
+        core.import_contacts(people, frequency_days, day)
+    })?;
     let _ = tauri::async_runtime::spawn_blocking(move || {
         // SAFETY: as in list_contacts.
         let store = unsafe { CNContactStore::new() };
-        for (card, uid) in links {
-            if let Err(e) = write_link(&store, &card, &uid) {
-                eprintln!("friends: couldn't add the link to a contact card: {e}");
-            }
+        if let Err(e) = write_links(&store, &links) {
+            eprintln!("friends: couldn't add the link to the contact cards: {e}");
         }
     })
     .await;

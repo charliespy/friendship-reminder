@@ -84,7 +84,7 @@ impl Guide {
     }
 
     /// A file from before the guide existed belongs to someone who has used the app already.
-    fn finished() -> Self {
+    pub(crate) fn finished() -> Self {
         Guide {
             sign_in: true,
             import: true,
@@ -471,25 +471,23 @@ impl Data {
             .iter()
             .map(|p| clean_name(&p.name))
             .collect::<Result<Vec<_>, _>>()?;
-        let before = self.clone();
+        // Nobody already in the list: the same card here, or the same name (the picker can be behind,
+        // with a person synced down since). Errors after the checks above can't happen short of
+        // running out of ids; App::call undoes the whole batch then.
         let mut ids = Vec::new();
         for (p, name) in people.iter().zip(names) {
-            let linked = |c: &String| self.people.iter().any(|q| q.contact.as_ref() == Some(c));
-            if p.contact.as_ref().is_some_and(linked) {
+            let fold = |n: &str| n.to_lowercase();
+            let listed = self.people.iter().any(|q| {
+                (p.contact.is_some() && q.contact == p.contact) || fold(&q.name) == fold(&name)
+            });
+            if listed {
                 continue;
             }
-            match self.add_person(&name, frequency_days, last_connected, today) {
-                Ok(id) => {
-                    if let Some(person) = self.people.last_mut() {
-                        person.contact = p.contact.clone();
-                    }
-                    ids.push(id);
-                }
-                Err(e) => {
-                    *self = before;
-                    return Err(e);
-                }
+            let id = self.add_person(&name, frequency_days, last_connected, today)?;
+            if let Some(person) = self.people.last_mut() {
+                person.contact = p.contact.clone();
             }
+            ids.push(id);
         }
         Ok(ids)
     }
@@ -621,6 +619,13 @@ impl Data {
             self.recompute_all(today);
         }
         Ok(())
+    }
+
+    /// A list with people in it is past the guide's import step (people added, or synced down).
+    pub fn settle_guide(&mut self) {
+        if !self.people.is_empty() {
+            self.guide.import = true;
+        }
     }
 
     pub fn set_notifications(&mut self, on: bool) {

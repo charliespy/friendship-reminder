@@ -314,6 +314,7 @@ impl App {
             self.data = before;
             return Err(e);
         }
+        self.data.settle_guide();
         self.data.stamp(&before, (self.clock)());
         if self.data != before {
             if let Err(e) = self.store.save(&self.data) {
@@ -397,6 +398,33 @@ impl App {
         Ok(())
     }
 
+    /// Adds the people picked in Contacts, in touch `today` (see [`Data::add_people`]), and answers
+    /// with the view and the cards to write the app's link onto: (this device's card id, the
+    /// person's `uid`) for each person added now (see [`crate::contacts`]).
+    #[allow(clippy::type_complexity)]
+    pub fn import_contacts(
+        &mut self,
+        people: Vec<NewPerson>,
+        frequency_days: u32,
+        today: NaiveDate,
+    ) -> Result<(View, Vec<(String, String)>), ApiError> {
+        let last_id = self.data.last_id;
+        let args = serde_json::json!({
+            "people": people,
+            "frequencyDays": frequency_days,
+            "lastConnected": today,
+        });
+        let view = self.call("add_people", args, today)?;
+        let links = self
+            .data
+            .people
+            .iter()
+            .filter(|p| p.id > last_id)
+            .filter_map(|p| Some((p.contact.clone()?, p.uid.clone())))
+            .collect();
+        Ok((view, links))
+    }
+
     /// Starts a sync with account `owner`: what to upload (see [`Data::sync_start`]). Saved, since a
     /// new account resets what was synced.
     /// A list that last synced with another account is that account's: it is saved to a copy next to
@@ -439,6 +467,7 @@ impl App {
         let before = self.data.clone();
         let caught_up = self.data.catch_up(today);
         let changed = self.data.sync_pulled(got, cursor, today) || caught_up;
+        self.data.settle_guide();
         self.save_or_undo(before)?;
         Ok(changed)
     }

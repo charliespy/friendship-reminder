@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Account, Person, View } from "./api";
 
@@ -49,8 +49,8 @@ describe("guideStep", () => {
     expect(guideStep(view(fresh), signedOut)).toBe("signIn");
   });
 
-  it("skips signing in when there's no account server", () => {
-    expect(guideStep(view(fresh), { status: "unavailable", reason: "" })).toBeNull();
+  it("goes on to Contacts when there's nothing to sign in to", () => {
+    expect(guideStep(view(fresh), { status: "unavailable", reason: "" })).toBe("import");
   });
 
   it("offers Contacts once signing in is behind you, while the list is empty", () => {
@@ -59,9 +59,8 @@ describe("guideStep", () => {
   });
 
   it("waits for a signed-in device's first sync before offering Contacts", () => {
-    const after = { signIn: true, import: false };
-    expect(guideStep(view(after), signedIn(null))).toBe("waitForList");
-    expect(guideStep(view(after), signedIn(1000))).toBe("import");
+    expect(guideStep(view(fresh), signedIn(null))).toBe("waitForList");
+    expect(guideStep(view(fresh), signedIn(1000))).toBe("import");
   });
 
   it("is over once both steps are", () => {
@@ -81,11 +80,10 @@ describe("WithGuide", () => {
     expect(screen.queryByText("the app")).toBeNull();
   });
 
-  it("marks the steps done without asking when they don't apply", async () => {
-    account = signedIn(1000);
-    finishGuide.mockResolvedValue(view(fresh));
-    render(<WithGuide view={view(fresh, [someone])}>the app</WithGuide>);
-    await waitFor(() => expect(finishGuide).toHaveBeenCalledWith("signIn"));
-    expect(finishGuide).not.toHaveBeenCalledWith("import");
+  it("says so when Not now can't be saved", async () => {
+    finishGuide.mockRejectedValue({ kind: "storage", message: "Couldn't save your changes: disk full" });
+    render(<WithGuide view={view(fresh)}>the app</WithGuide>);
+    fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("disk full");
   });
 });

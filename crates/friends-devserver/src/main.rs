@@ -158,6 +158,11 @@ impl Dev {
             "get_account" => Ok(self.account()),
             "sign_in_with_apple" => {
                 self.signed_in = true;
+                // As the app does once signed in: the guide's sign-in step is behind you.
+                let today = self.today();
+                let _ = self
+                    .app
+                    .call("finish_guide", json!({ "step": "signIn" }), today);
                 Ok(self.account())
             }
             "cancel_sign_in" => Ok(self.account()),
@@ -184,22 +189,22 @@ impl Dev {
                 let people: Vec<NewPerson> =
                     serde_json::from_value(args.get("people").cloned().unwrap_or(Value::Null))
                         .map_err(|e| json!(e.to_string()))?;
-                let frequency = args.get("frequencyDays").cloned().unwrap_or(Value::Null);
+                let frequency = args
+                    .get("frequencyDays")
+                    .and_then(Value::as_u64)
+                    .and_then(|f| u32::try_from(f).ok())
+                    .unwrap_or_default();
                 let today = self.today();
-                let call =
-                    json!({ "people": people, "frequencyDays": frequency, "lastConnected": today });
-                let view = self
+                let (view, links) = self
                     .app
-                    .call("add_people", call, today)
+                    .import_contacts(people, frequency, today)
                     .map_err(|e| serde_json::to_value(e).unwrap_or(Value::Null))?;
                 // As the app does: the link goes onto each card.
-                for p in &self.app.data().people {
-                    if let Some(card) = &p.contact {
-                        let links = self.card_links.entry(card.clone()).or_default();
-                        let url = link_url(&p.uid);
-                        if !links.contains(&url) {
-                            links.push(url);
-                        }
+                for (card, uid) in links {
+                    let on_card = self.card_links.entry(card).or_default();
+                    let url = link_url(&uid);
+                    if !on_card.contains(&url) {
+                        on_card.push(url);
                     }
                 }
                 to_value(view)
