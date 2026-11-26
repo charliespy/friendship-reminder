@@ -109,6 +109,40 @@ on `main` until then.
    the same description as `CHANGELOG.md`. Then download the `.dmg`, open it, and check that
    Friendship Reminder starts.
 
+## iPhone: a TestFlight build
+
+The iPhone app isn't on the App Store yet; test builds go to TestFlight, by hand, whenever the
+maintainer wants one. They don't need a Mac release, a tag or a version change.
+
+**Once, on the Mac that uploads:**
+
+- Everything README.md lists for building the iPhone app, plus `rustup component add llvm-tools`
+  (without it the sign-in sheet's Swift code doesn't link for a real iPhone).
+- An App Store Connect API key with **Admin** access (Users and Access → Integrations → App Store
+  Connect API → Team Keys). Its `AuthKey_<key id>.p8` file can be downloaded only once: keep it
+  outside the repo. Admin lets Xcode make the App Store certificate and profile by itself.
+- In `.env.local` at the repo root (git ignores it), next to the Supabase settings:
+
+  ```sh
+  APPLE_DEVELOPMENT_TEAM=<team id>        # Membership details on developer.apple.com
+  APPLE_API_KEY=<key id>
+  APPLE_API_ISSUER=<issuer id>            # above the list of keys
+  APPLE_API_KEY_PATH=<folder>/AuthKey_<key id>.p8
+  ```
+
+**Each build:**
+
+1. On an up-to-date `main`, with nothing uncommitted: `npm run ios:testflight`. It builds the app for the App Store, signs
+   it, and uploads it. The build number is the time in UTC (`YYYYMMDDHHMMSS`), so each upload is
+   new to Apple; the version is the one in the files.
+2. Apple processes it in 5 to 30 minutes, then it shows in App Store Connect → the app →
+   **TestFlight**. Testers in an **Internal Testing** group get it in the TestFlight app on
+   their iPhone. Internal testing needs no review; a build lasts 90 days.
+
+The app uses encryption only to secure its HTTPS connections (to the account server), which is
+exempt from export rules, so it says `ITSAppUsesNonExemptEncryption` is `false` and App Store
+Connect asks no export questions. Revisit this if the app ever encrypts anything else.
+
 ## How the script reads the history
 
 `plan` reads one commit per merged PR: the squash-merge commits on `main` (`feat: … (#12)`) since
