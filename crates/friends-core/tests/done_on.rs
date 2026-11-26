@@ -319,3 +319,33 @@ fn after_weeks_away_blocked_days_a_few_weeks_apart_still_leave_the_latest_missed
         (date(2026, 6, 16), true, Some(date(2026, 6, 15)))
     );
 }
+
+#[test]
+fn after_months_away_a_long_blocked_range_still_leaves_the_latest_missed_day() {
+    // Weekdays only, Jul 1 + 30 = Fri Jul 31, then blocked from Sep 1 to Nov 20 (one range, or two
+    // back to back). Every day from Aug 1 the app would have pushed Jul 31 to Mon Aug 3, ... Mon
+    // Aug 31, then past the range to Mon Nov 23: Aug 31 is the day missed.
+    let start = date(2026, 7, 1);
+    let thursday = date(2026, 11, 26);
+    for blocked in [
+        vec![(date(2026, 9, 1), date(2026, 11, 20))],
+        vec![
+            (date(2026, 9, 1), date(2026, 10, 20)),
+            (date(2026, 10, 21), date(2026, 11, 20)),
+        ],
+    ] {
+        let mut data = Data::default();
+        data.set_day_setting(DayToggle::WeekdaysOnly, None, start)
+            .unwrap();
+        for (from, to) in &blocked {
+            data.add_blocked(*from, *to, "Away", start).unwrap();
+        }
+        let id = data.add_person("Ada", 30, start, start).unwrap();
+        data.catch_up(thursday);
+        assert_eq!(
+            plan(&data, id),
+            (date(2026, 11, 23), true, Some(date(2026, 8, 31))),
+            "blocked {blocked:?}"
+        );
+    }
+}
