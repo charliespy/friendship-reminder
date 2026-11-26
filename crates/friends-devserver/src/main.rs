@@ -214,17 +214,17 @@ impl Dev {
             }
             "list_contacts" => {
                 let ask = args.get("ask").and_then(Value::as_bool).unwrap_or(false);
-                let mut chosen = Chosen::Nobody;
+                let mut just_shared_some = false;
                 match self.contacts {
                     Access::NotAsked { .. } if !ask => {}
                     Access::NotAsked { limited: false } => self.set_access(Access::Allowed),
                     Access::NotAsked { limited: true } => {
                         self.set_access(Access::Limited);
-                        chosen = Chosen::Everyone;
+                        just_shared_some = true;
                     }
                     _ => {}
                 }
-                Ok(self.contact_list(&chosen))
+                Ok(self.contact_list(just_shared_some, None))
             }
             "share_more_contacts" => {
                 // The trip to Settings: Kofi and Lena are shared there, if only some were.
@@ -237,8 +237,7 @@ impl Dev {
                         }
                     }
                 }
-                let chosen = Chosen::shared_in_settings(&before, &self.shared, limited);
-                Ok(self.contact_list(&chosen))
+                Ok(self.contact_list(false, Some(&before)))
             }
             "import_contacts" => {
                 let people: Vec<NewPerson> =
@@ -283,8 +282,9 @@ impl Dev {
         };
     }
 
-    /// The cards the app may see, as `list_contacts` answers, with `chosen` in Apple's sheets.
-    fn contact_list(&self, chosen: &Chosen) -> Value {
+    /// The cards the app may see, as `list_contacts` answers: `just_shared_some` and `before_trip`
+    /// as for `Chosen::when_listing`.
+    fn contact_list(&self, just_shared_some: bool, before_trip: Option<&[String]>) -> Value {
         let limited = match self.contacts {
             Access::Denied => return json!({ "status": "denied" }),
             Access::NotAsked { .. } => return json!({ "status": "notAsked" }),
@@ -301,7 +301,9 @@ impl Dev {
             })
             .collect();
         let contacts = choices(self.app.data(), cards);
-        let picked = just_chosen(&contacts, chosen);
+        let now: Vec<String> = contacts.iter().map(|c| c.id.clone()).collect();
+        let chosen = Chosen::when_listing(limited, just_shared_some, before_trip, &now);
+        let picked = just_chosen(&contacts, &chosen);
         json!({ "status": "allowed", "contacts": contacts, "limited": limited, "picked": picked })
     }
 

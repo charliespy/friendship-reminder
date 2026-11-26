@@ -237,15 +237,9 @@ fn list(
     };
     let cards = read_cards(store)
         .map_err(|e| storage_error(format!("Couldn't read your contacts: {e}")))?;
-    let chosen = match (before, access) {
-        (Some(before), _) => {
-            let now: Vec<String> = cards.iter().map(|c| c.id.clone()).collect();
-            Chosen::shared_in_settings(&before, &now, limited)
-        }
-        // Shared just now: everyone the app can see was chosen in Apple's sheet a moment ago.
-        (None, Access::Limited { just_now: true }) => Chosen::Everyone,
-        (None, _) => Chosen::Nobody,
-    };
+    let now: Vec<String> = cards.iter().map(|c| c.id.clone()).collect();
+    let just_shared_some = matches!(access, Access::Limited { just_now: true });
+    let chosen = Chosen::when_listing(limited, just_shared_some, before.as_deref(), &now);
     let state = app
         .try_state::<crate::State>()
         .ok_or_else(|| storage_error("Friendship Reminder can't open its data.".into()))?;

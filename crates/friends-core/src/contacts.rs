@@ -103,6 +103,23 @@ pub enum Chosen {
 }
 
 impl Chosen {
+    /// Who was just chosen when the picker lists the cards the app sees `now`. `limited`: the app
+    /// sees only some contacts. `just_shared_some`: the user answered Apple's question a moment ago
+    /// by sharing only some. `before_trip`: the cards the app saw before a trip to Settings to share
+    /// more, if it just made one.
+    pub fn when_listing(
+        limited: bool,
+        just_shared_some: bool,
+        before_trip: Option<&[String]>,
+        now: &[String],
+    ) -> Chosen {
+        match before_trip {
+            Some(before) => Chosen::shared_in_settings(before, now, limited),
+            None if limited && just_shared_some => Chosen::Everyone,
+            None => Chosen::Nobody,
+        }
+    }
+
     /// After a trip to Settings to share more: the cards the app sees `now` and didn't `before`
     /// were picked there, while the app still sees only some contacts (`still_limited`). If the
     /// user turned on full access instead, every card is new to the app but nobody was picked.

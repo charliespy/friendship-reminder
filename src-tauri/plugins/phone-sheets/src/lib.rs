@@ -28,6 +28,13 @@ pub struct PhoneSheets<R: Runtime> {
 #[derive(serde::Serialize)]
 struct SignInRequest<'a> {
     nonce: &'a str,
+    attempt: &'a str,
+}
+
+#[cfg(target_os = "ios")]
+#[derive(serde::Serialize)]
+struct CloseRequest<'a> {
+    attempt: &'a str,
 }
 
 #[cfg(target_os = "ios")]
@@ -42,8 +49,13 @@ const ONLY_ON_IPHONE: &str = "Apple's sheets are only on iPhone.";
 
 impl<R: Runtime> PhoneSheets<R> {
     /// Shows Sign in with Apple for `hashed_nonce` and waits: Apple's identity token, or `None` when
-    /// the user closed the sheet. Blocks the calling thread, so never call it on the main thread.
-    pub fn sign_in_with_apple(&self, hashed_nonce: &str) -> Result<Option<String>, String> {
+    /// the user closed the sheet (or `attempt` was closed first). Blocks the calling thread, so
+    /// never call it on the main thread.
+    pub fn sign_in_with_apple(
+        &self,
+        attempt: &str,
+        hashed_nonce: &str,
+    ) -> Result<Option<String>, String> {
         #[cfg(target_os = "ios")]
         {
             self.handle
@@ -51,6 +63,7 @@ impl<R: Runtime> PhoneSheets<R> {
                     "signInWithApple",
                     SignInRequest {
                         nonce: hashed_nonce,
+                        attempt,
                     },
                 )
                 .map(|r| r.id_token)
@@ -58,21 +71,23 @@ impl<R: Runtime> PhoneSheets<R> {
         }
         #[cfg(not(target_os = "ios"))]
         {
-            let _ = hashed_nonce;
+            let _ = (attempt, hashed_nonce);
             Err(ONLY_ON_IPHONE.into())
         }
     }
 
-    /// Closes Sign in with Apple's sheet, if it's up: its call answers as if the user closed it.
-    pub fn close_sign_in_with_apple(&self) -> Result<(), String> {
+    /// Closes `attempt`'s Sign in with Apple sheet: now if it's up, or as soon as it would open.
+    /// Its call answers as if the user closed it.
+    pub fn close_sign_in_with_apple(&self, attempt: &str) -> Result<(), String> {
         #[cfg(target_os = "ios")]
         {
             self.handle
-                .run_mobile_plugin::<()>("closeSignInWithApple", ())
+                .run_mobile_plugin::<()>("closeSignInWithApple", CloseRequest { attempt })
                 .map_err(|e| e.to_string())
         }
         #[cfg(not(target_os = "ios"))]
         {
+            let _ = attempt;
             Err(ONLY_ON_IPHONE.into())
         }
     }

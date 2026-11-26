@@ -464,3 +464,32 @@ fn cards_shared_in_settings_are_the_ones_new_to_the_app() {
         Chosen::Nobody
     );
 }
+
+#[test]
+fn who_was_just_chosen_depends_on_how_the_list_was_reached() {
+    let ids = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let now = ids(&["c1", "c2"]);
+    // Just answered Apple's question by sharing only some: those are everyone the app sees.
+    assert_eq!(
+        Chosen::when_listing(true, true, None, &now),
+        Chosen::Everyone
+    );
+    // Opened again later, or full access: nobody, the list shows.
+    assert_eq!(
+        Chosen::when_listing(true, false, None, &now),
+        Chosen::Nobody
+    );
+    assert_eq!(
+        Chosen::when_listing(false, false, None, &now),
+        Chosen::Nobody
+    );
+    // Back from Settings: who's new since.
+    assert_eq!(
+        Chosen::when_listing(true, false, Some(&ids(&["c1"])), &now),
+        Chosen::Cards(ids(&["c2"]))
+    );
+    assert_eq!(
+        Chosen::when_listing(false, false, Some(&ids(&["c1"])), &now),
+        Chosen::Nobody
+    );
+}

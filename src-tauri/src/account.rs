@@ -323,14 +323,11 @@ pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<Shown, St
         }
         // Apple's sheet closes too, so it can't finish a sign-in nobody wants any more.
         #[cfg(target_os = "ios")]
-        if account.waiting().is_waiting(&attempt) {
+        if account.waiting().cancel(&attempt).is_some() {
             use tauri_plugin_phone_sheets::PhoneSheetsExt;
-            account.waiting().cancel(&attempt);
-            if let Err(e) = app.phone_sheets().close_sign_in_with_apple() {
+            if let Err(e) = app.phone_sheets().close_sign_in_with_apple(&attempt) {
                 eprintln!("friends: couldn't close Apple's sign-in sheet: {e}");
             }
-        } else {
-            account.waiting().cancel(&attempt);
         }
         Ok(account.view())
     })
@@ -418,7 +415,9 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
             return Ok(None);
         }
         // `None`: closed without signing in.
-        let token = app.phone_sheets().sign_in_with_apple(&nonce.hashed)?;
+        let token = app
+            .phone_sheets()
+            .sign_in_with_apple(attempt, &nonce.hashed)?;
         Ok(token.map(|t| (t, nonce)))
     })();
     let (token, nonce) = match waited {

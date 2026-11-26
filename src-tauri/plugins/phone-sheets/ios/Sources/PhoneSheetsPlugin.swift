@@ -14,6 +14,12 @@ import UserNotifications
 class SignInArgs: Decodable {
   /// The SHA-256 of the sign-in's nonce, in hex: Apple puts it into the identity token.
   let nonce: String
+  /// The app's name for this sign-in, so a Cancel can close it.
+  let attempt: String
+}
+
+class CloseArgs: Decodable {
+  let attempt: String
 }
 
 /// Waits for one Sign in with Apple to finish and answers the call that started it.
@@ -22,13 +28,16 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
 {
   private let invoke: Invoke
   private let anchor: () -> ASPresentationAnchor
-  /// The sheet's controller, to close it on Cancel.
-  weak var controller: ASAuthorizationController?
+  /// Which sign-in this is (the app's name for it).
+  let attempt: String
+  /// The sheet's controller: kept until Apple answers (nothing else holds it), and to close it.
+  var controller: ASAuthorizationController?
   /// Called once Apple's sheet has answered.
   var done: () -> Void = {}
 
-  init(invoke: Invoke, anchor: @escaping () -> ASPresentationAnchor) {
+  init(invoke: Invoke, attempt: String, anchor: @escaping () -> ASPresentationAnchor) {
     self.invoke = invoke
+    self.attempt = attempt
     self.anchor = anchor
   }
 
@@ -113,6 +122,8 @@ class SettingsTrip {
 class PhoneSheetsPlugin: Plugin {
   /// The sign-in under way: kept alive while Apple's sheet shows.
   private var signIn: AppleSignIn?
+  /// A sign-in cancelled before its sheet came up.
+  private var closedAttempt: String?
   /// The trip to Settings under way, if any.
   private var trip: SettingsTrip?
 
@@ -138,11 +149,19 @@ class PhoneSheetsPlugin: Plugin {
         invoke.reject("Couldn't show Sign in with Apple. Try again.")
         return
       }
+      // Cancelled before its sheet came up: it ends as if closed.
+      if self.closedAttempt == args.attempt {
+        self.closedAttempt = nil
+        invoke.resolve(["idToken": NSNull()])
+        return
+      }
       let signIn = AppleSignIn(
-        invoke: invoke, anchor: { [weak self] in self?.window() ?? ASPresentationAnchor() })
+        invoke: invoke, attempt: args.attempt,
+        anchor: { [weak self] in self?.window() ?? ASPresentationAnchor() })
       signIn.controller = controller
       signIn.done = { [weak self, weak signIn] in
         // Only if it is still the one kept.
+        signIn?.controller = nil
         if let self = self, let signIn = signIn, self.signIn === signIn { self.signIn = nil }
       }
       self.signIn = signIn
@@ -154,9 +173,15 @@ class PhoneSheetsPlugin: Plugin {
 
   /// Closes Apple's sign-in sheet, if it's up (iOS 16 on; before that it stays until the user
   /// closes it). Its sign-in then answers as closed.
-  @objc public func closeSignInWithApple(_ invoke: Invoke) {
+  @objc public func closeSignInWithApple(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(CloseArgs.self)
     DispatchQueue.main.async {
-      if #available(iOS 16.0, *) { self.signIn?.controller?.cancel() }
+      if let signIn = self.signIn, signIn.attempt == args.attempt {
+        if #available(iOS 16.0, *) { signIn.controller?.cancel() }
+      } else {
+        // Its sheet isn't up yet: it closes as soon as it would open.
+        self.closedAttempt = args.attempt
+      }
       invoke.resolve()
     }
   }
