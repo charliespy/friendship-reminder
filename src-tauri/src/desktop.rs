@@ -367,6 +367,15 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // A first launch shows the guide (signing in, adding people): the menu bar icon alone is easy
+    // to miss.
+    let new_here = handle
+        .try_state::<crate::State>()
+        .is_some_and(|s| !crate::lock(&s).data().guide.is_done());
+    if new_here {
+        let _ = show_preferences(&handle);
+    }
+
     // Ask once for permission to notify; macOS remembers the answer.
     let _ = handle.notification().request_permission();
 

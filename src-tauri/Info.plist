@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- What macOS shows when the app asks for Contacts (Add person › Import from Contacts). -->
+	<key>NSContactsUsageDescription</key>
+	<string>Friendship Reminder shows your contacts' names so you can pick who to add, and adds a link back to the app on the cards of the people you add.</string>
+	<!-- The app's link, which it writes on the contact cards of the people added from Contacts:
+	     tapping it in Contacts opens the app on that person. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>io.github.charliespy.friends</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.github.charliespy.friends</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

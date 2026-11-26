@@ -6,6 +6,7 @@ const getView = vi.fn<() => Promise<View>>();
 const onViewChanged = vi.fn<(f: (v: View) => void) => Promise<() => void>>();
 const getLaunchAtLogin = vi.fn<() => Promise<boolean>>();
 const setDayToggle = vi.fn<(t: string, d?: string[]) => Promise<View>>();
+const takeShownPerson = vi.fn<() => Promise<number | null>>();
 
 vi.mock("./api", async (orig) => ({
   ...(await orig<typeof import("./api")>()),
@@ -16,6 +17,8 @@ vi.mock("./api", async (orig) => ({
     setDayToggle: (t: string, d?: string[]) => setDayToggle(t, d),
     getAccount: () => Promise.resolve({ status: "signedOut", warning: null }),
     onAccountChanged: () => Promise.resolve(() => {}),
+    takeShownPerson: () => takeShownPerson(),
+    onShowPerson: () => Promise.resolve(() => {}),
   },
 }));
 
@@ -57,6 +60,7 @@ function view(people: Person[], unreadableFile: string | null = null): View {
     blocked: [],
     settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
     unreadableFile,
+    guide: { signIn: true, import: true },
   };
 }
 
@@ -73,8 +77,9 @@ const panel = (id: string) => document.getElementById(`pane-${id}`)!;
 afterEach(cleanup);
 
 beforeEach(() => {
-  for (const f of [getView, onViewChanged, getLaunchAtLogin]) f.mockReset();
+  for (const f of [getView, onViewChanged, getLaunchAtLogin, takeShownPerson]) f.mockReset();
   onViewChanged.mockResolvedValue(() => {});
+  takeShownPerson.mockResolvedValue(null);
   getLaunchAtLogin.mockResolvedValue(false);
 });
 
@@ -92,6 +97,14 @@ describe("Preferences", () => {
     render(<Preferences />);
     await act(async () => {});
     expect(screen.getByRole("alert").textContent).toBe("Couldn't read your saved list.");
+  });
+
+  it("opened from a contact card's link, shows that person in People", async () => {
+    takeShownPerson.mockResolvedValueOnce(2);
+    await open(view([person({ id: 1 }), person({ id: 2, name: "Lena Fischer" })]));
+    expect(tab(/^People/).getAttribute("aria-selected")).toBe("true");
+    const rows = screen.getAllByTestId("person-row");
+    expect(rows.map((r) => r.className.includes("is-highlighted"))).toEqual([false, true]);
   });
 
   it("starts on People, and switches tabs and panels together", async () => {

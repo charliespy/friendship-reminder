@@ -6,6 +6,7 @@
 compile_error!("Friendship Reminder is a Mac and iPhone app: build it for macOS or iOS.");
 
 mod account;
+mod contacts;
 #[cfg(target_os = "macos")]
 mod desktop;
 #[cfg(target_os = "ios")]
@@ -22,6 +23,56 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 
 const VIEW_CHANGED: &str = "view-changed";
+
+/// Sent to the windows when a link from a contact card opened the app on someone: take them with
+/// `take_shown_person`.
+const SHOW_PERSON: &str = "show-person";
+
+/// The person a link from a contact card opened the app on, until a window shows them. Kept, not
+/// only sent, since the window may still be loading.
+struct ShownPerson(Mutex<Option<u64>>);
+
+/// The app was opened from a link: the line Friendship Reminder writes on a contact card. Shows the
+/// app (Preferences on the Mac), and the person, if they're still in the list. Other links (the
+/// iPhone's sign-in comes back on the same address) are left alone.
+fn open_links(app: &AppHandle, urls: &[tauri::Url]) {
+    let Some(state) = app.try_state::<State>() else {
+        return;
+    };
+    let person = {
+        let core = lock(&state);
+        let data = core.data();
+        let ours = urls
+            .iter()
+            .any(|u| friends_core::contacts::uid_in_link(u.as_str()).is_some());
+        if !ours {
+            return;
+        }
+        urls.iter()
+            .find_map(|u| friends_core::contacts::person_in_link(data, u.as_str()))
+    };
+    if let Some(id) = person {
+        *app.state::<ShownPerson>()
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(id);
+    }
+    #[cfg(target_os = "macos")]
+    let _ = desktop::show_preferences(app);
+    if let Some(id) = person {
+        let _ = app.emit(SHOW_PERSON, id);
+    }
+}
+
+/// The person a link opened the app on, once: the window that asks first shows them.
+#[tauri::command]
+fn take_shown_person(app: AppHandle) -> Option<u64> {
+    app.state::<ShownPerson>()
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+}
 
 struct State(Mutex<App>);
 
@@ -111,6 +162,15 @@ fn send(app: &AppHandle, view: &View, json: Option<String>) {
 /// Async, so Tauri runs it off the main thread and a slow save never freezes the window.
 #[tauri::command]
 async fn call(app: AppHandle, cmd: String, args: Value) -> Result<View, ApiError> {
+    with_core(&app, |core, day| Ok((core.call(&cmd, args, day)?, ()))).map(|(view, ())| view)
+}
+
+/// Runs `f` on the data and tells every window the new view, even when `f` fails (it may have
+/// caught up missed targets first), then nudges sync when a change waits to upload.
+fn with_core<T>(
+    app: &AppHandle,
+    f: impl FnOnce(&mut App, NaiveDate) -> Result<(View, T), ApiError>,
+) -> Result<(View, T), ApiError> {
     let Some(state) = app.try_state::<State>() else {
         #[cfg(target_os = "ios")]
         let reason = app
@@ -125,20 +185,37 @@ async fn call(app: AppHandle, cmd: String, args: Value) -> Result<View, ApiError
     };
     let mut core = lock(&state);
     let day = today();
-    let result = core.call(&cmd, args, day);
-    // Every command (get_view too, and one that fails) may have caught up missed targets first, so
-    // every one tells the windows. Sent while the lock is held, so two commands' views reach the
-    // windows in the order they ran.
+    let result = f(&mut core, day);
+    // Sent while the lock is held, so two commands' views reach the windows in the order they ran.
     match &result {
-        Ok(view) => publish(&app, view),
-        Err(_) => publish(&app, &core.view(day)),
+        Ok((view, _)) => publish(app, view),
+        Err(_) => publish(app, &core.view(day)),
     }
     let unsynced = core.has_unsynced();
     drop(core);
     if unsynced {
-        sync::nudge(&app, sync::Nudge::Soon);
+        sync::nudge(app, sync::Nudge::Soon);
     }
     result
+}
+
+/// The first-run guide's sign-in step is behind you: signed in, or there's no account server to
+/// sign in to. Runs on its own task, so it never waits on a lock its caller holds.
+fn finish_guide_sign_in(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let done = app
+            .try_state::<State>()
+            .is_some_and(|s| lock(&s).data().guide.sign_in);
+        if !done {
+            let finish = serde_json::json!({ "step": "signIn" });
+            if let Err(e) = with_core(&app, |core, day| {
+                Ok((core.call("finish_guide", finish, day)?, ()))
+            }) {
+                eprintln!("friends: couldn't save the guide's progress: {e}");
+            }
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -157,7 +234,10 @@ pub fn run() {
             account::get_account,
             account::sign_in_with_apple,
             account::cancel_sign_in,
-            account::sign_out
+            account::sign_out,
+            contacts::list_contacts,
+            contacts::import_contacts,
+            take_shown_person
         ]);
     #[cfg(target_os = "ios")]
     let builder = tauri::Builder::default()
@@ -168,12 +248,16 @@ pub fn run() {
             account::get_account,
             account::sign_in_with_apple,
             account::cancel_sign_in,
-            account::sign_out
+            account::sign_out,
+            contacts::list_contacts,
+            contacts::import_contacts,
+            take_shown_person
         ]);
     builder
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(LastPublished(Mutex::new(None)));
+            app.manage(ShownPerson(Mutex::new(None)));
             app.manage(account::Account::new());
             app.manage(sync::Syncer::new());
             let core = match open_data(&handle) {
@@ -190,6 +274,10 @@ pub fn run() {
                 }
             };
             app.manage(State(Mutex::new(core)));
+            // Without an account server there's no sign-in step in the guide.
+            if app.state::<account::Account>().config().is_none() {
+                finish_guide_sign_in(&handle);
+            }
             #[cfg(target_os = "macos")]
             desktop::setup(app)?;
             #[cfg(target_os = "ios")]
@@ -200,6 +288,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the Friendship Reminder app")
         .run(|app, event| {
+            if let tauri::RunEvent::Opened { urls } = &event {
+                open_links(app, urls);
+            }
             #[cfg(target_os = "macos")]
             desktop::on_event(app, &event);
             #[cfg(target_os = "ios")]

@@ -11,7 +11,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::model::{Blocked, Data, Person, Settings};
+use crate::model::{Blocked, Data, Guide, NewPerson, Person, Settings};
 use crate::schedule::{DaySet, DayToggle};
 use crate::store::{Loaded, Store};
 use crate::sync::Changes;
@@ -27,6 +27,8 @@ pub struct View {
     pub settings: Settings,
     /// When the data file couldn't be read at launch: where it was moved, so the UI can say so.
     pub unreadable_file: Option<String>,
+    /// The first-run guide's steps that are behind you, on this device.
+    pub guide: Guide,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -87,6 +89,27 @@ struct PersonArgs {
     name: String,
     frequency_days: u32,
     last_connected: NaiveDate,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PeopleArgs {
+    people: Vec<NewPerson>,
+    last_connected: NaiveDate,
+}
+
+/// A step of the first-run guide.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GuideStep {
+    SignIn,
+    Import,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GuideArgs {
+    step: GuideStep,
 }
 
 #[derive(Deserialize)]
@@ -267,6 +290,7 @@ impl App {
             people,
             blocked: self.data.blocked.clone(),
             settings: self.data.settings.clone(),
+            guide: self.data.guide,
             unreadable_file: self.unreadable_file.as_ref().map(|p| {
                 // Shown in the app, where it may end up in a screenshot for a bug report.
                 crate::hide_home(&p.display().to_string(), crate::home_dir().as_deref())
@@ -289,6 +313,7 @@ impl App {
             self.data = before;
             return Err(e);
         }
+        self.data.settle_guide();
         self.data.stamp(&before, (self.clock)());
         if self.data != before {
             if let Err(e) = self.store.save(&self.data) {
@@ -313,6 +338,18 @@ impl App {
                 let p: PersonArgs = args(cmd, a)?;
                 d.add_person(&p.name, p.frequency_days, p.last_connected, today)
                     .map_err(invalid)?;
+            }
+            "add_people" => {
+                let p: PeopleArgs = args(cmd, a)?;
+                d.add_people(&p.people, p.last_connected, today)
+                    .map_err(invalid)?;
+            }
+            "finish_guide" => {
+                let p: GuideArgs = args(cmd, a)?;
+                match p.step {
+                    GuideStep::SignIn => d.guide.sign_in = true,
+                    GuideStep::Import => d.guide.import = true,
+                }
             }
             "update_person" => {
                 let p: UpdatePersonArgs = args(cmd, a)?;
@@ -360,6 +397,28 @@ impl App {
         Ok(())
     }
 
+    /// Adds the people picked in Contacts, in touch `today` (see [`Data::add_people`]), and answers
+    /// with the view and the cards to write the app's link onto: (this device's card id, the
+    /// person's `uid`) for each person added now (see [`crate::contacts`]).
+    #[allow(clippy::type_complexity)]
+    pub fn import_contacts(
+        &mut self,
+        people: Vec<NewPerson>,
+        today: NaiveDate,
+    ) -> Result<(View, Vec<(String, String)>), ApiError> {
+        let last_id = self.data.last_id;
+        let args = serde_json::json!({ "people": people, "lastConnected": today });
+        let view = self.call("add_people", args, today)?;
+        let links = self
+            .data
+            .people
+            .iter()
+            .filter(|p| p.id > last_id)
+            .filter_map(|p| Some((p.contact.clone()?, p.uid.clone())))
+            .collect();
+        Ok((view, links))
+    }
+
     /// Starts a sync with account `owner`: what to upload (see [`Data::sync_start`]). Saved, since a
     /// new account resets what was synced.
     /// A list that last synced with another account is that account's: it is saved to a copy next to
@@ -402,6 +461,7 @@ impl App {
         let before = self.data.clone();
         let caught_up = self.data.catch_up(today);
         let changed = self.data.sync_pulled(got, cursor, today) || caught_up;
+        self.data.settle_guide();
         self.save_or_undo(before)?;
         Ok(changed)
     }

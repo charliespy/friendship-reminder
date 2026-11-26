@@ -57,3 +57,26 @@ export async function openPreferences(page: Page, tab?: "People" | "Blocked date
   await page.goto("/preferences.html");
   if (tab) await page.getByRole("tab", { name: tab }).click();
 }
+
+/** Starts as a brand-new install: empty data, and the first-run guide not done. */
+export async function seedNewUser(request: APIRequestContext) {
+  const fresh = { version: 3, guide: { signIn: false, import: false } };
+  expect((await request.post(`${server}/__test/reset`, { data: fresh, headers: JSON_HEADERS })).ok()).toBeTruthy();
+  await setToday(request, TODAY);
+}
+
+/** How the made-up address book answers "allow access to your contacts?" from now on. */
+export async function setContactsAccess(request: APIRequestContext, answer: "allowed" | "denied") {
+  const res = await request.post(`${server}/__test/contacts`, { data: JSON.stringify(answer), headers: JSON_HEADERS });
+  expect(res.ok()).toBeTruthy();
+}
+
+/**
+ * Acts as if the app's link on a made-up contact card opened the app; answers the person's id, or
+ * null when the card has no link to someone in the list.
+ */
+export async function openCard(request: APIRequestContext, card: string): Promise<number | null> {
+  const res = await request.post(`${server}/__test/open-card`, { data: JSON.stringify(card), headers: JSON_HEADERS });
+  expect(res.ok()).toBeTruthy();
+  return res.json();
+}

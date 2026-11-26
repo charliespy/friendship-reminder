@@ -199,9 +199,16 @@ pub fn session_for_sync(app: &AppHandle, force: bool) -> Result<Option<Session>,
 /// Sends the account to the windows. Sent while holding the state, so two changes at once can't send
 /// their views out of order.
 fn publish(app: &AppHandle) {
-    let account = app.state::<Account>();
-    let state = account.state();
-    let _ = app.emit(ACCOUNT_CHANGED, account.view_of(&state));
+    let shown = {
+        let account = app.state::<Account>();
+        let state = account.state();
+        account.view_of(&state)
+    };
+    let signed_in = matches!(shown.account, AccountView::SignedIn { .. });
+    let _ = app.emit(ACCOUNT_CHANGED, shown);
+    if signed_in {
+        crate::finish_guide_sign_in(app);
+    }
 }
 
 /// errSecItemNotFound: the Keychain holds no such item.

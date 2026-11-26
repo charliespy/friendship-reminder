@@ -1108,7 +1108,9 @@ button.done-option:disabled {
 }
 
 /* iOS selection circles: an empty ring, filled with the accent and a white tick when chosen. */
-.phone #pane-people .list-row input[type="checkbox"] {
+.phone #pane-people .list-row input[type="checkbox"],
+.phone .picker-row input[type="checkbox"] {
+  flex: none;
   grid-column: 1;
   grid-row: 1 / span 3;
   width: 22px;
@@ -1119,7 +1121,8 @@ button.done-option:disabled {
   appearance: none;
 }
 
-.phone #pane-people .list-row input[type="checkbox"]:checked {
+.phone #pane-people .list-row input[type="checkbox"]:checked,
+.phone .picker-row input[type="checkbox"]:checked {
   background: var(--accent)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='m3 7.3 2.7 2.7L11 4.3' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
     center / 14px no-repeat;
@@ -1507,4 +1510,264 @@ html.in-browser #root {
   width: 360px;
   height: 520px;
   box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+}
+
+/*
+ * The first-run guide: one step at a time, centred in the window like the Mac's own setup screens.
+ * The sign-in step is narrow (an icon, a line about the app, two buttons); the import step is as
+ * wide as a pane, for the contact list.
+ */
+.guide {
+  display: flex;
+  min-height: 100%;
+  background: var(--window);
+}
+
+.guide-body {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-5);
+}
+
+.guide-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.guide-step-wide {
+  align-items: stretch;
+  max-width: 560px;
+}
+
+.guide-step-wide h1,
+.guide-step-wide .guide-lead {
+  text-align: center;
+}
+
+.guide-icon {
+  margin-bottom: var(--space-4);
+}
+
+.guide-step h1 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.guide-lead {
+  margin: var(--space-2) auto var(--space-5);
+  max-width: 46ch;
+  color: var(--label-2);
+}
+
+.guide-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.guide-button {
+  width: 100%;
+  max-width: 240px;
+  min-height: 32px;
+}
+
+.guide-note {
+  max-width: 46ch;
+  margin-top: var(--space-5);
+}
+
+.guide .error {
+  margin-top: var(--space-3);
+}
+
+/* On iPhone: from the top of the screen, past the status bar, with full-width buttons. */
+.guide-phone .guide-body {
+  align-items: flex-start;
+  padding: calc(env(safe-area-inset-top) + var(--space-6)) var(--space-4) calc(env(safe-area-inset-bottom) + var(--space-5));
+}
+
+.guide-phone .guide-step h1 {
+  font-size: 28px;
+  letter-spacing: 0;
+}
+
+.guide-phone .guide-button {
+  max-width: none;
+  min-height: 50px;
+}
+
+/* Add person › Import from Contacts, at the top of the form. */
+.import-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: calc(var(--space-4) * -1) calc(var(--space-4) * -1) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.form-card-spacing {
+  margin-bottom: var(--space-5);
+}
+
+/* The contact picker: search, a list to tick, then how often and Add. */
+.picker {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-align: left;
+}
+
+.picker-search {
+  padding: var(--space-3);
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.picker-search .input {
+  width: 100%;
+}
+
+.picker-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.picker-row {
+  padding: 0;
+}
+
+.picker-row label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row);
+  padding: var(--space-2) var(--space-3);
+}
+
+.picker-row .person-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-row[data-added="true"] .person-name {
+  color: var(--label-2);
+}
+
+.picker-added {
+  flex: none;
+  color: var(--label-3);
+  font-size: var(--text-sm);
+}
+
+.picker-message {
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+}
+
+.picker-message strong {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.picker-message p {
+  max-width: 56ch;
+  margin: 0 auto;
+}
+
+.picker-footer {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 0.5px solid var(--separator);
+}
+
+.picker-row .picker-frequency {
+  flex: none;
+  width: auto;
+  margin-right: var(--space-3);
+}
+
+.picker-hint {
+  padding: 0;
+}
+
+.picker-actions {
+  margin-top: var(--space-3);
+}
+
+.picker > .picker-actions {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.phone .picker-list {
+  max-height: none;
+}
+
+/* Clip, not hide: hidden would make the card a scroller and stop the footer sticking. */
+.phone .picker {
+  overflow: clip;
+}
+
+/* The list scrolls with the page; how often and Add stay at the bottom of the screen. */
+.phone .picker-footer {
+  position: sticky;
+  bottom: 0;
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--space-4));
+  background: var(--group);
+}
+
+.phone .picker-row[data-added="true"] input[type="checkbox"] {
+  opacity: 0.4;
+}
+
+/* On iPhone the dropdown sits under the name, lined up with it, so long names keep their room. */
+.phone .picker-row {
+  flex-wrap: wrap;
+  padding-bottom: 0;
+}
+
+.phone .picker-row .picker-frequency {
+  width: calc(100% - var(--space-4) - 22px - var(--space-3));
+  margin: 0 var(--space-4) var(--space-3) calc(var(--space-4) + 22px + var(--space-3));
+}
+
+.phone .import-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.picker-footer .hint {
+  padding: 0;
+}
+
+.guide-error {
+  position: fixed;
+  right: 0;
+  bottom: var(--space-4);
+  left: 0;
+  text-align: center;
+}
+
+/* A person opened from their contact card: their row lights up for a moment. */
+.list-row.is-highlighted {
+  background: var(--accent-tint);
+  transition: background 0.6s var(--ease-out);
+}
+
+.list-row {
+  transition: background 1.2s var(--ease-out);
 }

@@ -49,6 +49,13 @@ targets:
         # Encryption only to secure HTTPS connections, which is exempt: no export questions in App Store Connect.
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
+        # The app's link, written on the contact cards of people added from Contacts: tapping it
+        # in Contacts opens the app on that person.
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.charliespy.friends
+            CFBundleURLSchemes: [io.github.charliespy.friends]
+        # What iOS shows when the app asks for Contacts (Add person › Import from Contacts).
+        NSContactsUsageDescription: "Friendship Reminder shows your contacts' names so you can pick who to add, and adds a link back to the app on the cards of the people you add."
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
         UISupportedInterfaceOrientations:

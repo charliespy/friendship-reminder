@@ -4,6 +4,11 @@
  * builds with VITE_BROWSER_BRIDGE=1 include it; the app never does.
  */
 
+/** Whether a command's reply is the app's view (as every data command answers). */
+function isView(body: unknown): boolean {
+  return !!body && typeof body === "object" && "today" in body && "people" in body && "guide" in body;
+}
+
 type Handler = (event: { event: string; id: number; payload: unknown }) => void;
 
 export function installBrowserBridge(endpoint = "/__friends/invoke") {
@@ -71,8 +76,9 @@ export function installBrowserBridge(endpoint = "/__friends/invoke") {
         }
         throw body;
       }
-      // The real shell tells every window about a new view; here there is only this window.
-      if (cmd === "call") emit("view-changed", body);
+      // The real shell tells every window about a new view after any command that changes the data;
+      // here there is only this window. Those commands answer with the view.
+      if (isView(body)) emit("view-changed", body);
       return body;
     },
   };

@@ -38,6 +38,24 @@ account read and write only its own rows; signed-out requests get nothing. Remin
 reminders were sent and the other settings stay on the device. Signing out stops syncing; your
 list stays on the device. If you never sign in, Friendship Reminder sends nothing over the network.
 
+### Contacts
+
+Add person › Import from Contacts (and the same step when you first open the app) lists the people
+in your Contacts so you can pick who to add. macOS or iOS asks you first, and you can say no; you
+can still type names in. Friendship Reminder reads only names (and, to spot people already in your
+list, the web addresses on a card), never phone numbers, email addresses, addresses, birthdays or
+photos. For each person you add, it keeps:
+
+- their name, like any name you type in (synced while you're signed in);
+- this device's id for their card, so the app can find the card again. It stays on the device and
+  is never synced;
+- a link written onto their card in Contacts, labelled "Friendship Reminder", for example
+  `io.github.charliespy.friends://person/3f2a…`. The code at the end is the app's random id for the
+  person, which says nothing about them. Contacts syncs the card (with iCloud), so your other
+  devices find the person's card by this link, and tapping it opens Friendship Reminder at that
+  person (the app registers this kind of link for that). It's the only change the app makes to your contacts,
+  and only on the cards of people you add; you can delete it from the card at any time.
+
 ## Supported versions
 
 Only the latest release gets fixes.

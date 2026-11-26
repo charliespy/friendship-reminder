@@ -506,6 +506,7 @@ impl Data {
             uid: r.id.clone(),
             modified: r.modified_at,
             synced: r.modified_at,
+            contact: None,
         };
         Data::reschedule(&mut person, rule, &ranges, today);
         self.people.push(person);
