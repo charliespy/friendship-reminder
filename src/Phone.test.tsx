@@ -42,6 +42,7 @@ function view(people: Person[]): View {
     blocked: [],
     settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
     unreadableFile: null,
+    guide: { signIn: true, import: true },
   };
 }
 

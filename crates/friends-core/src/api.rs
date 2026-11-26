@@ -11,7 +11,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::model::{Blocked, Data, Person, Settings};
+use crate::model::{Blocked, Data, Guide, NewPerson, Person, Settings};
 use crate::schedule::{DaySet, DayToggle};
 use crate::store::{Loaded, Store};
 use crate::sync::Changes;
@@ -27,6 +27,8 @@ pub struct View {
     pub settings: Settings,
     /// When the data file couldn't be read at launch: where it was moved, so the UI can say so.
     pub unreadable_file: Option<String>,
+    /// The first-run guide's steps that are behind you, on this device.
+    pub guide: Guide,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -87,6 +89,28 @@ struct PersonArgs {
     name: String,
     frequency_days: u32,
     last_connected: NaiveDate,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PeopleArgs {
+    people: Vec<NewPerson>,
+    frequency_days: u32,
+    last_connected: NaiveDate,
+}
+
+/// A step of the first-run guide.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GuideStep {
+    SignIn,
+    Import,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GuideArgs {
+    step: GuideStep,
 }
 
 #[derive(Deserialize)]
@@ -267,6 +291,7 @@ impl App {
             people,
             blocked: self.data.blocked.clone(),
             settings: self.data.settings.clone(),
+            guide: self.data.guide,
             unreadable_file: self.unreadable_file.as_ref().map(|p| {
                 // Shown in the app, where it may end up in a screenshot for a bug report.
                 crate::hide_home(&p.display().to_string(), crate::home_dir().as_deref())
@@ -313,6 +338,18 @@ impl App {
                 let p: PersonArgs = args(cmd, a)?;
                 d.add_person(&p.name, p.frequency_days, p.last_connected, today)
                     .map_err(invalid)?;
+            }
+            "add_people" => {
+                let p: PeopleArgs = args(cmd, a)?;
+                d.add_people(&p.people, p.frequency_days, p.last_connected, today)
+                    .map_err(invalid)?;
+            }
+            "finish_guide" => {
+                let p: GuideArgs = args(cmd, a)?;
+                match p.step {
+                    GuideStep::SignIn => d.guide.sign_in = true,
+                    GuideStep::Import => d.guide.import = true,
+                }
             }
             "update_person" => {
                 let p: UpdatePersonArgs = args(cmd, a)?;

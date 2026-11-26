@@ -22,6 +22,8 @@
 	<string>0.1.2</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSContactsUsageDescription</key>
+	<string>Friendship Reminder shows your contacts' names so you can pick who to add, and adds a link back to the app on the cards of the people you add.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -1,6 +1,7 @@
 /** The Preferences window: People, Blocked dates and Settings. */
 import { useState } from "react";
 import { BlockedPane } from "./BlockedPane";
+import { WithGuide } from "./Guide";
 import { PeoplePane } from "./PeoplePane";
 import { SettingsPane } from "./SettingsPane";
 import { useView } from "./useView";
@@ -18,7 +19,7 @@ export function Preferences() {
   const [tab, setTab] = useState<Tab>("people");
   const due = view?.people.filter((p) => p.due).length ?? 0;
 
-  return (
+  const prefs = (
     <div className="prefs">
       <nav className="sidebar" aria-label="Preferences">
         <h1 className="wordmark">Friendship Reminder</h1>
@@ -72,4 +73,6 @@ export function Preferences() {
       </main>
     </div>
   );
+  // A new user sees the first-run guide in place of the window's panes.
+  return view ? <WithGuide view={view}>{prefs}</WithGuide> : prefs;
 }

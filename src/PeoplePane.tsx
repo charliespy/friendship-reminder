@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { api, type IsoDate, type Person, type View } from "./api";
 import { Avatar } from "./components/Avatar";
+import { ContactPicker } from "./ContactPicker";
 import { DoneButton } from "./DoneButton";
 import { aimDay, formatDay, relativeDay } from "./date";
 import { FREQUENCIES, frequencyLabel } from "./format";
@@ -19,6 +20,7 @@ function PersonForm({
   submitLabel,
   onSubmit,
   onCancel,
+  onImport,
 }: {
   initial: Draft;
   today: string;
@@ -26,6 +28,8 @@ function PersonForm({
   /** `opened` is the draft as the form first showed it. */
   onSubmit: (d: Draft, opened: Draft) => Promise<unknown>;
   onCancel: () => void;
+  /** Add person only: offers picking people from Contacts instead of typing. */
+  onImport?: () => void;
 }) {
   const [opened] = useState(initial);
   const [draft, setDraft] = useState(initial);
@@ -45,6 +49,14 @@ function PersonForm({
   };
   return (
     <form className="card form-card" onSubmit={submit} aria-label={submitLabel} noValidate>
+      {onImport && (
+        <div className="import-row">
+          <span className="choice-text">Add one or more people from your contacts.</span>
+          <button type="button" className="btn btn-outline btn-sm" onClick={onImport}>
+            Import from Contacts…
+          </button>
+        </div>
+      )}
       <div className="form-row">
         <label className="field grow">
           <span>Name</span>
@@ -159,6 +171,8 @@ function PersonRow({
 
 export function PeoplePane({ view }: { view: View }) {
   const [adding, setAdding] = useState(false);
+  // Add person's "Import from Contacts": the picker in place of the form.
+  const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirming, setConfirming] = useState(false);
@@ -269,21 +283,35 @@ export function PeoplePane({ view }: { view: View }) {
           <p>Who you want to keep up with, and how often.</p>
         </div>
         {!adding && (
-          <button ref={addButton} className="btn btn-primary" onClick={() => (setAdding(true), setEditing(null))}>
+          <button
+            ref={addButton}
+            className="btn btn-primary"
+            onClick={() => (setAdding(true), setImporting(false), setEditing(null))}
+          >
             Add person
           </button>
         )}
       </header>
 
-      {adding && (
-        <PersonForm
-          initial={{ name: "", frequencyDays: 30, lastConnected: view.today }}
-          today={view.today}
-          submitLabel="Add person"
-          onSubmit={(d) => api.addPerson(d)}
-          onCancel={() => ((returnFocus.current = "add"), setAdding(false))}
-        />
-      )}
+      {adding &&
+        (importing ? (
+          <div className="form-card-spacing">
+            <ContactPicker
+              closeLabel="Cancel"
+              onClose={() => setImporting(false)}
+              onAdded={() => ((returnFocus.current = "add"), setImporting(false), setAdding(false))}
+            />
+          </div>
+        ) : (
+          <PersonForm
+            initial={{ name: "", frequencyDays: 30, lastConnected: view.today }}
+            today={view.today}
+            submitLabel="Add person"
+            onSubmit={(d) => api.addPerson(d)}
+            onCancel={() => ((returnFocus.current = "add"), setAdding(false))}
+            onImport={() => setImporting(true)}
+          />
+        ))}
 
       {editingPerson && (
         <PersonForm

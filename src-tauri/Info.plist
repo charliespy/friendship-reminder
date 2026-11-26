@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- What macOS shows when the app asks for Contacts (Add person › Import from Contacts). -->
+	<key>NSContactsUsageDescription</key>
+	<string>Friendship Reminder shows your contacts' names so you can pick who to add, and adds a link back to the app on the cards of the people you add.</string>
+</dict>
+</plist>

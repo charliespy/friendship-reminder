@@ -4,6 +4,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { BlockedPane } from "./BlockedPane";
 import { formatDay } from "./date";
+import { WithGuide } from "./Guide";
 import { ReachOut } from "./Dropdown";
 import { PeoplePane } from "./PeoplePane";
 import { SettingsPane } from "./SettingsPane";
@@ -81,7 +82,7 @@ export function Phone() {
     setTab(next);
   };
 
-  return (
+  const app = (
     <div className="phone">
       <main className="phone-pane">
         {!view ? (
@@ -142,5 +143,13 @@ export function Phone() {
         </div>
       </nav>
     </div>
+  );
+  // A new user sees the first-run guide in place of the tabs.
+  return view ? (
+    <WithGuide view={view} phone>
+      {app}
+    </WithGuide>
+  ) : (
+    app
   );
 }

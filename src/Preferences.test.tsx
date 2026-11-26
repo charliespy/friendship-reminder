@@ -57,6 +57,7 @@ function view(people: Person[], unreadableFile: string | null = null): View {
     blocked: [],
     settings: { dayToggle: "weekendsOnly", customDays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], notifications: true },
     unreadableFile,
+    guide: { signIn: true, import: true },
   };
 }
 

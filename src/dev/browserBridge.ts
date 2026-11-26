@@ -72,7 +72,7 @@ export function installBrowserBridge(endpoint = "/__friends/invoke") {
         throw body;
       }
       // The real shell tells every window about a new view; here there is only this window.
-      if (cmd === "call") emit("view-changed", body);
+      if (cmd === "call" || cmd === "import_contacts") emit("view-changed", body);
       return body;
     },
   };

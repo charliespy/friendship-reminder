@@ -46,13 +46,36 @@ export interface Settings {
   notifications: boolean;
 }
 
+/** The first-run guide's steps that are behind you, on this device. */
+export interface Guide {
+  /** The sign-in page: signed in, or "Not now". */
+  signIn: boolean;
+  /** Adding people from Contacts: added, skipped, or the list already had people. */
+  import: boolean;
+}
+
+export type GuideStep = keyof Guide;
+
 export interface View {
   today: IsoDate;
   people: Person[];
   blocked: Blocked[];
   settings: Settings;
   unreadableFile: string | null;
+  guide: Guide;
 }
+
+/** A card in the address book, as the picker shows it. */
+export interface ContactChoice {
+  /** This device's id for the card. */
+  id: string;
+  name: string;
+  /** The person is in the list already. */
+  added: boolean;
+}
+
+/** The address book's cards, or why the app can't see them. */
+export type ContactList = { status: "allowed"; contacts: ContactChoice[] } | { status: "denied" };
 
 export interface ApiError {
   kind: "invalid" | "storage" | "badCall";
@@ -106,6 +129,16 @@ export const api = {
   setDayToggle: (dayToggle: DayToggle, customDays?: Weekday[]) =>
     call("set_day_toggle", customDays ? { dayToggle, customDays } : { dayToggle }),
   setNotifications: (on: boolean) => call("set_notifications", { on }),
+  /** A step of the first-run guide is behind you (done or skipped). */
+  finishGuide: (step: GuideStep) => call("finish_guide", { step }),
+  /** The cards in Contacts. Asks for access the first time. */
+  listContacts: () => invoke<ContactList>("list_contacts"),
+  /**
+   * Adds the people picked in Contacts, in touch today, and links each to their card (on this device,
+   * and with a link on the card the other devices find).
+   */
+  importContacts: (people: { name: string; contact: string }[], frequencyDays: number) =>
+    invoke<View>("import_contacts", { people, frequencyDays }),
   getLaunchAtLogin: () => invoke<boolean>("get_launch_at_login"),
   setLaunchAtLogin: (on: boolean) => invoke<boolean>("set_launch_at_login", { on }),
   openPreferences: () => invoke<void>("open_preferences"),

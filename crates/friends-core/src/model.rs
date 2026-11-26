@@ -50,6 +50,46 @@ pub struct Person {
     /// The `modified` the account has. Behind `modified`, a change here is waiting to upload.
     #[serde(default)]
     pub synced: i64,
+    /// This device's id for the person's card in Contacts, when they were added from there. Each
+    /// device has its own id for the same card, so this stays here and never goes to the account
+    /// (the card itself carries a link other devices find them by: see [`crate::contacts`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact: Option<String>,
+}
+
+/// Someone to add in a batch (from Contacts): their name, and this device's id for their card.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewPerson {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact: Option<String>,
+}
+
+/// The first-run guide, on this device: which steps are behind you. Each is done once, by doing it
+/// or by skipping it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Guide {
+    /// The sign-in page: signed in, or "Not now".
+    pub sign_in: bool,
+    /// Adding people from Contacts: added, skipped, or the list already had people.
+    pub import: bool,
+}
+
+impl Guide {
+    /// Every step is behind you.
+    pub fn is_done(&self) -> bool {
+        self.sign_in && self.import
+    }
+
+    /// A file from before the guide existed belongs to someone who has used the app already.
+    fn finished() -> Self {
+        Guide {
+            sign_in: true,
+            import: true,
+        }
+    }
 }
 
 impl Person {
@@ -173,6 +213,9 @@ pub struct Data {
     /// What syncing with the Friendship Reminder account needs to remember.
     #[serde(default)]
     pub sync: crate::sync::SyncState,
+    /// The first-run guide on this device (not synced).
+    #[serde(default = "Guide::finished")]
+    pub guide: Guide,
 }
 
 impl Default for Data {
@@ -184,6 +227,11 @@ impl Default for Data {
             settings: Settings::default(),
             last_id: 0,
             sync: Default::default(),
+            // A new list: the guide starts.
+            guide: Guide {
+                sign_in: false,
+                import: false,
+            },
         }
     }
 }
@@ -397,10 +445,53 @@ impl Data {
             uid: crate::sync::new_uid(),
             modified: 0,
             synced: 0,
+            contact: None,
         };
         Self::reschedule(&mut person, self.settings.rule(), &self.ranges(), today);
         self.people.push(person);
         Ok(id)
+    }
+
+    /// Adds several people at once (from Contacts), all with the same frequency and last time in
+    /// touch. Someone whose card is already in the list (or twice in the batch) is left out. When any
+    /// name can't be used, nobody is added. Returns the ids of the people added.
+    pub fn add_people(
+        &mut self,
+        people: &[NewPerson],
+        frequency_days: u32,
+        last_connected: NaiveDate,
+        today: NaiveDate,
+    ) -> Result<Vec<u64>, Invalid> {
+        if people.is_empty() {
+            return invalid("Pick at least one person.");
+        }
+        check_frequency(frequency_days)?;
+        check_last_connected(last_connected, today)?;
+        let names = people
+            .iter()
+            .map(|p| clean_name(&p.name))
+            .collect::<Result<Vec<_>, _>>()?;
+        let before = self.clone();
+        let mut ids = Vec::new();
+        for (p, name) in people.iter().zip(names) {
+            let linked = |c: &String| self.people.iter().any(|q| q.contact.as_ref() == Some(c));
+            if p.contact.as_ref().is_some_and(linked) {
+                continue;
+            }
+            match self.add_person(&name, frequency_days, last_connected, today) {
+                Ok(id) => {
+                    if let Some(person) = self.people.last_mut() {
+                        person.contact = p.contact.clone();
+                    }
+                    ids.push(id);
+                }
+                Err(e) => {
+                    *self = before;
+                    return Err(e);
+                }
+            }
+        }
+        Ok(ids)
     }
 
     pub fn update_person(

@@ -6,6 +6,7 @@
 compile_error!("Friendship Reminder is a Mac and iPhone app: build it for macOS or iOS.");
 
 mod account;
+mod contacts;
 #[cfg(target_os = "macos")]
 mod desktop;
 #[cfg(target_os = "ios")]
@@ -157,7 +158,9 @@ pub fn run() {
             account::get_account,
             account::sign_in_with_apple,
             account::cancel_sign_in,
-            account::sign_out
+            account::sign_out,
+            contacts::list_contacts,
+            contacts::import_contacts
         ]);
     #[cfg(target_os = "ios")]
     let builder = tauri::Builder::default()
@@ -168,7 +171,9 @@ pub fn run() {
             account::get_account,
             account::sign_in_with_apple,
             account::cancel_sign_in,
-            account::sign_out
+            account::sign_out,
+            contacts::list_contacts,
+            contacts::import_contacts
         ]);
     builder
         .setup(|app| {

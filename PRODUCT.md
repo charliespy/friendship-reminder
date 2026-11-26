@@ -39,7 +39,10 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
 
 - The menu bar dropdown (360 x 520 pt, opens under the tray icon, closes when it loses focus or on
   Escape): who to reach out to now, with a Done button each, and the next few coming up.
-- The Preferences window: People (add, edit, mark done, select and delete), Blocked dates (add,
+- The first-run guide, on a new Mac or iPhone: a sign-in page (Sign in with Apple, or Not now),
+  then picking people from Contacts (or Skip). Each step shows once. Someone already using the app
+  never sees it.
+- The Preferences window: People (add by name or from Contacts, edit, mark done, select and delete), Blocked dates (add,
   remove), Settings (which days count, notifications, open at login, and Account: sign in with
   Apple, sign out, and how syncing is going).
 - macOS notifications on the reminder day; the menu bar shows the count of people due.

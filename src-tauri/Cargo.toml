@@ -40,6 +40,11 @@ time = "0.3"
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 # The Keychain, for the account's session.
 security-framework = { version = "3", default-features = false }
+# Contacts, for adding people from the address book.
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-contacts = "0.3"
+block2 = "0.6"
 
 [features]
 # Set by `tauri build`: serve the built front end from inside the app instead of the dev server.

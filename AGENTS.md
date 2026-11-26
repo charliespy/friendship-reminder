@@ -15,7 +15,9 @@ needs. `CLAUDE.md` and `AGENTS.md` hold the same text: change both together.
 - **Logic lives in `crates/friends-core`**, never in the UI or the Tauri shell. The UI calls
   commands through `src/api.ts`; the shell only does platform things: `src-tauri/src/desktop.rs`
   the Mac's (tray, windows, notifications, open at login), `src-tauri/src/mobile.rs` the
-  iPhone's (booking reminders ahead), `src-tauri/src/lib.rs` what both share. Account sign-in rules live in `crates/friends-account`; the
+  iPhone's (booking reminders ahead), `src-tauri/src/contacts.rs` reading and writing Contacts
+  (the rules, and the link a person keeps to their card, are in `crates/friends-core/src/contacts.rs`),
+  `src-tauri/src/lib.rs` what both share. Account sign-in rules live in `crates/friends-account`; the
   shell only opens the browser sign-in and keeps the session in the Keychain. Sync rules live in
   `crates/friends-core/src/sync.rs` and the sync requests in `crates/friends-sync`; the shell only
   decides when to sync.

@@ -10,16 +10,21 @@
 //! - `POST /__test/reset` with a data file's JSON (or `{}`) replaces the data and clears launch at login.
 //! - `GET /__test/health` answers 200 once the server is up.
 //! - `POST /__test/today` with `"YYYY-MM-DD"` (a JSON string) moves the server's clock to that day.
+//! - `POST /__test/contacts` with `"allowed"` or `"denied"` (a JSON string) answers Contacts' "allow
+//!   access?" that way from then on (allowed at first). The address book is a made-up one.
 //!
 //! It only listens on the loopback address and is never part of the app. So that a web page open in
 //! the browser can't drive it, it answers only requests addressed to `127.0.0.1:<port>` or
 //! `localhost:<port>` (no DNS rebinding) and only JSON POSTs (a page can't send those to another
 //! origin without a CORS preflight, which this server never allows).
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use chrono::{Local, NaiveDate};
 use friends_core::api::App;
+use friends_core::contacts::{choices, link_url, Card};
+use friends_core::model::NewPerson;
 use friends_core::store::Store;
 use serde_json::{json, Value};
 use tiny_http::{Header, Method, Response, Server};
@@ -101,7 +106,27 @@ struct Dev {
     launch_at_login: bool,
     /// Stands in for Sign in with Apple: there's no Apple page in the tests, so signing in always works.
     signed_in: bool,
+    /// Stands in for the answer to Contacts' "allow access?".
+    contacts_allowed: bool,
+    /// The links the app wrote onto the made-up cards, by card.
+    card_links: HashMap<String, Vec<String>>,
 }
+
+/// A made-up address book: (card id, name). The app reads only names.
+const ADDRESS_BOOK: [(&str, &str); 12] = [
+    ("card-01", "Ana Torres"),
+    ("card-02", "Ben Okafor"),
+    ("card-03", "Chloé Martin"),
+    ("card-04", "Dev Patel"),
+    ("card-05", "Elif Yılmaz"),
+    ("card-06", "Felix Wagner"),
+    ("card-07", "Grace Lee"),
+    ("card-08", "Hana Sato"),
+    ("card-09", "Iris Novak"),
+    ("card-10", "Jonah Reyes"),
+    ("card-11", "Kofi Mensah"),
+    ("card-12", "Lena Fischer"),
+];
 
 impl Dev {
     fn today(&self) -> NaiveDate {
@@ -140,6 +165,45 @@ impl Dev {
                 self.signed_in = false;
                 Ok(self.account())
             }
+            "list_contacts" => {
+                if !self.contacts_allowed {
+                    return Ok(json!({ "status": "denied" }));
+                }
+                let cards = ADDRESS_BOOK
+                    .iter()
+                    .map(|(id, name)| Card {
+                        id: (*id).to_string(),
+                        name: (*name).to_string(),
+                        links: self.card_links.get(*id).cloned().unwrap_or_default(),
+                    })
+                    .collect();
+                let contacts = choices(self.app.data(), cards);
+                Ok(json!({ "status": "allowed", "contacts": contacts }))
+            }
+            "import_contacts" => {
+                let people: Vec<NewPerson> =
+                    serde_json::from_value(args.get("people").cloned().unwrap_or(Value::Null))
+                        .map_err(|e| json!(e.to_string()))?;
+                let frequency = args.get("frequencyDays").cloned().unwrap_or(Value::Null);
+                let today = self.today();
+                let call =
+                    json!({ "people": people, "frequencyDays": frequency, "lastConnected": today });
+                let view = self
+                    .app
+                    .call("add_people", call, today)
+                    .map_err(|e| serde_json::to_value(e).unwrap_or(Value::Null))?;
+                // As the app does: the link goes onto each card.
+                for p in &self.app.data().people {
+                    if let Some(card) = &p.contact {
+                        let links = self.card_links.entry(card.clone()).or_default();
+                        let url = link_url(&p.uid);
+                        if !links.contains(&url) {
+                            links.push(url);
+                        }
+                    }
+                }
+                to_value(view)
+            }
             // Window commands have nothing to do in a browser.
             "open_preferences" | "hide_dropdown" | "quit" => Ok(Value::Null),
             _ => Err(json!(format!("unknown command: {cmd}"))),
@@ -177,6 +241,8 @@ impl Dev {
         self.app = App::open(Store::new(&self.store_path)).map_err(|e| e.to_string())?;
         self.launch_at_login = false;
         self.signed_in = false;
+        self.contacts_allowed = true;
+        self.card_links.clear();
         Ok(())
     }
 }
@@ -206,6 +272,8 @@ fn main() {
         today: opts.today,
         launch_at_login: false,
         signed_in: false,
+        contacts_allowed: true,
+        card_links: HashMap::new(),
     };
     let server = Server::http(("127.0.0.1", opts.port)).unwrap_or_else(|e| {
         eprintln!(
@@ -260,6 +328,19 @@ fn main() {
                 }
                 None => json_response(400, &json!("send \"YYYY-MM-DD\"")),
             },
+            (Method::Post, "/__test/contacts") => {
+                match serde_json::from_str::<String>(&body).as_deref() {
+                    Ok("allowed") => {
+                        dev.contacts_allowed = true;
+                        json_response(200, &Value::Null)
+                    }
+                    Ok("denied") => {
+                        dev.contacts_allowed = false;
+                        json_response(200, &Value::Null)
+                    }
+                    _ => json_response(400, &json!("send \"allowed\" or \"denied\"")),
+                }
+            }
             _ => json_response(404, &json!("not found")),
         };
         let _ = request.respond(response);
