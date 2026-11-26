@@ -19,7 +19,12 @@ export function useNotificationAccess() {
       if (document.visibilityState !== "visible") return;
       const n = ++latest.current;
       api.notificationAccess().then(
-        (a) => live && n === latest.current && setAccess(a),
+        (a) => {
+          if (!live || n !== latest.current) return;
+          setAccess(a);
+          // Whatever went wrong asking before is behind us once iOS has answered.
+          if (a !== "notAsked") setError(null);
+        },
         // Unknown: nothing offered (turning reminders on in Settings still asks).
         () => {},
       );

@@ -610,6 +610,11 @@ impl<T> Attempts<T> {
         self.current.take().map(|(_, w)| w)
     }
 
+    /// Some attempt is waiting (on iPhone, Apple's sheet is up for it).
+    pub fn is_busy(&self) -> bool {
+        self.current.is_some()
+    }
+
     pub fn is_waiting(&self, attempt: &str) -> bool {
         self.current.as_ref().is_some_and(|(a, _)| a == attempt)
     }

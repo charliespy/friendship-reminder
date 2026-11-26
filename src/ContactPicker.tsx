@@ -55,9 +55,6 @@ export function ContactPicker({
   const [chosen, setChosen] = useState<string[] | null>(null);
   const add = useAction();
   const live = useRef(true);
-  // Loaded once per picker: loading can open Apple's question, which must not open twice (React
-  // runs effects twice in development).
-  const started = useRef(false);
 
   // The ticks as of this render, for answers that arrive later.
   const pickedNow = useRef(picked);
@@ -84,10 +81,8 @@ export function ContactPicker({
   const load = (ask: boolean) => api.listContacts(ask).then(take, fail);
   useEffect(() => {
     live.current = true;
-    if (!started.current) {
-      started.current = true;
-      load(false);
-    }
+    // Never asks (that's Continue's job), so React running effects twice in development is harmless.
+    load(false);
     return () => {
       live.current = false;
     };

@@ -123,13 +123,17 @@ impl Chosen {
 /// The cards to go straight to "how often" for: the ones just chosen (in the order the picker shows
 /// them), leaving out people already in the list. Empty means the picker shows its list.
 pub fn just_chosen(choices: &[Choice], chosen: &Chosen) -> Vec<String> {
+    let cards: std::collections::HashSet<&String> = match chosen {
+        Chosen::Cards(ids) => ids.iter().collect(),
+        _ => Default::default(),
+    };
     choices
         .iter()
         .filter(|c| !c.added)
         .filter(|c| match chosen {
             Chosen::Nobody => false,
             Chosen::Everyone => true,
-            Chosen::Cards(ids) => ids.contains(&c.id),
+            Chosen::Cards(_) => cards.contains(&c.id),
         })
         .map(|c| c.id.clone())
         .collect()

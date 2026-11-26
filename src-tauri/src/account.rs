@@ -397,8 +397,16 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
     use tauri_plugin_phone_sheets::PhoneSheetsExt;
     let account = app.state::<Account>();
     let client = account.client()?;
-    if let Started::Cancelled = account.waiting().start(attempt, ()) {
-        return Ok(account.view());
+    {
+        let mut waiting = account.waiting();
+        // Apple's sheet is up for another attempt: it carries on (taking its place would throw
+        // away a sign-in the user may be finishing).
+        if waiting.is_busy() {
+            return Err("Sign in with Apple is open already.".into());
+        }
+        if let Started::Cancelled = waiting.start(attempt, ()) {
+            return Ok(account.view());
+        }
     }
     let waited = (|| {
         let nonce = Nonce::new()?;

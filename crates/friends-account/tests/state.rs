@@ -291,3 +291,17 @@ fn closing_preferences_cancels_the_waiting_sign_in() {
     assert_eq!(attempts.cancel_all(), Some(1));
     assert!(!attempts.finish("a"));
 }
+
+#[test]
+fn an_attempt_waiting_keeps_the_sign_in_busy_until_it_ends() {
+    let mut attempts = Attempts::default();
+    assert!(!attempts.is_busy());
+    attempts.start("a1", ());
+    // Apple's sheet is up for a1: a second sign-in must not take its place.
+    assert!(attempts.is_busy());
+    assert!(attempts.finish("a1"));
+    assert!(!attempts.is_busy());
+    attempts.start("a2", ());
+    attempts.cancel("a2");
+    assert!(!attempts.is_busy());
+}
