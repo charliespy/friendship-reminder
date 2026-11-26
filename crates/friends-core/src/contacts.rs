@@ -90,6 +90,33 @@ pub fn choices(data: &Data, cards: Vec<Card>) -> Vec<Choice> {
     list
 }
 
+/// Who the user just chose in the system's own contact sheets (sharing only some contacts with the
+/// app), before the app shows anything.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Chosen {
+    /// Nobody: the app shows its own list to pick from.
+    Nobody,
+    /// Everyone the app can see: the user has just shared only some contacts, and those are them.
+    Everyone,
+    /// These cards: just added to the ones shared.
+    Cards(Vec<String>),
+}
+
+/// The cards to go straight to "how often" for: the ones just chosen (in the order the picker shows
+/// them), leaving out people already in the list. Empty means the picker shows its list.
+pub fn just_chosen(choices: &[Choice], chosen: &Chosen) -> Vec<String> {
+    choices
+        .iter()
+        .filter(|c| !c.added)
+        .filter(|c| match chosen {
+            Chosen::Nobody => false,
+            Chosen::Everyone => true,
+            Chosen::Cards(ids) => ids.contains(&c.id),
+        })
+        .map(|c| c.id.clone())
+        .collect()
+}
+
 /// A name as compared for "already added": spacing and case don't count.
 fn fold(name: &str) -> String {
     squeeze(name).to_lowercase()

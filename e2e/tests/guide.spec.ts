@@ -104,6 +104,10 @@ test("on iPhone, people shared in Apple's sheet go straight to how often", async
   await expect(picker.getByRole("checkbox")).toHaveCount(3);
   await expect(picker.getByRole("checkbox", { name: "Elif Yılmaz" })).toBeChecked();
   await picker.getByLabel("How often for Elif Yılmaz").selectOption({ label: "Quarterly" });
+  // Back to the whole list: the choices and how often are kept.
+  await picker.getByRole("button", { name: "Choose others…" }).click();
+  await expect(picker.getByLabel("Search contacts")).toBeVisible();
+  await expect(picker.getByLabel("How often for Elif Yılmaz")).toHaveValue("90");
   await page.getByRole("button", { name: "Add 3 people" }).click();
 
   await page.getByRole("tab", { name: /People/ }).click();

@@ -6,7 +6,9 @@ use std::path::PathBuf;
 
 use chrono::NaiveDate;
 use friends_core::api::App;
-use friends_core::contacts::{choices, link_url, person_in_link, uid_in_link, Card};
+use friends_core::contacts::{
+    choices, just_chosen, link_url, person_in_link, uid_in_link, Card, Chosen,
+};
 use friends_core::model::{Data, NewPerson};
 use friends_core::store::Store;
 use serde_json::json;
@@ -415,4 +417,29 @@ fn a_link_from_a_card_finds_the_person_on_this_device() {
         person_in_link(&data, "io.github.charliespy.friends://auth/callback?code=x"),
         None
     );
+}
+
+#[test]
+fn people_just_chosen_in_the_system_sheet_go_straight_to_how_often() {
+    let mut data = Data::default();
+    data.add_people(&[new_person("Ben Okafor", None)], today(), today())
+        .unwrap();
+    let list = choices(
+        &data,
+        vec![
+            card("c3", "Iris Novak"),
+            card("c1", "Ben Okafor"),
+            card("c2", "Elif Yilmaz"),
+        ],
+    );
+    // A fresh "share only some": everyone the app can see, except who's in the list already, by name.
+    assert_eq!(just_chosen(&list, &Chosen::Everyone), ["c2", "c3"]);
+    // Shared more: only those cards, still without anyone added.
+    assert_eq!(
+        just_chosen(&list, &Chosen::Cards(vec!["c1".into(), "c3".into()])),
+        ["c3"]
+    );
+    assert!(just_chosen(&list, &Chosen::Nobody).is_empty());
+    // A card that isn't among those the app can see is left out.
+    assert!(just_chosen(&list, &Chosen::Cards(vec!["c9".into()])).is_empty());
 }

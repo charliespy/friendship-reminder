@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use block2::RcBlock;
 use friends_core::api::{ApiError, ErrorKind, View};
-use friends_core::contacts::{choices, link_url, Card, Choice, LINK_LABEL};
+use friends_core::contacts::{choices, just_chosen, link_url, Card, Choice, Chosen, LINK_LABEL};
 use friends_core::model::NewPerson;
 use objc2::rc::Retained;
 use objc2::runtime::{Bool, ProtocolObject};
@@ -34,8 +34,8 @@ pub enum ContactList {
         contacts: Vec<Choice>,
         /// The user shared only some contacts with the app (iPhone, iOS 18 and later).
         limited: bool,
-        /// The cards the user has just chosen in Apple's own sheets, to go straight to "how often":
-        /// everyone shared when they first shared only some, or the ones just added to those.
+        /// The cards just chosen in Apple's own sheets (see `friends_core::contacts::just_chosen`),
+        /// to go straight to "how often".
         picked: Vec<String>,
     },
     /// Not asked yet, and the call didn't say to ask: the app explains first.
@@ -221,12 +221,13 @@ fn storage_error(message: String) -> ApiError {
     ApiError::new(ErrorKind::Storage, message)
 }
 
-/// The cards the app may read, for the picker, with `picked` the ones just chosen in Apple's sheets.
+/// The cards the app may read, for the picker. `shared`: the cards just shared in Apple's sheet for
+/// sharing more, if it was open.
 fn list(
     app: &AppHandle,
     store: &CNContactStore,
     access: Access,
-    picked: Option<Vec<String>>,
+    shared: Option<Vec<String>>,
 ) -> Result<ContactList, ApiError> {
     let limited = match access {
         Access::NotAsked => return Ok(ContactList::NotAsked),
@@ -236,20 +237,21 @@ fn list(
     };
     let cards = read_cards(store)
         .map_err(|e| storage_error(format!("Couldn't read your contacts: {e}")))?;
-    let picked = match (picked, access) {
-        (Some(ids), _) => ids,
-        // Shared just now: everyone the app can see was picked in Apple's sheet a moment ago.
-        (None, Access::Limited { just_now: true }) => cards.iter().map(|c| c.id.clone()).collect(),
-        (None, _) => Vec::new(),
+    let chosen = match (shared, access) {
+        (Some(ids), _) => Chosen::Cards(ids),
+        // Shared just now: everyone the app can see was chosen in Apple's sheet a moment ago.
+        (None, Access::Limited { just_now: true }) => Chosen::Everyone,
+        (None, _) => Chosen::Nobody,
     };
     let state = app
         .try_state::<crate::State>()
         .ok_or_else(|| storage_error("Friendship Reminder can't open its data.".into()))?;
     let core = crate::lock(&state);
+    let contacts = choices(core.data(), cards);
     Ok(ContactList::Allowed {
-        contacts: choices(core.data(), cards),
+        picked: just_chosen(&contacts, &chosen),
+        contacts,
         limited,
-        picked,
     })
 }
 
@@ -269,23 +271,23 @@ pub async fn list_contacts(app: AppHandle, ask: bool) -> Result<ContactList, Api
 }
 
 /// Opens Apple's sheet for sharing more contacts with the app (when only some are shared, on
-/// iPhone), then the cards, with `picked` the ones just shared.
+/// iPhone), then the cards, with `picked` the ones just shared (and not in the list yet).
 #[tauri::command]
 pub async fn share_more_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
     tauri::async_runtime::spawn_blocking(move || {
         #[cfg(target_os = "ios")]
-        let picked = {
+        let shared = {
             use tauri_plugin_phone_sheets::PhoneSheetsExt;
             app.phone_sheets()
                 .share_more_contacts()
                 .map_err(storage_error)?
         };
         #[cfg(not(target_os = "ios"))]
-        let picked: Vec<String> = Vec::new();
+        let shared: Vec<String> = Vec::new();
         // SAFETY: as in list_contacts.
         let store = unsafe { CNContactStore::new() };
         let access = access(&store, false).map_err(storage_error)?;
-        list(&app, &store, access, Some(picked))
+        list(&app, &store, access, Some(shared))
     })
     .await
     .map_err(|e| storage_error(e.to_string()))?

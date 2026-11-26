@@ -30,7 +30,7 @@ use std::path::PathBuf;
 
 use chrono::{Local, NaiveDate};
 use friends_core::api::App;
-use friends_core::contacts::{choices, link_url, person_in_link, Card};
+use friends_core::contacts::{choices, just_chosen, link_url, person_in_link, Card, Chosen};
 use friends_core::model::NewPerson;
 use friends_core::store::Store;
 use serde_json::{json, Value};
@@ -199,30 +199,29 @@ impl Dev {
             }
             "list_contacts" => {
                 let ask = args.get("ask").and_then(Value::as_bool).unwrap_or(false);
-                let mut picked = Vec::new();
+                let mut chosen = Chosen::Nobody;
                 match self.contacts {
-                    Access::NotAsked { .. } if !ask => return Ok(json!({ "status": "notAsked" })),
-                    Access::NotAsked { limited: false } => self.contacts = Access::Allowed,
+                    Access::NotAsked { .. } if !ask => {}
+                    Access::NotAsked { limited: false } => self.set_access(Access::Allowed),
                     Access::NotAsked { limited: true } => {
-                        self.contacts = Access::Limited;
-                        self.shared = SHARED_FIRST.map(String::from).to_vec();
-                        picked.clone_from(&self.shared);
+                        self.set_access(Access::Limited);
+                        chosen = Chosen::Everyone;
                     }
                     _ => {}
                 }
-                Ok(self.contact_list(picked))
+                Ok(self.contact_list(&chosen))
             }
             "share_more_contacts" => {
-                let mut picked = Vec::new();
+                let mut shared = Vec::new();
                 if self.contacts == Access::Limited {
                     for id in SHARED_MORE {
                         if !self.shared.iter().any(|s| s == id) {
                             self.shared.push(id.to_string());
-                            picked.push(id.to_string());
+                            shared.push(id.to_string());
                         }
                     }
                 }
-                Ok(self.contact_list(picked))
+                Ok(self.contact_list(&Chosen::Cards(shared)))
             }
             "import_contacts" => {
                 let people: Vec<NewPerson> =
@@ -250,8 +249,18 @@ impl Dev {
         }
     }
 
-    /// The cards the app may see, as `list_contacts` answers, with `picked` just chosen in Apple's sheets.
-    fn contact_list(&self, picked: Vec<String>) -> Value {
+    /// Sets Contacts' access; with only some contacts shared, those are Ben, Elif and Iris.
+    fn set_access(&mut self, access: Access) {
+        self.contacts = access;
+        self.shared = if access == Access::Limited {
+            SHARED_FIRST.map(String::from).to_vec()
+        } else {
+            Vec::new()
+        };
+    }
+
+    /// The cards the app may see, as `list_contacts` answers, with `chosen` in Apple's sheets.
+    fn contact_list(&self, chosen: &Chosen) -> Value {
         let limited = match self.contacts {
             Access::Denied => return json!({ "status": "denied" }),
             Access::NotAsked { .. } => return json!({ "status": "notAsked" }),
@@ -268,6 +277,7 @@ impl Dev {
             })
             .collect();
         let contacts = choices(self.app.data(), cards);
+        let picked = just_chosen(&contacts, chosen);
         json!({ "status": "allowed", "contacts": contacts, "limited": limited, "picked": picked })
     }
 
@@ -302,8 +312,7 @@ impl Dev {
         self.app = App::open(Store::new(&self.store_path)).map_err(|e| e.to_string())?;
         self.launch_at_login = false;
         self.signed_in = false;
-        self.contacts = Access::NotAsked { limited: false };
-        self.shared.clear();
+        self.set_access(Access::NotAsked { limited: false });
         self.card_links.clear();
         self.shown_person = None;
         Ok(())
@@ -414,12 +423,7 @@ fn main() {
                 };
                 match access {
                     Some(access) => {
-                        dev.contacts = access;
-                        dev.shared = if access == Access::Limited {
-                            SHARED_FIRST.map(String::from).to_vec()
-                        } else {
-                            Vec::new()
-                        };
+                        dev.set_access(access);
                         json_response(200, &Value::Null)
                     }
                     None => json_response(

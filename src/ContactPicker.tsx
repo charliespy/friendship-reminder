@@ -61,8 +61,13 @@ export function ContactPicker({
   const take = (list: ContactList) => {
     if (!live.current) return;
     if (list.status === "allowed") {
-      const fresh = list.picked.filter((id) => list.contacts.some((c) => c.id === id && !c.added));
-      setPicked(new Map(fresh.map((id) => [id, DEFAULT_FREQUENCY])));
+      // The people just chosen join anyone ticked already, who keep how often they had.
+      const fresh = list.picked;
+      setPicked((was) => {
+        const next = new Map(was);
+        for (const id of fresh) if (!next.has(id)) next.set(id, DEFAULT_FREQUENCY);
+        return next;
+      });
       setChosen(fresh.length > 0 ? fresh : null);
     }
     setLoaded(list);
@@ -72,9 +77,12 @@ export function ContactPicker({
   const load = (ask: boolean) =>
     api
       .listContacts(ask)
-      // Only some shared, and nobody just chosen: open Apple's sheet to share more.
+      // Only some shared from before (not in the question just answered), and nobody just chosen:
+      // open Apple's sheet to share more. Closing it shows those already shared, to tick.
       .then((list) =>
-        list.status === "allowed" && list.limited && list.picked.length === 0 ? api.shareMoreContacts() : list,
+        !ask && list.status === "allowed" && list.limited && list.picked.length === 0
+          ? api.shareMoreContacts()
+          : list,
       )
       .then(take, fail);
   useEffect(() => {
@@ -261,10 +269,16 @@ export function ContactPicker({
               ? "Everyone in Contacts is in your list already."
               : "Pick how often for each person you tick. Each counts as in touch today, so their first reminder comes one round from now."}
         </p>
-        {loaded.limited && !chosen && (
-          <button type="button" className="btn btn-quiet picker-more" onClick={shareMore}>
-            Choose more in Contacts…
+        {chosen ? (
+          <button type="button" className="btn btn-quiet picker-more" onClick={() => setChosen(null)}>
+            Choose others…
           </button>
+        ) : (
+          loaded.limited && (
+            <button type="button" className="btn btn-quiet picker-more" onClick={shareMore}>
+              Choose more in Contacts…
+            </button>
+          )
         )}
         {add.error && (
           <p className="error" role="alert">

@@ -1074,41 +1074,42 @@ button.done-option:disabled {
 
 /*
  * People rows on a grid: the checkbox, then the name with Done and Edit beside it, and the detail
- * line under all three, so it runs the full width instead of wrapping beside the buttons.
+ * line under all three, so it runs the full width instead of wrapping beside the buttons. (Not the
+ * rows of the contact picker when it opens inside People: they keep the picker's own layout.)
  */
-.phone #pane-people .list-row {
+.phone #pane-people .list-row:not(.picker-row) {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0 var(--space-3);
 }
 
-.phone #pane-people .list-row .person-text {
+.phone #pane-people .list-row:not(.picker-row) .person-text {
   display: contents;
 }
 
-.phone #pane-people .list-row .person-name {
+.phone #pane-people .list-row:not(.picker-row) .person-name {
   grid-column: 2;
   grid-row: 1;
 }
 
-.phone #pane-people .list-row .btn-done {
+.phone #pane-people .list-row:not(.picker-row) .btn-done {
   grid-column: 3;
   grid-row: 1;
 }
 
-.phone #pane-people .list-row .btn-quiet {
+.phone #pane-people .list-row:not(.picker-row) .btn-quiet {
   grid-column: 4;
   grid-row: 1;
 }
 
-.phone #pane-people .list-row .person-meta,
-.phone #pane-people .list-row .error {
+.phone #pane-people .list-row:not(.picker-row) .person-meta,
+.phone #pane-people .list-row:not(.picker-row) .error {
   grid-column: 2 / -1;
 }
 
 /* iOS selection circles: an empty ring, filled with the accent and a white tick when chosen. */
-.phone #pane-people .list-row input[type="checkbox"],
+.phone #pane-people .list-row:not(.picker-row) input[type="checkbox"],
 .phone .picker-row input[type="checkbox"] {
   flex: none;
   grid-column: 1;
@@ -1121,7 +1122,7 @@ button.done-option:disabled {
   appearance: none;
 }
 
-.phone #pane-people .list-row input[type="checkbox"]:checked,
+.phone #pane-people .list-row:not(.picker-row) input[type="checkbox"]:checked,
 .phone .picker-row input[type="checkbox"]:checked {
   background: var(--accent)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='m3 7.3 2.7 2.7L11 4.3' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
@@ -1759,11 +1760,8 @@ html.in-browser #root {
   opacity: 0.4;
 }
 
-/* On iPhone the dropdown sits under the name, lined up with it, so long names keep their room.
-   (Inside People, a picker row is not one of the list's grid rows.) */
-.phone .picker-row,
-.phone #pane-people .picker-row {
-  display: flex;
+/* On iPhone the dropdown sits under the name, lined up with it, so long names keep their room. */
+.phone .picker-row {
   flex-wrap: wrap;
   padding-bottom: 0;
 }

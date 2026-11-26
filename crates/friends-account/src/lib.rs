@@ -637,11 +637,16 @@ pub struct Pkce {
     pub challenge: String,
 }
 
+/// 32 secure random bytes, in URL-safe base64 without padding.
+fn random_token() -> Result<String, String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
 impl Pkce {
     pub fn new() -> Result<Pkce, String> {
-        let mut bytes = [0u8; 32];
-        getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
-        Ok(Pkce::from_verifier(URL_SAFE_NO_PAD.encode(bytes)))
+        Ok(Pkce::from_verifier(random_token()?))
     }
 
     pub fn from_verifier(verifier: String) -> Pkce {
@@ -664,9 +669,7 @@ pub struct Nonce {
 
 impl Nonce {
     pub fn new() -> Result<Nonce, String> {
-        let mut bytes = [0u8; 32];
-        getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
-        Ok(Nonce::from_raw(URL_SAFE_NO_PAD.encode(bytes)))
+        Ok(Nonce::from_raw(random_token()?))
     }
 
     pub fn from_raw(raw: String) -> Nonce {

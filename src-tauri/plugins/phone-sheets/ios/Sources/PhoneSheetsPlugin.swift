@@ -22,18 +22,30 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
 {
   private let invoke: Invoke
   private let anchor: () -> ASPresentationAnchor
-  private let done: () -> Void
+  /// Called once Apple's sheet has answered.
+  var done: () -> Void = {}
 
-  init(invoke: Invoke, anchor: @escaping () -> ASPresentationAnchor, done: @escaping () -> Void) {
+  /// Answered already: Apple's sheet calls back once, but a replaced sign-in is answered early.
+  private var answered = false
+
+  init(invoke: Invoke, anchor: @escaping () -> ASPresentationAnchor) {
     self.invoke = invoke
     self.anchor = anchor
-    self.done = done
+  }
+
+  /// A newer sign-in took this one's place: it ends as if closed.
+  func abandon() {
+    if answered { return }
+    answered = true
+    invoke.resolve(["idToken": NSNull()])
   }
 
   func authorizationController(
     controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization
   ) {
     defer { done() }
+    if answered { return }
+    answered = true
     guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
       let data = credential.identityToken,
       let token = String(data: data, encoding: .utf8)
@@ -46,6 +58,8 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
 
   func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
     defer { done() }
+    if answered { return }
+    answered = true
     if let error = error as? ASAuthorizationError, error.code == .canceled {
       // Closed: not an error, the user just stays signed out.
       invoke.resolve(["idToken": NSNull()])
@@ -73,9 +87,10 @@ struct ShareMoreContacts: View {
       }
       .onAppear { open = true }
       .onChange(of: open) { now in
-        // Closed without an answer: nobody new.
+        // Closed. Apple's answer may still be on its way: give it a moment, then go on without it
+        // (the plugin also counts whoever became visible meanwhile).
         if !now {
-          DispatchQueue.main.async { answer([]) }
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { answer([]) }
         }
       }
   }
@@ -104,8 +119,13 @@ class PhoneSheetsPlugin: Plugin {
       request.nonce = args.nonce
       let controller = ASAuthorizationController(authorizationRequests: [request])
       let signIn = AppleSignIn(
-        invoke: invoke, anchor: { [weak self] in self?.window() ?? ASPresentationAnchor() },
-        done: { [weak self] in self?.signIn = nil })
+        invoke: invoke, anchor: { [weak self] in self?.window() ?? ASPresentationAnchor() })
+      signIn.done = { [weak self, weak signIn] in
+        // Only if it's still this one: a newer sign-in may have taken its place.
+        if let self = self, let signIn = signIn, self.signIn === signIn { self.signIn = nil }
+      }
+      // A sign-in still open is replaced: answer its call so nothing waits on it.
+      self.signIn?.abandon()
       self.signIn = signIn
       controller.delegate = signIn
       controller.presentationContextProvider = signIn
@@ -113,27 +133,52 @@ class PhoneSheetsPlugin: Plugin {
     }
   }
 
+  /// The ids of the cards the app can see now.
+  private static func visibleCards() -> Set<String> {
+    var ids = Set<String>()
+    let request = CNContactFetchRequest(keysToFetch: [CNContactIdentifierKey as CNKeyDescriptor])
+    try? CNContactStore().enumerateContacts(with: request) { contact, _ in
+      ids.insert(contact.identifier)
+    }
+    return ids
+  }
+
   @objc public func shareMoreContacts(_ invoke: Invoke) throws {
     guard #available(iOS 18.0, *) else {
       invoke.reject("Choosing more contacts needs iOS 18.")
       return
     }
-    DispatchQueue.main.async {
-      guard let parent = self.manager.viewController else {
-        invoke.reject("Couldn't open Contacts.")
-        return
+    DispatchQueue.global(qos: .userInitiated).async {
+      let before = Self.visibleCards()
+      DispatchQueue.main.async {
+        // Over whatever is showing: a controller that is already presenting can't present again.
+        guard var top = self.manager.viewController else {
+          invoke.reject("Couldn't open Contacts.")
+          return
+        }
+        while let shown = top.presentedViewController { top = shown }
+        var host: UIViewController?
+        let sheet = ShareMoreContacts { ids in
+          host?.dismiss(animated: false)
+          host = nil
+          // The cards Apple says were shared, and any the app can see now that it couldn't before
+          // (in case Apple's answer came too late).
+          DispatchQueue.global(qos: .userInitiated).async {
+            let now = Self.visibleCards()
+            let shared = Set(ids).union(now.subtracting(before))
+            invoke.resolve(["ids": Array(shared)])
+          }
+        }
+        let controller = UIHostingController(rootView: sheet)
+        controller.view.backgroundColor = .clear
+        controller.modalPresentationStyle = .overFullScreen
+        host = controller
+        top.present(controller, animated: false)
+        if controller.presentingViewController == nil {
+          host = nil
+          invoke.reject("Couldn't open Contacts. Try again.")
+        }
       }
-      var host: UIViewController?
-      let sheet = ShareMoreContacts { ids in
-        host?.dismiss(animated: false)
-        host = nil
-        invoke.resolve(["ids": ids])
-      }
-      let controller = UIHostingController(rootView: sheet)
-      controller.view.backgroundColor = .clear
-      controller.modalPresentationStyle = .overFullScreen
-      host = controller
-      parent.present(controller, animated: false)
     }
   }
 }
