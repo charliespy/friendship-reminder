@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
 use friends_account::{
-    app_redirect, parse_app_callback, parse_callback, AccountView, AuthError, Callback, Client,
-    Config, Pkce, Response, Session, Transport,
+    parse_callback, AccountView, AuthError, Callback, Client, Config, Nonce, Pkce, Response,
+    Session, Transport,
 };
 use serde_json::{json, Value};
 
@@ -334,27 +334,34 @@ fn the_account_view_is_tagged_for_the_ui() {
 }
 
 #[test]
-fn the_iphone_sheet_comes_back_to_an_address_supabase_accepts() {
-    let scheme = "io.example.friends";
-    // Supabase's list of allowed addresses only takes ones written `scheme://...`.
-    assert_eq!(app_redirect(scheme), "io.example.friends://auth/callback");
+fn apples_identity_token_is_traded_with_the_raw_nonce() {
+    let fake = Fake::new(200, token_answer());
+    let nonce = Nonce::from_raw("nonce-1".into());
+    let session = Client::new(config(), &fake)
+        .sign_in_with_id_token("apple", "token-1", &nonce, 1_800_000_000)
+        .unwrap();
+    assert_eq!(session.user_id, "user-1");
+    let sent = fake.sent.borrow();
+    let (url, _, body) = &sent[0];
     assert_eq!(
-        parse_app_callback(scheme, "io.example.friends://auth/callback?code=abc"),
-        Callback::Code("abc".into())
+        url,
+        "https://example.supabase.co/auth/v1/token?grant_type=id_token"
     );
     assert_eq!(
-        parse_app_callback(
-            scheme,
-            "io.example.friends://auth/callback?error=access_denied"
-        ),
-        Callback::Failed("access_denied".into())
+        serde_json::from_str::<Value>(body).unwrap(),
+        json!({ "provider": "apple", "id_token": "token-1", "nonce": "nonce-1" })
     );
+}
+
+#[test]
+fn apple_gets_the_nonce_hashed_in_hex() {
+    // SHA-256 of "abc".
     assert_eq!(
-        parse_app_callback(scheme, "io.example.other://auth/callback?code=abc"),
-        Callback::Other
+        Nonce::from_raw("abc".into()).hashed,
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
-    assert_eq!(
-        parse_app_callback(scheme, "io.example.friends://elsewhere?code=abc"),
-        Callback::Other
-    );
+    let a = Nonce::new().unwrap();
+    let b = Nonce::new().unwrap();
+    assert_ne!(a.raw, b.raw);
+    assert_eq!(a.hashed.len(), 64);
 }

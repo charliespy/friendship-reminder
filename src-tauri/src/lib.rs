@@ -236,13 +236,14 @@ pub fn run() {
             account::cancel_sign_in,
             account::sign_out,
             contacts::list_contacts,
+            contacts::share_more_contacts,
             contacts::import_contacts,
             take_shown_person
         ]);
     #[cfg(target_os = "ios")]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_web_auth::init())
+        .plugin(tauri_plugin_phone_sheets::init())
         .invoke_handler(tauri::generate_handler![
             call,
             account::get_account,
@@ -250,6 +251,7 @@ pub fn run() {
             account::cancel_sign_in,
             account::sign_out,
             contacts::list_contacts,
+            contacts::share_more_contacts,
             contacts::import_contacts,
             take_shown_person
         ]);

@@ -129,8 +129,7 @@ function ImportStep({ onSkip }: { onSkip: () => void }) {
     <section className="guide-step guide-step-wide" aria-labelledby="guide-title">
       <h1 id="guide-title">Who do you want to keep up with?</h1>
       <p className="guide-lead">
-        Pick people from your contacts. Friendship Reminder reads only their names, and adds a link back to the app on
-        their cards.
+        Add them from your contacts, or skip this and add people by name whenever you like.
       </p>
       {/* Adding people finishes this step by itself (the core marks it once the list has people). */}
       <ContactPicker closeLabel="Skip" onClose={onSkip} onAdded={() => {}} />

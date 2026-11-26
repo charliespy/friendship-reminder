@@ -29,24 +29,48 @@ use tauri::{AppHandle, Manager};
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase", tag = "status")]
 pub enum ContactList {
+    #[serde(rename_all = "camelCase")]
     Allowed {
         contacts: Vec<Choice>,
+        /// The user shared only some contacts with the app (iPhone, iOS 18 and later).
+        limited: bool,
+        /// The cards the user has just chosen in Apple's own sheets, to go straight to "how often":
+        /// everyone shared when they first shared only some, or the ones just added to those.
+        picked: Vec<String>,
     },
-    /// The user said no (or isn't allowed to say yes): they can change it in System Settings.
+    /// Not asked yet, and the call didn't say to ask: the app explains first.
+    NotAsked,
+    /// The user said no (or isn't allowed to say yes): they can change it in Settings.
+    Denied,
+}
+
+/// Whether the app may read the address book.
+#[derive(Clone, Copy)]
+enum Access {
+    Full,
+    /// Only the contacts the user chose. `just_now`: chosen in the question just answered.
+    Limited {
+        just_now: bool,
+    },
+    NotAsked,
     Denied,
 }
 
 /// How long to wait for the user to answer "allow access to your contacts?".
 const ANSWER_WITHIN: Duration = Duration::from_secs(600);
 
-/// Whether the app may read the address book, asking the user the first time. An `Err` when the
-/// question went unanswered: nothing was decided, so it isn't a "no".
-fn allowed(store: &CNContactStore) -> Result<bool, String> {
-    // SAFETY: plain calls into the Contacts framework, which is thread safe.
-    let status =
-        unsafe { CNContactStore::authorizationStatusForEntityType(CNEntityType::Contacts) };
-    match status {
-        CNAuthorizationStatus::Authorized | CNAuthorizationStatus::Limited => Ok(true),
+fn status() -> CNAuthorizationStatus {
+    // SAFETY: a plain call into the Contacts framework, which is thread safe.
+    unsafe { CNContactStore::authorizationStatusForEntityType(CNEntityType::Contacts) }
+}
+
+/// Whether the app may read the address book, asking the user if `ask` and they weren't asked yet.
+/// An `Err` when the question went unanswered: nothing was decided, so it isn't a "no".
+fn access(store: &CNContactStore, ask: bool) -> Result<Access, String> {
+    match status() {
+        CNAuthorizationStatus::Authorized => Ok(Access::Full),
+        CNAuthorizationStatus::Limited => Ok(Access::Limited { just_now: false }),
+        CNAuthorizationStatus::NotDetermined if !ask => Ok(Access::NotAsked),
         CNAuthorizationStatus::NotDetermined => {
             let (tx, rx) = mpsc::channel();
             let answer = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
@@ -56,11 +80,16 @@ fn allowed(store: &CNContactStore) -> Result<bool, String> {
             unsafe {
                 store.requestAccessForEntityType_completionHandler(CNEntityType::Contacts, &answer)
             };
-            rx.recv_timeout(ANSWER_WITHIN).map_err(|_| {
+            let granted = rx.recv_timeout(ANSWER_WITHIN).map_err(|_| {
                 "The question about Contacts wasn't answered. Try again to see it.".to_string()
+            })?;
+            Ok(match status() {
+                CNAuthorizationStatus::Limited => Access::Limited { just_now: true },
+                _ if granted => Access::Full,
+                _ => Access::Denied,
             })
         }
-        _ => Ok(false),
+        _ => Ok(Access::Denied),
     }
 }
 
@@ -192,25 +221,71 @@ fn storage_error(message: String) -> ApiError {
     ApiError::new(ErrorKind::Storage, message)
 }
 
-/// The address book's cards for the picker (asks for access the first time).
+/// The cards the app may read, for the picker, with `picked` the ones just chosen in Apple's sheets.
+fn list(
+    app: &AppHandle,
+    store: &CNContactStore,
+    access: Access,
+    picked: Option<Vec<String>>,
+) -> Result<ContactList, ApiError> {
+    let limited = match access {
+        Access::NotAsked => return Ok(ContactList::NotAsked),
+        Access::Denied => return Ok(ContactList::Denied),
+        Access::Full => false,
+        Access::Limited { .. } => true,
+    };
+    let cards = read_cards(store)
+        .map_err(|e| storage_error(format!("Couldn't read your contacts: {e}")))?;
+    let picked = match (picked, access) {
+        (Some(ids), _) => ids,
+        // Shared just now: everyone the app can see was picked in Apple's sheet a moment ago.
+        (None, Access::Limited { just_now: true }) => cards.iter().map(|c| c.id.clone()).collect(),
+        (None, _) => Vec::new(),
+    };
+    let state = app
+        .try_state::<crate::State>()
+        .ok_or_else(|| storage_error("Friendship Reminder can't open its data.".into()))?;
+    let core = crate::lock(&state);
+    Ok(ContactList::Allowed {
+        contacts: choices(core.data(), cards),
+        limited,
+        picked,
+    })
+}
+
+/// The address book's cards for the picker. Asks for access when `ask` and the user wasn't asked
+/// yet; otherwise answers `NotAsked`, so the app can explain first.
 #[tauri::command]
-pub async fn list_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
+pub async fn list_contacts(app: AppHandle, ask: bool) -> Result<ContactList, ApiError> {
     // Off the async runtime: asking and reading can take a while.
     tauri::async_runtime::spawn_blocking(move || {
         // SAFETY: a new store, as the framework's documentation shows.
         let store = unsafe { CNContactStore::new() };
-        if !allowed(&store).map_err(storage_error)? {
-            return Ok(ContactList::Denied);
-        }
-        let cards = read_cards(&store)
-            .map_err(|e| storage_error(format!("Couldn't read your contacts: {e}")))?;
-        let state = app
-            .try_state::<crate::State>()
-            .ok_or_else(|| storage_error("Friendship Reminder can't open its data.".into()))?;
-        let core = crate::lock(&state);
-        Ok(ContactList::Allowed {
-            contacts: choices(core.data(), cards),
-        })
+        let access = access(&store, ask).map_err(storage_error)?;
+        list(&app, &store, access, None)
+    })
+    .await
+    .map_err(|e| storage_error(e.to_string()))?
+}
+
+/// Opens Apple's sheet for sharing more contacts with the app (when only some are shared, on
+/// iPhone), then the cards, with `picked` the ones just shared.
+#[tauri::command]
+pub async fn share_more_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(target_os = "ios")]
+        let picked = {
+            use tauri_plugin_phone_sheets::PhoneSheetsExt;
+            app.phone_sheets()
+                .share_more_contacts()
+                .map_err(storage_error)?
+        };
+        #[cfg(not(target_os = "ios"))]
+        let picked: Vec<String> = Vec::new();
+        // SAFETY: as in list_contacts.
+        let store = unsafe { CNContactStore::new() };
+        let access = access(&store, false).map_err(storage_error)?;
+        list(&app, &store, access, Some(picked))
     })
     .await
     .map_err(|e| storage_error(e.to_string()))?

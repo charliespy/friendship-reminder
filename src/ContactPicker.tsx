@@ -2,18 +2,19 @@
  * Picking people from Contacts: search the cards, tick one or several, pick how often for each, and
  * add them.
  * Used from Add person and from the first-run guide. The app reads only names (see SECURITY.md).
+ *
+ * - Before Apple asks for access the first time, the picker says why the app wants it.
+ * - People chosen in Apple's own sheets (sharing only some contacts, on iPhone) were picked there
+ *   already: they go straight to "how often", with no second list to tick.
+ * - With only some contacts shared, opening the picker opens Apple's sheet for sharing more first.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, errorMessage, type ContactChoice } from "./api";
+import { api, errorMessage, type ContactList } from "./api";
 import { Avatar } from "./components/Avatar";
 import { FREQUENCIES } from "./format";
 import { useAction } from "./useView";
 
-type Loaded =
-  | { status: "loading" }
-  | { status: "allowed"; contacts: ContactChoice[] }
-  | { status: "denied" }
-  | { status: "failed"; message: string };
+type Loaded = { status: "loading" } | ContactList | { status: "failed"; message: string };
 
 /** How a search matches a name: any order of words, ignoring case and accents. */
 function fold(text: string): string {
@@ -49,28 +50,58 @@ export function ContactPicker({
   const [query, setQuery] = useState("");
   // Who's ticked, by card, with how often to be in touch with each (monthly to start with).
   const [picked, setPicked] = useState<Map<string, number>>(new Map());
+  // The people just chosen in Apple's sheet, shown alone for "how often" (null: the whole list).
+  const [chosen, setChosen] = useState<string[] | null>(null);
   const add = useAction();
   const live = useRef(true);
+  // Loaded once per picker: loading opens Apple's sheets, which must not open twice (React runs
+  // effects twice in development).
+  const started = useRef(false);
 
-  const fetchList = () =>
-    api.listContacts().then(
-      (list) => live.current && setLoaded(list),
-      (e) => live.current && setLoaded({ status: "failed", message: errorMessage(e) }),
-    );
+  const take = (list: ContactList) => {
+    if (!live.current) return;
+    if (list.status === "allowed") {
+      const fresh = list.picked.filter((id) => list.contacts.some((c) => c.id === id && !c.added));
+      setPicked(new Map(fresh.map((id) => [id, DEFAULT_FREQUENCY])));
+      setChosen(fresh.length > 0 ? fresh : null);
+    }
+    setLoaded(list);
+  };
+  const fail = (e: unknown) => live.current && setLoaded({ status: "failed", message: errorMessage(e) });
+  /** The list; `ask`: Apple asks for access now (after the explanation). */
+  const load = (ask: boolean) =>
+    api
+      .listContacts(ask)
+      // Only some shared, and nobody just chosen: open Apple's sheet to share more.
+      .then((list) =>
+        list.status === "allowed" && list.limited && list.picked.length === 0 ? api.shareMoreContacts() : list,
+      )
+      .then(take, fail);
   useEffect(() => {
     live.current = true;
-    fetchList();
+    if (!started.current) {
+      started.current = true;
+      load(false);
+    }
     return () => {
       live.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const retry = () => {
+  const again = (ask: boolean) => {
     setLoaded({ status: "loading" });
-    fetchList();
+    load(ask);
+  };
+  const shareMore = () => {
+    setLoaded({ status: "loading" });
+    api.shareMoreContacts().then(take, fail);
   };
 
   const contacts = useMemo(() => (loaded.status === "allowed" ? loaded.contacts : []), [loaded]);
-  const shown = useMemo(() => contacts.filter((c) => matches(c.name, query)), [contacts, query]);
+  const shown = useMemo(
+    () => (chosen ? contacts.filter((c) => chosen.includes(c.id)) : contacts.filter((c) => matches(c.name, query))),
+    [contacts, chosen, query],
+  );
   const count = picked.size;
 
   const flip = (id: string, on: boolean) => {
@@ -96,6 +127,31 @@ export function ContactPicker({
       {closeLabel}
     </button>
   );
+
+  if (loaded.status === "notAsked") {
+    return (
+      <div className="card picker" role="region" aria-label="Contacts">
+        <div className="picker-message picker-explain">
+          <strong>Add people from your Contacts</strong>
+          <p className="muted">
+            Friendship Reminder reads only names. On the card of each person you add, it puts a link back to them in the
+            app.
+          </p>
+          <p className="muted">
+            {phone
+              ? "Next, iOS asks whether to share your contacts. You can share all of them, or choose just the people you want."
+              : "Next, macOS asks whether Friendship Reminder may use your contacts."}
+          </p>
+        </div>
+        <div className="form-actions picker-actions">
+          {closeButton}
+          <button type="button" className="btn btn-primary" autoFocus={!phone} onClick={() => again(true)}>
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loaded.status !== "allowed") {
     return (
@@ -123,7 +179,7 @@ export function ContactPicker({
         <div className="form-actions picker-actions">
           {closeButton}
           {loaded.status !== "loading" && (
-            <button type="button" className="btn btn-outline" onClick={retry}>
+            <button type="button" className="btn btn-outline" onClick={() => again(false)}>
               Try again
             </button>
           )}
@@ -135,19 +191,28 @@ export function ContactPicker({
   const free = contacts.filter((c) => !c.added).length;
   return (
     <div className="card picker" role="region" aria-label="Contacts">
-      <div className="picker-search">
-        <input
-          className="input"
-          type="search"
-          value={query}
-          autoFocus={!phone}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search contacts"
-          aria-label="Search contacts"
-        />
-      </div>
+      {chosen ? (
+        <div className="picker-heading">
+          <h2>How often?</h2>
+          <p className="muted">Pick how often to be in touch with each person you chose.</p>
+        </div>
+      ) : (
+        <div className="picker-search">
+          <input
+            className="input"
+            type="search"
+            value={query}
+            autoFocus={!phone}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search contacts"
+            aria-label="Search contacts"
+          />
+        </div>
+      )}
       {contacts.length === 0 ? (
-        <p className="picker-message muted">There's nobody in Contacts yet.</p>
+        <p className="picker-message muted">
+          {loaded.limited ? "You haven't shared anyone from Contacts yet." : "There's nobody in Contacts yet."}
+        </p>
       ) : shown.length === 0 ? (
         <p className="picker-message muted">Nobody in Contacts matches “{query.trim()}”.</p>
       ) : (
@@ -190,10 +255,17 @@ export function ContactPicker({
       )}
       <div className="picker-footer">
         <p className="hint picker-hint">
-          {free === 0 && contacts.length > 0
-            ? "Everyone in Contacts is in your list already."
-            : "Pick how often for each person you tick. Each counts as in touch today, so their first reminder comes one round from now."}
+          {chosen
+            ? "Each counts as in touch today, so their first reminder comes one round from now."
+            : free === 0 && contacts.length > 0
+              ? "Everyone in Contacts is in your list already."
+              : "Pick how often for each person you tick. Each counts as in touch today, so their first reminder comes one round from now."}
         </p>
+        {loaded.limited && !chosen && (
+          <button type="button" className="btn btn-quiet picker-more" onClick={shareMore}>
+            Choose more in Contacts…
+          </button>
+        )}
         {add.error && (
           <p className="error" role="alert">
             {add.error}

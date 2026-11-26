@@ -1637,6 +1637,31 @@ html.in-browser #root {
   width: 100%;
 }
 
+/* "How often?" over the people just chosen in Apple's sheet, in place of the search. */
+.picker-heading {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.picker-heading h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+
+.picker-heading p {
+  margin: 0;
+}
+
+/* Why the app asks for Contacts, before Apple's question. */
+.picker-explain p + p {
+  margin-top: var(--space-2);
+}
+
+.picker-more {
+  margin-top: var(--space-2);
+  padding-inline: 0;
+}
+
 .picker-list {
   max-height: 280px;
   overflow-y: auto;
@@ -1734,8 +1759,11 @@ html.in-browser #root {
   opacity: 0.4;
 }
 
-/* On iPhone the dropdown sits under the name, lined up with it, so long names keep their room. */
-.phone .picker-row {
+/* On iPhone the dropdown sits under the name, lined up with it, so long names keep their room.
+   (Inside People, a picker row is not one of the list's grid rows.) */
+.phone .picker-row,
+.phone #pane-people .picker-row {
+  display: flex;
   flex-wrap: wrap;
   padding-bottom: 0;
 }

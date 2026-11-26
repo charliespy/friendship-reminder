@@ -9,6 +9,10 @@ test("a new user signs in or not, then picks people from Contacts", async ({ pag
   await page.getByRole("button", { name: "Not now" }).click();
 
   await expect(page.getByRole("heading", { name: "Who do you want to keep up with?" })).toBeVisible();
+  // The app says why it wants Contacts before the system asks.
+  await expect(page.getByText("Add people from your Contacts")).toBeVisible();
+  await expect(page.getByLabel("Search contacts")).toHaveCount(0);
+  await page.getByRole("button", { name: "Continue" }).click();
   const add = page.getByRole("button", { name: /^Add/ });
   await expect(add).toBeDisabled();
   await page.getByLabel("Search contacts").fill("chloe");
@@ -54,6 +58,8 @@ test("someone who already uses the app never sees the guide", async ({ page, req
 
 test("Add person offers people from Contacts, and marks who's in the list already", async ({ page, request }) => {
   await seed(request, { people: [{ name: "Ana Torres", frequencyDays: 30, lastConnected: "2026-11-01" }] });
+  // Contacts were shared on an earlier import.
+  await setContactsAccess(request, "allowed");
   await openPreferences(page);
   await page.getByRole("button", { name: "Add person" }).click();
   await page.getByRole("button", { name: "Import from Contacts…" }).click();
@@ -83,6 +89,58 @@ test("without access to Contacts the picker says how to allow it, and Cancel goe
   await expect(page.getByRole("form", { name: "Add person" })).toBeVisible();
 });
 
+test("on iPhone, people shared in Apple's sheet go straight to how often", async ({ page, request }) => {
+  await seedNewUser(request);
+  await setContactsAccess(request, "notAskedLimited");
+  await page.goto("/phone.html");
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(page.getByText(/choose just the people you want/)).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // Ben, Elif and Iris were chosen in Apple's sheet: no list to tick again, just how often.
+  const picker = page.getByRole("region", { name: "Contacts" });
+  await expect(picker.getByRole("heading", { name: "How often?" })).toBeVisible();
+  await expect(picker.getByLabel("Search contacts")).toHaveCount(0);
+  await expect(picker.getByRole("checkbox")).toHaveCount(3);
+  await expect(picker.getByRole("checkbox", { name: "Elif Yılmaz" })).toBeChecked();
+  await picker.getByLabel("How often for Elif Yılmaz").selectOption({ label: "Quarterly" });
+  await page.getByRole("button", { name: "Add 3 people" }).click();
+
+  await page.getByRole("tab", { name: /People/ }).click();
+  const rows = page.getByTestId("person-row");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.filter({ hasText: "Elif Yılmaz" })).toContainText("Quarterly");
+  await expect(rows.filter({ hasText: "Ben Okafor" })).toContainText("Monthly");
+});
+
+test("with only some contacts shared, importing opens Apple's sheet to share more", async ({ page, request }) => {
+  await seed(request, { people: SAMPLE.slice(0, 1) });
+  await setContactsAccess(request, "limited");
+  await page.goto("/phone.html");
+  await page.getByRole("tab", { name: /People/ }).click();
+  await page.getByRole("button", { name: "Add person" }).click();
+  await page.getByRole("button", { name: "Import from Contacts…" }).click();
+
+  // Apple's sheet shared Kofi and Lena: they go to how often.
+  const picker = page.getByRole("region", { name: "Contacts" });
+  await expect(picker.getByRole("heading", { name: "How often?" })).toBeVisible();
+  await expect(picker.getByRole("checkbox")).toHaveCount(2);
+  await picker.getByRole("checkbox", { name: "Lena Fischer" }).uncheck();
+  await page.getByRole("button", { name: "Add 1 person" }).click();
+  await expect(page.getByTestId("person-row").filter({ hasText: "Kofi Mensah" })).toHaveCount(1);
+  await expect(page.getByTestId("person-row").filter({ hasText: "Lena Fischer" })).toHaveCount(0);
+
+  // Nobody new shared this time: the people already shared, to tick, and a way to share more.
+  await page.getByRole("button", { name: "Add person" }).click();
+  await page.getByRole("button", { name: "Import from Contacts…" }).click();
+  await expect(picker.getByLabel("Search contacts")).toBeVisible();
+  await expect(picker.getByRole("checkbox", { name: "Kofi Mensah, already added" })).toBeDisabled();
+  await expect(picker.getByRole("checkbox", { name: "Lena Fischer" })).not.toBeChecked();
+  // Inside People on iPhone, each row still shows its name (not squeezed into the list's grid).
+  await expect(picker.getByText("Lena Fischer")).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Choose more in Contacts…" })).toBeVisible();
+});
+
 test("on iPhone the guide fills the screen, without the tab bar", async ({ page, request }) => {
   await seedNewUser(request);
   await page.goto("/phone.html");
@@ -95,6 +153,8 @@ test("on iPhone the guide fills the screen, without the tab bar", async ({ page,
 
 test("the link on a contact card opens the app at that person", async ({ page, request }) => {
   await seed(request, { people: SAMPLE });
+  // Contacts were shared on an earlier import.
+  await setContactsAccess(request, "allowed");
   await openPreferences(page);
   await page.getByRole("button", { name: "Add person" }).click();
   await page.getByRole("button", { name: "Import from Contacts…" }).click();

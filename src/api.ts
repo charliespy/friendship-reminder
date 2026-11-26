@@ -75,7 +75,18 @@ export interface ContactChoice {
 }
 
 /** The address book's cards, or why the app can't see them. */
-export type ContactList = { status: "allowed"; contacts: ContactChoice[] } | { status: "denied" };
+export type ContactList =
+  | {
+      status: "allowed";
+      contacts: ContactChoice[];
+      /** Only some contacts are shared with the app (iPhone). */
+      limited: boolean;
+      /** The cards just chosen in Apple's own sheets: they go straight to "how often". */
+      picked: string[];
+    }
+  /** Not asked yet: the app explains before Apple asks. */
+  | { status: "notAsked" }
+  | { status: "denied" };
 
 export interface ApiError {
   kind: "invalid" | "storage" | "badCall";
@@ -134,8 +145,10 @@ export const api = {
   setNotifications: (on: boolean) => call("set_notifications", { on }),
   /** A step of the first-run guide is behind you (done or skipped). */
   finishGuide: (step: GuideStep) => call("finish_guide", { step }),
-  /** The cards in Contacts. Asks for access the first time. */
-  listContacts: () => invoke<ContactList>("list_contacts"),
+  /** The cards in Contacts. Asks for access only when `ask` (after the app explained why). */
+  listContacts: (ask: boolean) => invoke<ContactList>("list_contacts", { ask }),
+  /** Opens Apple's sheet for sharing more contacts (only some shared, on iPhone), then the cards. */
+  shareMoreContacts: () => invoke<ContactList>("share_more_contacts"),
   /**
    * Adds the people picked in Contacts, each with their own frequency, in touch today, and links each to their card (on this device,
    * and with a link on the card the other devices find).

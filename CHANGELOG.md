@@ -16,7 +16,15 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
   their names, and adds a link back to the app on their cards: tap it in Contacts to open
   Friendship Reminder at that person.
 - A short welcome when you first open Friendship Reminder: sign in with Apple (or choose Not now),
-  then pick people from Contacts (or Skip).
+  then pick people from Contacts (or Skip). Friendship Reminder says what it reads before it asks
+  for your contacts.
+- On iPhone, if you share only some contacts, the people you chose in Apple's screen go straight to
+  "How often?", with no second list to tick. Import from Contacts opens Apple's screen to share more.
+
+### Changed
+
+- On iPhone, Sign in with Apple uses Apple's own sign-in sheet (Face ID or your passcode), not a
+  web page, so iOS no longer asks whether the app may use the account server's address.
 
 ## [0.2.0] - 2026-11-25
 

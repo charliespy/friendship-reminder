@@ -66,7 +66,7 @@ fields, pipelines or scores, only a name, a rhythm, and the last time you were i
   (`due-person`, `upcoming-person`, `person-row`, `blocked-row`); copy changes must keep them.
 - The web page loads no web fonts and makes no network requests: the content security policy
   allows only the app's own files. Signing in to a Friendship Reminder account (optional) and syncing with it
-  are the only network use: the sign-in page opens in the browser (a sheet over the app on
+  are the only network use: the sign-in page opens in the browser (Apple's own sign-in sheet on
 iPhone), and the app's own requests
   (signing in, syncing) go from the Rust side.
 

@@ -65,8 +65,15 @@ export async function seedNewUser(request: APIRequestContext) {
   await setToday(request, TODAY);
 }
 
-/** How the made-up address book answers "allow access to your contacts?" from now on. */
-export async function setContactsAccess(request: APIRequestContext, answer: "allowed" | "denied") {
+/**
+ * Contacts' access in the made-up address book (see friends-devserver): not asked yet (and what the
+ * user will answer), all shared, only some shared (Ben, Elif and Iris; "share more" adds Kofi and
+ * Lena), or refused. Each reset starts at "notAsked".
+ */
+export async function setContactsAccess(
+  request: APIRequestContext,
+  answer: "notAsked" | "notAskedLimited" | "allowed" | "limited" | "denied",
+) {
   const res = await request.post(`${server}/__test/contacts`, { data: JSON.stringify(answer), headers: JSON_HEADERS });
   expect(res.ok()).toBeTruthy();
 }

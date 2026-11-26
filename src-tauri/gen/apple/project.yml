@@ -69,6 +69,8 @@ targets:
         CFBundleVersion: "0.1.2"
     entitlements:
       path: friends_iOS/friends_iOS.entitlements
+      properties:
+        com.apple.developer.applesignin: [Default]
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full

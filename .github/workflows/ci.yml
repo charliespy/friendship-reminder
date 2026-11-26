@@ -60,12 +60,14 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
-          # The iPhone app's shell is checked too (it isn't built or signed here).
+          # The iPhone app is checked too, and built for the simulator (unsigned).
           targets: aarch64-apple-ios-sim
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: npm ci
       - run: npm run check
       - run: npm run check:ios
+      - name: Build the whole iPhone app (Swift and the final link)
+        run: npm run check:ios-link
 
   e2e:
     name: End-to-end (Playwright, WebKit)
