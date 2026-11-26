@@ -321,8 +321,17 @@ pub async fn cancel_sign_in(app: AppHandle, attempt: String) -> Result<Shown, St
         if let Some(server) = account.waiting().cancel(&attempt) {
             server.unblock();
         }
+        // Apple's sheet closes too, so it can't finish a sign-in nobody wants any more.
         #[cfg(target_os = "ios")]
-        account.waiting().cancel(&attempt);
+        if account.waiting().is_waiting(&attempt) {
+            use tauri_plugin_phone_sheets::PhoneSheetsExt;
+            account.waiting().cancel(&attempt);
+            if let Err(e) = app.phone_sheets().close_sign_in_with_apple() {
+                eprintln!("friends: couldn't close Apple's sign-in sheet: {e}");
+            }
+        } else {
+            account.waiting().cancel(&attempt);
+        }
         Ok(account.view())
     })
     .await
@@ -350,7 +359,8 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
         .port();
     let server = Arc::new(server);
     match account.waiting().start(attempt, server.clone()) {
-        Started::Cancelled => return Ok(account.view()),
+        // `start` replaces whatever is waiting, so it's never busy.
+        Started::Cancelled | Started::Busy => return Ok(account.view()),
         Started::Waiting { replaced } => {
             if let Some(old) = replaced {
                 old.unblock();
@@ -397,16 +407,10 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
     use tauri_plugin_phone_sheets::PhoneSheetsExt;
     let account = app.state::<Account>();
     let client = account.client()?;
-    {
-        let mut waiting = account.waiting();
-        // Apple's sheet is up for another attempt: it carries on (taking its place would throw
-        // away a sign-in the user may be finishing).
-        if waiting.is_busy() {
-            return Err("Sign in with Apple is open already.".into());
-        }
-        if let Started::Cancelled = waiting.start(attempt, ()) {
-            return Ok(account.view());
-        }
+    match account.waiting().start_unless_busy(attempt, ()) {
+        Started::Cancelled => return Ok(account.view()),
+        Started::Busy => return Err("Sign in with Apple is open already.".into()),
+        Started::Waiting { .. } => {}
     }
     let waited = (|| {
         let nonce = Nonce::new()?;

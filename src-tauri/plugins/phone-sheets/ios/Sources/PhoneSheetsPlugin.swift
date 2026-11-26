@@ -22,6 +22,8 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
 {
   private let invoke: Invoke
   private let anchor: () -> ASPresentationAnchor
+  /// The sheet's controller, to close it on Cancel.
+  weak var controller: ASAuthorizationController?
   /// Called once Apple's sheet has answered.
   var done: () -> Void = {}
 
@@ -114,8 +116,8 @@ class PhoneSheetsPlugin: Plugin {
   /// The trip to Settings under way, if any.
   private var trip: SettingsTrip?
 
-  private func window() -> ASPresentationAnchor {
-    return manager.viewController?.view.window ?? ASPresentationAnchor()
+  private func window() -> ASPresentationAnchor? {
+    return manager.viewController?.view.window
   }
 
   @objc public func signInWithApple(_ invoke: Invoke) throws {
@@ -131,8 +133,14 @@ class PhoneSheetsPlugin: Plugin {
       request.requestedScopes = [.email]
       request.nonce = args.nonce
       let controller = ASAuthorizationController(authorizationRequests: [request])
+      // Not on screen yet (or any more): Apple's sheet would have nowhere to show.
+      guard self.window() != nil else {
+        invoke.reject("Couldn't show Sign in with Apple. Try again.")
+        return
+      }
       let signIn = AppleSignIn(
         invoke: invoke, anchor: { [weak self] in self?.window() ?? ASPresentationAnchor() })
+      signIn.controller = controller
       signIn.done = { [weak self, weak signIn] in
         // Only if it is still the one kept.
         if let self = self, let signIn = signIn, self.signIn === signIn { self.signIn = nil }
@@ -141,6 +149,15 @@ class PhoneSheetsPlugin: Plugin {
       controller.delegate = signIn
       controller.presentationContextProvider = signIn
       controller.performRequests()
+    }
+  }
+
+  /// Closes Apple's sign-in sheet, if it's up (iOS 16 on; before that it stays until the user
+  /// closes it). Its sign-in then answers as closed.
+  @objc public func closeSignInWithApple(_ invoke: Invoke) {
+    DispatchQueue.main.async {
+      if #available(iOS 16.0, *) { self.signIn?.controller?.cancel() }
+      invoke.resolve()
     }
   }
 

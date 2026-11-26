@@ -156,12 +156,12 @@ export function SettingsPane({
   access?: NotificationAccessState;
 }) {
   const notify = useAction();
-  // Turning reminders on asks iOS too, unless it has answered already (or, when its answer
-  // couldn't be read, in case it hasn't). A failure shows under the toggle.
+  // iOS hasn't answered (or its answer couldn't be read): turning reminders on asks it too.
+  const mayAsk = access?.access === "notAsked" || access?.access === "unknown";
   const setNotifications = (on: boolean) =>
     notify.run(async () => {
       await api.setNotifications(on);
-      if (on && access && (access.access === "notAsked" || access.access === null)) await access.ask();
+      if (on && mayAsk) await access?.allow();
     });
   const [login, setLogin] = useState<boolean | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -248,10 +248,14 @@ export function SettingsPane({
               </span>
             </span>
           </label>
-          {view.settings.notifications && access?.access === "notAsked" && (
+          {view.settings.notifications && mayAsk && (
             <div className="choice-note">
-              <p className="hint">iOS hasn't been asked to let Friendship Reminder send notifications yet.</p>
-              <button type="button" className="btn btn-outline btn-sm" disabled={access.busy} onClick={access.allow}>
+              <p className="hint">
+                {access?.access === "notAsked"
+                  ? "iOS hasn't been asked to let Friendship Reminder send notifications yet."
+                  : "Couldn't check whether iOS lets Friendship Reminder send notifications."}
+              </p>
+              <button type="button" className="btn btn-outline btn-sm" disabled={access?.busy} onClick={access?.allow}>
                 Allow notifications
               </button>
             </div>

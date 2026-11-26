@@ -8,7 +8,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # The build writes the version into the Xcode project's files: put them back after.
-project=(src-tauri/gen/apple/friends.xcodeproj/project.pbxproj src-tauri/gen/apple/friends_iOS/Info.plist)
+project=(src-tauri/gen/apple/friends.xcodeproj/project.pbxproj src-tauri/gen/apple/friends_iOS/Info.plist
+  src-tauri/gen/apple/ExportOptions.plist)
 saved=$(mktemp -d)
 for f in "${project[@]}"; do cp "$f" "$saved/$(basename "$f")"; done
 restore() {

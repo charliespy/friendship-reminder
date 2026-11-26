@@ -580,6 +580,8 @@ pub enum Started<T> {
     Cancelled,
     /// Now the one waiting; wake the one it replaced, if any, so it stops.
     Waiting { replaced: Option<T> },
+    /// Another attempt is waiting and keeps its place ([`Attempts::start_unless_busy`]).
+    Busy,
 }
 
 impl<T> Attempts<T> {
@@ -595,6 +597,19 @@ impl<T> Attempts<T> {
         Started::Waiting { replaced }
     }
 
+    /// As [`start`](Self::start), but an attempt already waiting keeps its place: on iPhone it has
+    /// Apple's sheet on screen, which the user may be finishing, and only it can answer that sheet.
+    pub fn start_unless_busy(&mut self, attempt: &str, wake: T) -> Started<T> {
+        if self.cancelled.as_deref() == Some(attempt) {
+            self.cancelled = None;
+            return Started::Cancelled;
+        }
+        if self.current.is_some() {
+            return Started::Busy;
+        }
+        self.start(attempt, wake)
+    }
+
     /// Cancels `attempt`: returns how to wake it if it's waiting, or remembers it for when it starts.
     pub fn cancel(&mut self, attempt: &str) -> Option<T> {
         if self.is_waiting(attempt) {
@@ -608,11 +623,6 @@ impl<T> Attempts<T> {
     /// to wake it.
     pub fn cancel_all(&mut self) -> Option<T> {
         self.current.take().map(|(_, w)| w)
-    }
-
-    /// Some attempt is waiting (on iPhone, Apple's sheet is up for it).
-    pub fn is_busy(&self) -> bool {
-        self.current.is_some()
     }
 
     pub fn is_waiting(&self, attempt: &str) -> bool {

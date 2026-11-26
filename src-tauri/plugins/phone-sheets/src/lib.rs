@@ -63,6 +63,20 @@ impl<R: Runtime> PhoneSheets<R> {
         }
     }
 
+    /// Closes Sign in with Apple's sheet, if it's up: its call answers as if the user closed it.
+    pub fn close_sign_in_with_apple(&self) -> Result<(), String> {
+        #[cfg(target_os = "ios")]
+        {
+            self.handle
+                .run_mobile_plugin::<()>("closeSignInWithApple", ())
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(not(target_os = "ios"))]
+        {
+            Err(ONLY_ON_IPHONE.into())
+        }
+    }
+
     /// Opens the app's page in iOS Settings (where the user can share more contacts) and waits for
     /// the user to come back to the app. Blocks the calling thread.
     pub fn open_settings_and_wait(&self) -> Result<(), String> {
