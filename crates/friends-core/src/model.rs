@@ -358,10 +358,12 @@ impl Data {
     ) -> bool {
         let mut moved = false;
         let mut pushes = 0;
-        let skip_from = Self::skip_from(rule, ranges, today);
+        // Worked out only for someone behind: the same for everyone, but it takes a few pushes.
+        let mut skip_from = None;
         let mut last_missed = None;
         while last_day_of_run(person.next_target, rule) < today && pushes < MAX_PUSHES {
             last_missed = Some(person.next_target);
+            let skip_from = *skip_from.get_or_insert_with(|| Self::skip_from(rule, ranges, today));
             let from = person.next_target.max(skip_from);
             person.apply(push_missed_schedule(from, rule, ranges));
             pushes += 1;
@@ -398,12 +400,17 @@ impl Data {
         };
         let mut from = back(today, 14);
         // Each step moves `from` earlier, to two weeks before a range that no step used yet, so this
-        // ends after at most one step per range.
-        while let Some(range) = ranges.iter().find(|r| {
-            r.first_day() <= today
-                && r.last_day() >= back(from, 7)
-                && back(r.first_day(), 14) < from
-        }) {
+        // ends after at most one step per range. It takes the nearby range that starts latest, the
+        // smallest step back, so the order the ranges are listed in doesn't change where it stops.
+        while let Some(range) = ranges
+            .iter()
+            .filter(|r| {
+                r.first_day() <= today
+                    && r.last_day() >= back(from, 7)
+                    && back(r.first_day(), 14) < from
+            })
+            .max_by_key(|r| r.first_day())
+        {
             let earlier = back(range.first_day(), 14);
             if too_many_pushes(earlier) {
                 break;

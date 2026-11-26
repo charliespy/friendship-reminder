@@ -173,12 +173,7 @@ pub struct BlockedRange {
 impl BlockedRange {
     pub fn contains(&self, date: NaiveDate) -> bool {
         // A range typed in backwards still means the days between its two ends.
-        let (lo, hi) = if self.start <= self.end {
-            (self.start, self.end)
-        } else {
-            (self.end, self.start)
-        };
-        lo <= date && date <= hi
+        self.first_day() <= date && date <= self.last_day()
     }
 
     /// The range's first day, even when it was typed in backwards.
