@@ -20,8 +20,8 @@ export function useNotificationAccess() {
       const n = ++latest.current;
       api.notificationAccess().then(
         (a) => live && n === latest.current && setAccess(a),
-        // Unknown: offer to ask. Asking iOS again only answers what was decided.
-        () => live && n === latest.current && setAccess("notAsked"),
+        // Unknown: nothing offered (turning reminders on in Settings still asks).
+        () => {},
       );
     };
     read();
@@ -32,23 +32,28 @@ export function useNotificationAccess() {
     };
   }, []);
 
-  /** Shows iOS's question (the first time), then keeps the answer. */
+  /** Shows iOS's question (the first time) and keeps the answer; throws when it can't ask. */
+  const ask = useCallback(async () => {
+    const answer = await api.allowNotifications();
+    // The user's answer wins over any read started while iOS was asking.
+    ++latest.current;
+    setAccess(answer);
+  }, []);
+
+  /** `ask`, for a button: busy meanwhile, and the error kept. */
   const allow = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const answer = await api.allowNotifications();
-      // The user's answer wins over any read started while iOS was asking.
-      ++latest.current;
-      setAccess(answer);
+      await ask();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [ask]);
 
-  return { access, allow, busy, error };
+  return { access, ask, allow, busy, error };
 }
 
 export type NotificationAccessState = ReturnType<typeof useNotificationAccess>;

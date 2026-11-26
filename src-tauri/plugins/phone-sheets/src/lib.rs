@@ -2,8 +2,8 @@
 //! - Sign in with Apple (`ASAuthorizationController`): hands back Apple's identity token, which
 //!   friends-account trades for a session. It shows no web address, unlike a web sign-in sheet.
 //! - Sharing more contacts, when the user shared only some with the app: opens the app's page in
-//!   iOS Settings, and once the user is back hands back the cards shared meanwhile. (Apple's sheet
-//!   for this, `contactAccessPicker`, opens blank on iPhones from iOS 26 on.)
+//!   iOS Settings and waits for the user to come back. (Apple's sheet for this,
+//!   `contactAccessPicker`, opens blank on iPhones from iOS 26 on.)
 //!
 //! Also one call the notification plugin gets wrong on iOS: clearing every booked reminder.
 //!
@@ -37,12 +37,6 @@ struct SignInResponse {
     id_token: Option<String>,
 }
 
-#[cfg(target_os = "ios")]
-#[derive(serde::Deserialize)]
-struct ShareResponse {
-    ids: Vec<String>,
-}
-
 #[cfg(not(target_os = "ios"))]
 const ONLY_ON_IPHONE: &str = "Apple's sheets are only on iPhone.";
 
@@ -69,15 +63,13 @@ impl<R: Runtime> PhoneSheets<R> {
         }
     }
 
-    /// Opens the app's page in iOS Settings, for sharing more contacts, and waits for the user to
-    /// come back: the ids of the cards shared meanwhile (none when nobody new). Blocks the calling
-    /// thread.
-    pub fn share_more_contacts(&self) -> Result<Vec<String>, String> {
+    /// Opens the app's page in iOS Settings (where the user can share more contacts) and waits for
+    /// the user to come back to the app. Blocks the calling thread.
+    pub fn open_settings_and_wait(&self) -> Result<(), String> {
         #[cfg(target_os = "ios")]
         {
             self.handle
-                .run_mobile_plugin::<ShareResponse>("shareMoreContacts", ())
-                .map(|r| r.ids)
+                .run_mobile_plugin::<()>("openSettingsAndWait", ())
                 .map_err(|e| e.to_string())
         }
         #[cfg(not(target_os = "ios"))]
@@ -85,9 +77,7 @@ impl<R: Runtime> PhoneSheets<R> {
             Err(ONLY_ON_IPHONE.into())
         }
     }
-}
 
-impl<R: Runtime> PhoneSheets<R> {
     /// Cancels every reminder booked with iOS. (tauri-plugin-notification's `cancel_all` sends no
     /// arguments, which its iOS side refuses, and its `pending` can't read iOS's answer.)
     pub fn clear_booked_reminders(&self) -> Result<(), String> {

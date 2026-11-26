@@ -103,15 +103,20 @@ pub enum Chosen {
 }
 
 impl Chosen {
-    /// After a trip to Settings to share more: the cards that became visible meanwhile (`shared`)
-    /// were picked there while the app still sees only some contacts (`still_limited`). If the user
-    /// turned on full access instead, every card is new to the app but nobody was picked.
-    pub fn shared_in_settings(shared: Vec<String>, still_limited: bool) -> Chosen {
-        if still_limited {
-            Chosen::Cards(shared)
-        } else {
-            Chosen::Nobody
+    /// After a trip to Settings to share more: the cards the app sees `now` and didn't `before`
+    /// were picked there, while the app still sees only some contacts (`still_limited`). If the
+    /// user turned on full access instead, every card is new to the app but nobody was picked.
+    pub fn shared_in_settings(before: &[String], now: &[String], still_limited: bool) -> Chosen {
+        if !still_limited {
+            return Chosen::Nobody;
         }
+        let before: std::collections::HashSet<&String> = before.iter().collect();
+        Chosen::Cards(
+            now.iter()
+                .filter(|id| !before.contains(id))
+                .cloned()
+                .collect(),
+        )
     }
 }
 

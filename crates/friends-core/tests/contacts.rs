@@ -445,13 +445,22 @@ fn people_just_chosen_in_the_system_sheet_go_straight_to_how_often() {
 }
 
 #[test]
-fn turning_on_full_access_in_settings_picks_nobody() {
-    let shared = vec!["c2".to_string(), "c3".to_string()];
-    // Still sharing only some: the cards shared meanwhile were picked in Settings.
+fn cards_shared_in_settings_are_the_ones_new_to_the_app() {
+    let ids = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let before = ids(&["c1", "c2"]);
+    // Still sharing only some: whoever the app can see now and couldn't before was picked there
+    // (c1 un-shared meanwhile doesn't count).
     assert_eq!(
-        Chosen::shared_in_settings(shared.clone(), true),
-        Chosen::Cards(shared.clone())
+        Chosen::shared_in_settings(&before, &ids(&["c2", "c3", "c4"]), true),
+        Chosen::Cards(ids(&["c3", "c4"]))
+    );
+    assert_eq!(
+        Chosen::shared_in_settings(&before, &ids(&["c2"]), true),
+        Chosen::Cards(vec![])
     );
     // Full access now: every card is new to the app, but nobody was picked; the list shows instead.
-    assert_eq!(Chosen::shared_in_settings(shared, false), Chosen::Nobody);
+    assert_eq!(
+        Chosen::shared_in_settings(&before, &ids(&["c1", "c2", "c3", "c4"]), false),
+        Chosen::Nobody
+    );
 }

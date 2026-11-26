@@ -142,24 +142,12 @@ enum Access {
 
 /// The iPhone's notification permission, as the test sets it up (and as `notification_access`
 /// answers it).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 enum Notifications {
     Allowed,
     NotAsked,
     Denied,
-}
-
-impl Notifications {
-    const ALL: [Notifications; 3] = [Self::Allowed, Self::NotAsked, Self::Denied];
-
-    /// As the app's command answers it.
-    fn name(self) -> &'static str {
-        match self {
-            Self::Allowed => "allowed",
-            Self::NotAsked => "notAsked",
-            Self::Denied => "denied",
-        }
-    }
 }
 
 /// Who a user shares when they share only some contacts, and who "share more" adds.
@@ -239,19 +227,18 @@ impl Dev {
                 Ok(self.contact_list(&chosen))
             }
             "share_more_contacts" => {
-                let mut shared = Vec::new();
-                if self.contacts == Access::Limited {
+                // The trip to Settings: Kofi and Lena are shared there, if only some were.
+                let before = self.shared.clone();
+                let limited = self.contacts == Access::Limited;
+                if limited {
                     for id in SHARED_MORE {
                         if !self.shared.iter().any(|s| s == id) {
                             self.shared.push(id.to_string());
-                            shared.push(id.to_string());
                         }
                     }
                 }
-                Ok(self.contact_list(&Chosen::shared_in_settings(
-                    shared,
-                    self.contacts == Access::Limited,
-                )))
+                let chosen = Chosen::shared_in_settings(&before, &self.shared, limited);
+                Ok(self.contact_list(&chosen))
             }
             "import_contacts" => {
                 let people: Vec<NewPerson> =
@@ -272,12 +259,12 @@ impl Dev {
                 }
                 to_value(view)
             }
-            "notification_access" => Ok(json!(self.notifications.name())),
+            "notification_access" => Ok(json!(self.notifications)),
             "allow_notifications" => {
                 if self.notifications == Notifications::NotAsked {
                     self.notifications = Notifications::Allowed;
                 }
-                Ok(json!(self.notifications.name()))
+                Ok(json!(self.notifications))
             }
             "take_shown_person" => Ok(json!(self.shown_person.take())),
             // Window commands have nothing to do in a browser.
@@ -472,16 +459,12 @@ fn main() {
                 }
             }
             (Method::Post, "/__test/notifications") => {
-                let asked = serde_json::from_str::<String>(&body).ok();
-                match Notifications::ALL
-                    .into_iter()
-                    .find(|n| asked.as_deref() == Some(n.name()))
-                {
-                    Some(answer) => {
+                match serde_json::from_str::<Notifications>(&body) {
+                    Ok(answer) => {
                         dev.notifications = answer;
                         json_response(200, &Value::Null)
                     }
-                    None => {
+                    Err(_) => {
                         json_response(400, &json!("send \"allowed\", \"notAsked\" or \"denied\""))
                     }
                 }

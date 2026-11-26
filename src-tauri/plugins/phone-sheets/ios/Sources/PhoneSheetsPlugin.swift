@@ -1,12 +1,11 @@
 // Friendship Reminder's sheets from Apple on iPhone:
 // - Sign in with Apple (ASAuthorizationController), which hands the Rust side Apple's identity token.
 // - Sharing more contacts, for someone who shared only some with the app: opens the app's page in
-//   iOS Settings and, once the user is back, hands back the ids of the cards shared meanwhile.
+//   iOS Settings and answers once the user is back (Rust works out who was shared meanwhile).
 //   (Apple's own sheet for this, contactAccessPicker, opens blank on iPhones from iOS 26 on:
 //   FB20929400. Apple's forums point to Settings until it's fixed.)
 
 import AuthenticationServices
-import Contacts
 import SwiftRs
 import Tauri
 import UIKit
@@ -26,27 +25,15 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
   /// Called once Apple's sheet has answered.
   var done: () -> Void = {}
 
-  /// Answered already: Apple's sheet calls back once, but a replaced sign-in is answered early.
-  private var answered = false
-
   init(invoke: Invoke, anchor: @escaping () -> ASPresentationAnchor) {
     self.invoke = invoke
     self.anchor = anchor
-  }
-
-  /// A newer sign-in took this one's place: it ends as if closed.
-  func abandon() {
-    if answered { return }
-    answered = true
-    invoke.resolve(["idToken": NSNull()])
   }
 
   func authorizationController(
     controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization
   ) {
     defer { done() }
-    if answered { return }
-    answered = true
     guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
       let data = credential.identityToken,
       let token = String(data: data, encoding: .utf8)
@@ -59,8 +46,6 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
 
   func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
     defer { done() }
-    if answered { return }
-    answered = true
     if let error = error as? ASAuthorizationError, error.code == .canceled {
       // Closed: not an error, the user just stays signed out.
       invoke.resolve(["idToken": NSNull()])
@@ -74,20 +59,17 @@ class AppleSignIn: NSObject, ASAuthorizationControllerDelegate,
   }
 }
 
-/// One trip to Settings for sharing more contacts: waits for the app to leave the screen and come
-/// back, then answers with the cards that became visible meanwhile.
+/// One trip to Settings: waits for the app to leave the screen and come back, then answers.
 class SettingsTrip {
   private let invoke: Invoke
-  private let before: Set<String>
   private var left = false
   private var answered = false
   private var watching: [NSObjectProtocol] = []
   /// Called once answered.
   var done: () -> Void = {}
 
-  init(invoke: Invoke, before: Set<String>) {
+  init(invoke: Invoke) {
     self.invoke = invoke
-    self.before = before
     let center = NotificationCenter.default
     watching.append(
       center.addObserver(
@@ -102,17 +84,12 @@ class SettingsTrip {
       })
   }
 
-  /// Back from Settings (or replaced by a newer trip): the cards the app sees now and didn't before.
+  /// Back from Settings (or replaced by a newer trip).
   func answer() {
     if answered { return }
     answered = true
     stopWatching()
-    let before = self.before
-    let invoke = self.invoke
-    DispatchQueue.global(qos: .userInitiated).async {
-      let shared = PhoneSheetsPlugin.visibleCards().subtracting(before)
-      invoke.resolve(["ids": Array(shared)])
-    }
+    invoke.resolve()
     done()
   }
 
@@ -144,6 +121,11 @@ class PhoneSheetsPlugin: Plugin {
   @objc public func signInWithApple(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(SignInArgs.self)
     DispatchQueue.main.async {
+      // Apple's sheet is up already: it answers its own call; this one waits for nothing.
+      if self.signIn != nil {
+        invoke.reject("Sign in with Apple is open already.")
+        return
+      }
       let request = ASAuthorizationAppleIDProvider().createRequest()
       // The app shows the account's email; it never asks for a name.
       request.requestedScopes = [.email]
@@ -152,11 +134,9 @@ class PhoneSheetsPlugin: Plugin {
       let signIn = AppleSignIn(
         invoke: invoke, anchor: { [weak self] in self?.window() ?? ASPresentationAnchor() })
       signIn.done = { [weak self, weak signIn] in
-        // Only if it's still this one: a newer sign-in may have taken its place.
+        // Only if it is still the one kept.
         if let self = self, let signIn = signIn, self.signIn === signIn { self.signIn = nil }
       }
-      // A sign-in still open is replaced: answer its call so nothing waits on it.
-      self.signIn?.abandon()
       self.signIn = signIn
       controller.delegate = signIn
       controller.presentationContextProvider = signIn
@@ -170,34 +150,21 @@ class PhoneSheetsPlugin: Plugin {
     invoke.resolve()
   }
 
-  /// The ids of the cards the app can see now.
-  static func visibleCards() -> Set<String> {
-    var ids = Set<String>()
-    let request = CNContactFetchRequest(keysToFetch: [CNContactIdentifierKey as CNKeyDescriptor])
-    try? CNContactStore().enumerateContacts(with: request) { contact, _ in
-      ids.insert(contact.identifier)
-    }
-    return ids
-  }
-
-  @objc public func shareMoreContacts(_ invoke: Invoke) throws {
-    DispatchQueue.global(qos: .userInitiated).async {
-      let before = Self.visibleCards()
-      DispatchQueue.main.async {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else {
-          invoke.reject("Couldn't open Settings.")
-          return
-        }
-        let trip = SettingsTrip(invoke: invoke, before: before)
-        trip.done = { [weak self, weak trip] in
-          if let self = self, let trip = trip, self.trip === trip { self.trip = nil }
-        }
-        // A trip still waiting is replaced: answer its call so nothing waits on it.
-        self.trip?.answer()
-        self.trip = trip
-        UIApplication.shared.open(url) { opened in
-          if !opened { trip.fail("Couldn't open Settings.") }
-        }
+  @objc public func openSettingsAndWait(_ invoke: Invoke) {
+    DispatchQueue.main.async {
+      guard let url = URL(string: UIApplication.openSettingsURLString) else {
+        invoke.reject("Couldn't open Settings.")
+        return
+      }
+      let trip = SettingsTrip(invoke: invoke)
+      trip.done = { [weak self, weak trip] in
+        if let self = self, let trip = trip, self.trip === trip { self.trip = nil }
+      }
+      // A trip still waiting is replaced: answer its call so nothing waits on it.
+      self.trip?.answer()
+      self.trip = trip
+      UIApplication.shared.open(url) { opened in
+        if !opened { trip.fail("Couldn't open Settings.") }
       }
     }
   }

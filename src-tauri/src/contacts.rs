@@ -221,13 +221,13 @@ fn storage_error(message: String) -> ApiError {
     ApiError::new(ErrorKind::Storage, message)
 }
 
-/// The cards the app may read, for the picker. `shared`: the cards just shared in Settings, after
-/// a trip there to share more.
+/// The cards the app may read, for the picker. `before`: the cards the app could see before a trip
+/// to Settings to share more, if it just made one.
 fn list(
     app: &AppHandle,
     store: &CNContactStore,
     access: Access,
-    shared: Option<Vec<String>>,
+    before: Option<Vec<String>>,
 ) -> Result<ContactList, ApiError> {
     let limited = match access {
         Access::NotAsked => return Ok(ContactList::NotAsked),
@@ -237,8 +237,11 @@ fn list(
     };
     let cards = read_cards(store)
         .map_err(|e| storage_error(format!("Couldn't read your contacts: {e}")))?;
-    let chosen = match (shared, access) {
-        (Some(ids), _) => Chosen::shared_in_settings(ids, limited),
+    let chosen = match (before, access) {
+        (Some(before), _) => {
+            let now: Vec<String> = cards.iter().map(|c| c.id.clone()).collect();
+            Chosen::shared_in_settings(&before, &now, limited)
+        }
         // Shared just now: everyone the app can see was chosen in Apple's sheet a moment ago.
         (None, Access::Limited { just_now: true }) => Chosen::Everyone,
         (None, _) => Chosen::Nobody,
@@ -271,24 +274,30 @@ pub async fn list_contacts(app: AppHandle, ask: bool) -> Result<ContactList, Api
 }
 
 /// Sends the user to the app's page in iOS Settings to share more contacts (when only some are
-/// shared, on iPhone), then answers the cards, with `picked` the ones just shared (and not in the
+/// shared, on iPhone), then answers the cards, with `picked` the ones shared there (and not in the
 /// list yet).
 #[tauri::command]
 pub async fn share_more_contacts(app: AppHandle) -> Result<ContactList, ApiError> {
     tauri::async_runtime::spawn_blocking(move || {
+        // SAFETY: a new store, as in list_contacts.
+        let store = unsafe { CNContactStore::new() };
+        let before: Vec<String> = read_cards(&store)
+            .map_err(|e| storage_error(format!("Couldn't read your contacts: {e}")))?
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
         #[cfg(target_os = "ios")]
-        let shared = {
+        {
             use tauri_plugin_phone_sheets::PhoneSheetsExt;
             app.phone_sheets()
-                .share_more_contacts()
-                .map_err(storage_error)?
-        };
-        #[cfg(not(target_os = "ios"))]
-        let shared: Vec<String> = Vec::new();
-        // SAFETY: as in list_contacts.
+                .open_settings_and_wait()
+                .map_err(storage_error)?;
+        }
+        // A new store after the trip, so it reads what's shared now.
+        // SAFETY: as above.
         let store = unsafe { CNContactStore::new() };
         let access = access(&store, false).map_err(storage_error)?;
-        list(&app, &store, access, Some(shared))
+        list(&app, &store, access, Some(before))
     })
     .await
     .map_err(|e| storage_error(e.to_string()))?

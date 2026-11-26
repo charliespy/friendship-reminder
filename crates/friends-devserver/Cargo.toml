@@ -10,5 +10,6 @@ publish = false
 [dependencies]
 friends-core = { path = "../friends-core" }
 chrono = { workspace = true, features = ["clock"] }
+serde.workspace = true
 serde_json.workspace = true
 tiny_http = "0.12"

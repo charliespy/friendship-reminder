@@ -156,12 +156,12 @@ export function SettingsPane({
   access?: NotificationAccessState;
 }) {
   const notify = useAction();
-  // Turning reminders on asks iOS too, unless it's known to allow them (it asks only the first
-  // time; after that it just answers).
+  // Turning reminders on asks iOS too, unless it has answered already (or, when its answer
+  // couldn't be read, in case it hasn't). A failure shows under the toggle.
   const setNotifications = (on: boolean) =>
     notify.run(async () => {
       await api.setNotifications(on);
-      if (on && access && access.access !== "allowed") await access.allow();
+      if (on && access && (access.access === "notAsked" || access.access === null)) await access.ask();
     });
   const [login, setLogin] = useState<boolean | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
