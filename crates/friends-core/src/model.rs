@@ -359,12 +359,12 @@ impl Data {
         let mut moved = false;
         let mut pushes = 0;
         // Worked out only for someone behind: the same for everyone, but it takes a few pushes.
-        let mut skip_from = None;
+        let mut cached_start = None;
         let mut last_missed = None;
         while last_day_of_run(person.next_target, rule) < today && pushes < MAX_PUSHES {
             last_missed = Some(person.next_target);
-            let skip_from = *skip_from.get_or_insert_with(|| Self::skip_from(rule, ranges, today));
-            let from = person.next_target.max(skip_from);
+            let start = *cached_start.get_or_insert_with(|| Self::skip_from(rule, ranges, today));
+            let from = person.next_target.max(start);
             person.apply(push_missed_schedule(from, rule, ranges));
             pushes += 1;
             moved = true;

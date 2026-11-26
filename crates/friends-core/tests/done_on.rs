@@ -349,3 +349,31 @@ fn after_months_away_a_long_blocked_range_still_leaves_the_latest_missed_day() {
         );
     }
 }
+
+#[test]
+fn after_weeks_away_the_order_of_blocked_ranges_does_not_change_the_plan() {
+    // The same ranges, listed in both orders (another device may hold them the other way round).
+    let start = date(2026, 7, 1);
+    let thursday = date(2026, 11, 26);
+    let ranges = [
+        (date(2026, 9, 1), date(2026, 10, 20)),
+        (date(2026, 10, 21), date(2026, 11, 20)),
+        (date(2026, 11, 23), date(2026, 11, 23)),
+    ];
+    let plan_with = |ranges: &[(NaiveDate, NaiveDate)]| {
+        let mut data = Data::default();
+        data.set_day_setting(DayToggle::WeekdaysOnly, None, start)
+            .unwrap();
+        for (from, to) in ranges {
+            data.add_blocked(*from, *to, "Away", start).unwrap();
+        }
+        let id = data.add_person("Ada", 30, start, start).unwrap();
+        data.catch_up(thursday);
+        plan(&data, id)
+    };
+    let reversed: Vec<_> = ranges.iter().rev().copied().collect();
+    // Mon Aug 31 was the day missed; Mon Nov 23 is blocked, so Tue Nov 24 is the target.
+    let expected = (date(2026, 11, 24), true, Some(date(2026, 8, 31)));
+    assert_eq!(plan_with(&ranges), expected);
+    assert_eq!(plan_with(&reversed), expected);
+}
