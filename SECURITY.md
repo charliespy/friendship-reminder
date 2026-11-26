@@ -12,9 +12,11 @@ Friendship Reminder stores your list of people, blocked dates and settings in on
 each device: on the Mac in `~/Library/Application Support/io.github.charliespy.friends/`, on
 iPhone in the app's own data folder. Notifications are local notifications. On the Mac the app
 sends each one when it is due; on iPhone it hands iOS the coming ones ahead of time (up to 60,
-each with the person's name in it), since iOS stops the app soon after it leaves the screen.
-There are no analytics. Unless you sign in, your people, blocked dates and settings never leave
-the device.
+each with the person's name in it), since iOS stops the app soon after it leaves the screen. iOS
+keeps them until the app next opens and books them again, so a change made on another device
+reaches them only then. There are no analytics. Unless you sign in, your people, blocked dates
+and settings never leave the device, apart from the backups you make of it (Time Machine on the
+Mac, iCloud or computer backups on iPhone).
 
 Signing in is optional. You can sign in with Apple to a Friendship Reminder account, which keeps
 your list in sync between the Mac and iPhone apps. Only then does Friendship Reminder use the
@@ -30,11 +32,11 @@ Keychain.
 While you're signed in, Friendship Reminder syncs your list with the account: each person's name, how often to
 reach out and when you were last in touch; each blocked range's dates and label; and the "which
 days count" setting. It sends them when they change and checks for changes from your other devices
-every few minutes. Deleting something keeps an empty row on the server saying it was deleted, so
-your other devices delete it too. The database's rules let each account read and write only its
-own rows; signed-out requests get nothing. Reminder dates, which reminders were sent and the other
-settings stay on the device. Signing out stops syncing; your list stays on the device. If you never sign
-in, Friendship Reminder sends nothing over the network.
+every few minutes (on iPhone, while the app is open). Deleting something keeps an empty row on the
+server saying it was deleted, so your other devices delete it too. The database's rules let each
+account read and write only its own rows; signed-out requests get nothing. Reminder dates, which
+reminders were sent and the other settings stay on the device. Signing out stops syncing; your
+list stays on the device. If you never sign in, Friendship Reminder sends nothing over the network.
 
 ## Supported versions
 
