@@ -59,17 +59,23 @@ export function ContactPicker({
   // runs effects twice in development).
   const started = useRef(false);
 
+  // The ticks as of this render, for answers that arrive later.
+  const pickedNow = useRef(picked);
+  useEffect(() => {
+    pickedNow.current = picked;
+  }, [picked]);
+
   const take = (list: ContactList) => {
     if (!live.current) return;
     if (list.status === "allowed") {
-      // The people just chosen join anyone ticked already, who keep how often they had.
-      const fresh = list.picked;
-      setPicked((was) => {
-        const next = new Map(was);
-        for (const id of fresh) if (!next.has(id)) next.set(id, DEFAULT_FREQUENCY);
-        return next;
-      });
-      setChosen(fresh.length > 0 ? fresh : null);
+      // Anyone ticked who can still be added keeps how often they had (someone un-shared in
+      // Settings drops out); the people just chosen join them.
+      const open = new Set(list.contacts.filter((c) => !c.added).map((c) => c.id));
+      const next = new Map([...pickedNow.current].filter(([id]) => open.has(id)));
+      for (const id of list.picked) if (!next.has(id)) next.set(id, DEFAULT_FREQUENCY);
+      setPicked(next);
+      // How often shows everyone ticked, so what it shows is what Add adds.
+      setChosen(list.picked.length > 0 ? [...next.keys()] : null);
     }
     setLoaded(list);
   };
@@ -97,10 +103,11 @@ export function ContactPicker({
   };
 
   const contacts = useMemo(() => (loaded.status === "allowed" ? loaded.contacts : []), [loaded]);
-  const shown = useMemo(
-    () => (chosen ? contacts.filter((c) => chosen.includes(c.id)) : contacts.filter((c) => matches(c.name, query))),
-    [contacts, chosen, query],
-  );
+  const shown = useMemo(() => {
+    if (!chosen) return contacts.filter((c) => matches(c.name, query));
+    const ids = new Set(chosen);
+    return contacts.filter((c) => ids.has(c.id));
+  }, [contacts, chosen, query]);
   const count = picked.size;
 
   const flip = (id: string, on: boolean) => {

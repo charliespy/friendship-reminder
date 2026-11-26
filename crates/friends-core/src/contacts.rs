@@ -102,6 +102,19 @@ pub enum Chosen {
     Cards(Vec<String>),
 }
 
+impl Chosen {
+    /// After a trip to Settings to share more: the cards that became visible meanwhile (`shared`)
+    /// were picked there while the app still sees only some contacts (`still_limited`). If the user
+    /// turned on full access instead, every card is new to the app but nobody was picked.
+    pub fn shared_in_settings(shared: Vec<String>, still_limited: bool) -> Chosen {
+        if still_limited {
+            Chosen::Cards(shared)
+        } else {
+            Chosen::Nobody
+        }
+    }
+}
+
 /// The cards to go straight to "how often" for: the ones just chosen (in the order the picker shows
 /// them), leaving out people already in the list. Empty means the picker shows its list.
 pub fn just_chosen(choices: &[Choice], chosen: &Chosen) -> Vec<String> {

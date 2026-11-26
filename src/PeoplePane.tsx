@@ -148,7 +148,7 @@ function PersonRow({
     : `Reminder ${relativeDay(person.notificationDate, today)}, ${formatDay(person.notificationDate, today)}`;
   return (
     <li
-      className={highlighted ? "list-row is-highlighted" : "list-row"}
+      className={highlighted ? "list-row people-row is-highlighted" : "list-row people-row"}
       data-testid="person-row"
       data-person-id={person.id}
       data-overdue={person.overdue}

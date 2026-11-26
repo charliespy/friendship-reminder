@@ -9,8 +9,8 @@ export function useNotificationAccess() {
   const [access, setAccess] = useState<NotificationAccess | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Each read and each ask takes a number; an answer older than the latest is dropped, so a slow
-  // read can't undo what the user just allowed.
+  // Each read takes a number, and an answer to ask moves it on: an answer older than the latest
+  // is dropped, so a slow read can't undo what the user just allowed.
   const latest = useRef(0);
 
   useEffect(() => {
@@ -20,8 +20,8 @@ export function useNotificationAccess() {
       const n = ++latest.current;
       api.notificationAccess().then(
         (a) => live && n === latest.current && setAccess(a),
-        // Unknown: the card stays hidden, and turning reminders on in Settings still asks.
-        () => {},
+        // Unknown: offer to ask. Asking iOS again only answers what was decided.
+        () => live && n === latest.current && setAccess("notAsked"),
       );
     };
     read();
@@ -36,10 +36,11 @@ export function useNotificationAccess() {
   const allow = useCallback(async () => {
     setBusy(true);
     setError(null);
-    const n = ++latest.current;
     try {
       const answer = await api.allowNotifications();
-      if (n === latest.current) setAccess(answer);
+      // The user's answer wins over any read started while iOS was asking.
+      ++latest.current;
+      setAccess(answer);
     } catch (e) {
       setError(errorMessage(e));
     } finally {

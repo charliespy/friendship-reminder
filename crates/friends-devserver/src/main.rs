@@ -248,7 +248,10 @@ impl Dev {
                         }
                     }
                 }
-                Ok(self.contact_list(&Chosen::Cards(shared)))
+                Ok(self.contact_list(&Chosen::shared_in_settings(
+                    shared,
+                    self.contacts == Access::Limited,
+                )))
             }
             "import_contacts" => {
                 let people: Vec<NewPerson> =

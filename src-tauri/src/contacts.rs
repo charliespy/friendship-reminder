@@ -238,7 +238,7 @@ fn list(
     let cards = read_cards(store)
         .map_err(|e| storage_error(format!("Couldn't read your contacts: {e}")))?;
     let chosen = match (shared, access) {
-        (Some(ids), _) => Chosen::Cards(ids),
+        (Some(ids), _) => Chosen::shared_in_settings(ids, limited),
         // Shared just now: everyone the app can see was chosen in Apple's sheet a moment ago.
         (None, Access::Limited { just_now: true }) => Chosen::Everyone,
         (None, _) => Chosen::Nobody,

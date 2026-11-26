@@ -443,3 +443,15 @@ fn people_just_chosen_in_the_system_sheet_go_straight_to_how_often() {
     // A card that isn't among those the app can see is left out.
     assert!(just_chosen(&list, &Chosen::Cards(vec!["c9".into()])).is_empty());
 }
+
+#[test]
+fn turning_on_full_access_in_settings_picks_nobody() {
+    let shared = vec!["c2".to_string(), "c3".to_string()];
+    // Still sharing only some: the cards shared meanwhile were picked in Settings.
+    assert_eq!(
+        Chosen::shared_in_settings(shared.clone(), true),
+        Chosen::Cards(shared.clone())
+    );
+    // Full access now: every card is new to the app, but nobody was picked; the list shows instead.
+    assert_eq!(Chosen::shared_in_settings(shared, false), Chosen::Nobody);
+}

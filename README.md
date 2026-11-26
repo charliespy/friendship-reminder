@@ -105,7 +105,9 @@ where the phone does:
   "how often". To share more, Share more contacts… opens the app's page in iOS Settings (Contacts ›
   Edit Selected Contacts); whoever was shared there goes to "how often" on the way back (also in
   `plugins/phone-sheets`). Apple's own sheet for sharing more, `contactAccessPicker`, opens blank
-  on iPhones from iOS 26 on (FB20929400), so the app doesn't use it.
+  on iPhones from iOS 26 on (FB20929400), so the app doesn't use it. Turning on full access there
+  shows the whole list instead (nobody was picked), and changing the access level makes iOS restart
+  the app, so the picker starts over.
 - Its home-screen name is **Friendship**: iOS cuts longer names short.
 - No menu bar, Dock icon or open at login.
 
