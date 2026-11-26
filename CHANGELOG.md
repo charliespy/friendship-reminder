@@ -9,31 +9,34 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-25
+
 ### New
 
-- You can sign in with Apple in Preferences → Settings. While you're signed in, your list syncs
-  with your Friendship Reminder account, ready for a later iPhone app: the people, blocked dates and the day
-  setting. Signed out, everything stays on this Mac as before.
-- Friendship Reminder for iPhone, with the same look and the same lists: Today, People, Blocked dates and
-  Settings as tabs. Reminders come as notifications at 9 in the morning on the day. Sign in with
-  Apple on both to keep the Mac and iPhone in sync. (Built from source for now; not in the App
-  Store yet.)
-- **Custom day** replaces "Any day" in Settings: pick the days of the week you're free (any of
-  Monday to Sunday), and Friendship Reminder only aims for those. All seven start picked, which works the way
-  "Any day" did. Changes to the days to aim for now wait for **Save** (or Discard), since saving
-  reschedules everyone.
-- **Done** now asks when you were in touch: on the day Friendship Reminder suggested, today, or another day
-  from a calendar. The next reminder counts from that day.
+- You can sign in with Apple in Preferences → Settings. While you're signed in, your people,
+  blocked dates and day setting sync with your Friendship Reminder account. Signed out, everything
+  stays on this Mac as before.
+- **Custom day** replaces "Any day" in Settings: pick the days of the week you're free, and
+  Friendship Reminder only aims for those. All seven start picked, which works the way "Any day"
+  did. Changes to these days now wait for **Save** (or Discard), since saving reschedules everyone.
+- **Done** now asks when you were in touch: on the suggested day, today, or another day from a
+  calendar. The next reminder counts from that day.
+- An iPhone version is on the way: sign in with Apple on both to keep them in sync.
 
 ### Changed
 
-- Friends is now called **Friendship Reminder**. Your list, your sign-in and "Open at login"
-  carry over. It installs next to the old Friends app: quit Friends, open Friendship Reminder
-  from Applications once, then move Friends to the Bin.
-- Friendship Reminder now also has a Dock icon. Click it to open Preferences; the menu bar icon works as
-  before.
-- A calmer look that matches the Mac's own apps, like System Settings: neutral greys, and one
-  colour, your Mac's accent colour (System Settings → Appearance). Missed days are still orange.
+- Friends is now called **Friendship Reminder**. Your list, your sign-in and "Open at login" carry
+  over. It installs next to the old Friends app: quit Friends, open Friendship Reminder from
+  Applications once, then move Friends to the Bin.
+- Friendship Reminder now also has a Dock icon. Click it to open Preferences; the menu bar icon
+  works as before.
+- A calmer look that matches the Mac's own apps, like System Settings: neutral greys and one
+  colour, your Mac's accent colour. Missed days are still orange.
+
+### Good to know
+
+- After you update, the older version of the app can't read a list that uses Custom day, so update
+  every Mac you use.
 
 ## [0.1.2] - 2026-11-21
 
