@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0A7AC7500000000000000B1 /* Contacts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0A7AC7500000000000000F1 /* Contacts.framework */; };
 		3F9ABCD0F4655FB7182129D8 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6236ECDDC01C6C1FDD5A10F7 /* CoreGraphics.framework */; };
 		42ABD18CAF67FEC82B615D39 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D0F4B6F8A9B2E965D87A636A /* libapp.a */; };
 		4FDC88337FB24C5DA6268C30 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 56E2B3F26B4CBA031F9AEBCD /* Metal.framework */; };
@@ -25,6 +26,7 @@
 		220213397E0386248A3B62EC /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		2CA74B7650902A0B24289B12 /* sync.rs */ = {isa = PBXFileReference; path = sync.rs; sourceTree = "<group>"; };
 		37C9F56422696AD260283F1D /* friends_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = friends_iOS.entitlements; sourceTree = "<group>"; };
+		C0A7AC7500000000000000F1 /* Contacts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Contacts.framework; path = System/Library/Frameworks/Contacts.framework; sourceTree = SDKROOT; };
 		387B65889EEAAC04FAA44829 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		56E2B3F26B4CBA031F9AEBCD /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		6236ECDDC01C6C1FDD5A10F7 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
@@ -52,6 +54,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				42ABD18CAF67FEC82B615D39 /* libapp.a in Frameworks */,
+				C0A7AC7500000000000000B1 /* Contacts.framework in Frameworks */,
 				3F9ABCD0F4655FB7182129D8 /* CoreGraphics.framework in Frameworks */,
 				4FDC88337FB24C5DA6268C30 /* Metal.framework in Frameworks */,
 				6D49139E11082CE8B725739D /* MetalKit.framework in Frameworks */,
@@ -91,6 +94,7 @@
 		5407D79229FE0AB94B607E53 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C0A7AC7500000000000000F1 /* Contacts.framework */,
 				6236ECDDC01C6C1FDD5A10F7 /* CoreGraphics.framework */,
 				D0F4B6F8A9B2E965D87A636A /* libapp.a */,
 				56E2B3F26B4CBA031F9AEBCD /* Metal.framework */,
