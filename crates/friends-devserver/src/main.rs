@@ -291,7 +291,7 @@ impl Dev {
             Access::Allowed => false,
             Access::Limited => true,
         };
-        let cards = ADDRESS_BOOK
+        let cards: Vec<Card> = ADDRESS_BOOK
             .iter()
             .filter(|(id, _)| !limited || self.shared.iter().any(|s| s == id))
             .map(|(id, name)| Card {
@@ -300,8 +300,9 @@ impl Dev {
                 links: self.card_links.get(*id).cloned().unwrap_or_default(),
             })
             .collect();
+        // Who's new is worked out from the cards themselves, as the app does.
+        let now: Vec<String> = cards.iter().map(|c| c.id.clone()).collect();
         let contacts = choices(self.app.data(), cards);
-        let now: Vec<String> = contacts.iter().map(|c| c.id.clone()).collect();
         let chosen = Chosen::when_listing(limited, just_shared_some, before_trip, &now);
         let picked = just_chosen(&contacts, &chosen);
         json!({ "status": "allowed", "contacts": contacts, "limited": limited, "picked": picked })

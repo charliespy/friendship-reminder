@@ -427,7 +427,10 @@ fn sign_in(app: &AppHandle, attempt: &str) -> Result<Shown, String> {
             return Ok(account.view());
         }
         Err(e) => {
-            account.waiting().finish(attempt);
+            // Cancelled meanwhile: the user asked to stop, so no error to show.
+            if !account.waiting().finish(attempt) {
+                return Ok(account.view());
+            }
             return Err(e);
         }
     };

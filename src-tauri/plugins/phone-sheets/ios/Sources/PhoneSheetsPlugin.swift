@@ -122,8 +122,8 @@ class SettingsTrip {
 class PhoneSheetsPlugin: Plugin {
   /// The sign-in under way: kept alive while Apple's sheet shows.
   private var signIn: AppleSignIn?
-  /// A sign-in cancelled before its sheet came up.
-  private var closedAttempt: String?
+  /// Sign-ins cancelled before their sheet came up (each is asked for at most once).
+  private var closedAttempts = Set<String>()
   /// The trip to Settings under way, if any.
   private var trip: SettingsTrip?
 
@@ -134,6 +134,11 @@ class PhoneSheetsPlugin: Plugin {
   @objc public func signInWithApple(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(SignInArgs.self)
     DispatchQueue.main.async {
+      // Cancelled before its sheet came up: it ends as if closed.
+      if self.closedAttempts.remove(args.attempt) != nil {
+        invoke.resolve(["idToken": NSNull()])
+        return
+      }
       // Apple's sheet is up already: it answers its own call; this one waits for nothing.
       if self.signIn != nil {
         invoke.reject("Sign in with Apple is open already.")
@@ -147,12 +152,6 @@ class PhoneSheetsPlugin: Plugin {
       // Not on screen yet (or any more): Apple's sheet would have nowhere to show.
       guard self.window() != nil else {
         invoke.reject("Couldn't show Sign in with Apple. Try again.")
-        return
-      }
-      // Cancelled before its sheet came up: it ends as if closed.
-      if self.closedAttempt == args.attempt {
-        self.closedAttempt = nil
-        invoke.resolve(["idToken": NSNull()])
         return
       }
       let signIn = AppleSignIn(
@@ -180,7 +179,7 @@ class PhoneSheetsPlugin: Plugin {
         if #available(iOS 16.0, *) { signIn.controller?.cancel() }
       } else {
         // Its sheet isn't up yet: it closes as soon as it would open.
-        self.closedAttempt = args.attempt
+        self.closedAttempts.insert(args.attempt)
       }
       invoke.resolve()
     }
