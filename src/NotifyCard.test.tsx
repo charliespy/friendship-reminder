@@ -57,11 +57,20 @@ describe("NotifyCard", () => {
     expect(allow).toHaveBeenCalledTimes(1);
   });
 
-  it("goes away on Not now without asking", () => {
-    renderCard(view([someone]), notify());
+  it("goes away on Not now without asking, until the app opens again", () => {
+    const { rerender, unmount } = renderCard(view([someone]), notify());
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
     expect(title()).toBeNull();
     expect(allow).not.toHaveBeenCalled();
+
+    // A new view or a fresh read of access doesn't bring it back.
+    rerender(<NotifyCard view={view([someone, { ...someone, id: 2 }])} notify={notify()} afterClose={() => null} />);
+    expect(title()).toBeNull();
+
+    // The next time the app opens, it asks again.
+    unmount();
+    renderCard(view([someone]), notify());
+    expect(title()).toBeTruthy();
   });
 
   it("shows what went wrong asking", () => {

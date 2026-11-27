@@ -154,7 +154,16 @@ describe("ContactPicker adding", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add 1 person" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Couldn't save the list.");
     expect(onAdded).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Kofi Mensah")).toBeTruthy();
+    expect((screen.getByLabelText("Kofi Mensah") as HTMLInputElement).checked).toBe(true);
+
+    // The user can try again.
+    importContacts.mockImplementation(() => Promise.resolve({} as View));
+    const add = screen.getByRole("button", { name: "Add 1 person" }) as HTMLButtonElement;
+    expect(add.disabled).toBe(false);
+    fireEvent.click(add);
+    await vi.waitFor(() => expect(onAdded).toHaveBeenCalledWith(1));
+    expect(importContacts).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("closes from its close button", async () => {
@@ -193,7 +202,54 @@ describe("ContactPicker access", () => {
     listContacts.mockImplementation(() => Promise.resolve({ status: "denied" }));
     renderPicker();
     expect(await screen.findByText("Friendship Reminder can't see your contacts")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByText(/System Settings › Privacy & Security › Contacts/)).toBeTruthy();
+
+    listContacts.mockImplementation(() => Promise.resolve(allowed([renee])));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByLabelText("Renée Martin")).toBeTruthy();
+    expect(listContacts.mock.calls).toEqual([[false], [false]]);
+  });
+});
+
+describe("ContactPicker on iPhone", () => {
+  beforeEach(() => document.documentElement.classList.add("phone-app"));
+  afterEach(() => document.documentElement.classList.remove("phone-app"));
+
+  it("says what iOS asks next", async () => {
+    listContacts.mockImplementation(() => Promise.resolve({ status: "notAsked" }));
+    renderPicker();
+    expect(await screen.findByText(/Next, iOS asks whether to share your contacts/)).toBeTruthy();
+    expect(screen.queryByText(/macOS/)).toBeNull();
+    // A tap there opens no keyboard on its own.
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Continue" }));
+  });
+
+  it("says where to turn access on in iOS Settings", async () => {
+    listContacts.mockImplementation(() => Promise.resolve({ status: "denied" }));
+    renderPicker();
+    expect(await screen.findByText(/Settings › Apps › Friendship Reminder/)).toBeTruthy();
+    expect(screen.queryByText(/System Settings/)).toBeNull();
+  });
+
+  it("doesn't focus the search, which would open the keyboard", async () => {
+    renderPicker();
+    await screen.findByLabelText("Renée Martin");
+    expect(document.activeElement).not.toBe(screen.getByLabelText("Search contacts"));
+  });
+});
+
+describe("ContactPicker on the Mac", () => {
+  it("says what macOS asks next, and focuses Continue", async () => {
+    listContacts.mockImplementation(() => Promise.resolve({ status: "notAsked" }));
+    renderPicker();
+    expect(await screen.findByText(/Next, macOS asks whether Friendship Reminder may use your contacts/)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Continue" }));
+  });
+
+  it("focuses the search", async () => {
+    renderPicker();
+    await screen.findByLabelText("Renée Martin");
+    expect(document.activeElement).toBe(screen.getByLabelText("Search contacts"));
   });
 });
 
@@ -207,20 +263,26 @@ describe("ContactPicker with only some contacts shared", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Choose others…" }));
     expect(shownNames()).toEqual(["Renée Martin", "Kofi Mensah"]);
+    // Whoever was chosen in Apple's sheet stays ticked, at Monthly.
+    expect((screen.getByLabelText("Kofi Mensah") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("How often for Kofi Mensah") as HTMLSelectElement).value).toBe("30");
+    expect(screen.getByRole("button", { name: "Add 1 person" })).toBeTruthy();
   });
 
   it("keeps the ticks of people still shared after Share more, drops the others, and adds those just shared", async () => {
     listContacts.mockImplementation(() => Promise.resolve(allowed([renee, kofi], { limited: true })));
     // Back from Settings: Kofi is no longer shared, Priya was just shared.
-    shareMoreContacts.mockImplementation(() =>
-      Promise.resolve(allowed([renee, priya], { limited: true, picked: ["c4"] })),
-    );
+    let back: (list: ContactList) => void = () => {};
+    shareMoreContacts.mockImplementation(() => new Promise((resolve) => (back = resolve)));
     renderPicker();
     fireEvent.click(await screen.findByLabelText("Renée Martin"));
     fireEvent.change(screen.getByLabelText("How often for Renée Martin"), { target: { value: "365" } });
     fireEvent.click(screen.getByLabelText("Kofi Mensah"));
 
     fireEvent.click(screen.getByRole("button", { name: "Share more contacts…" }));
+    // While the user is away in Settings.
+    expect(screen.getByRole("status").textContent).toBe("Share more in Settings, then come back here.");
+    back(allowed([renee, priya], { limited: true, picked: ["c4"] }));
     expect(await screen.findByRole("heading", { name: "How often?" })).toBeTruthy();
     expect(shareMoreContacts).toHaveBeenCalledTimes(1);
     // Everyone ticked shows, so what's shown is what Add adds.
