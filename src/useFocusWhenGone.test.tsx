@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useFocusWhenGone } from "./useFocusWhenGone";
 
 function Card({ shown }: { shown: boolean }) {
@@ -52,5 +52,17 @@ describe("useFocusWhenGone", () => {
     await Promise.resolve();
     rerender(<Card shown={false} />);
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it("still sends focus on when the window lost focus meanwhile (iOS asking about notifications)", async () => {
+    const { rerender } = render(<Card shown />);
+    const notNow = screen.getByRole("button", { name: "Not now" });
+    notNow.focus();
+    const hasFocus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    notNow.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    await Promise.resolve();
+    hasFocus.mockRestore();
+    rerender(<Card shown={false} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
   });
 });
