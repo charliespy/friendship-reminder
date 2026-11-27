@@ -19,6 +19,14 @@ describe("matches (searching Contacts)", () => {
     expect(matches("Guðrún Þórsdóttir", "gudrun thorsdottir")).toBe(true);
     expect(matches("Ħelena Borg", "helena")).toBe(true);
     expect(matches("Áŋŋá Ŀlull", "anna llull")).toBe(true);
+    expect(matches("Leyla Məmmədova", "mammadova")).toBe(true);
+    expect(matches("Ĳsbrand Kok", "ijsbrand")).toBe(true);
+  });
+
+  it("leaves out Catalan's middle dot, and takes a straight apostrophe for a curly one", () => {
+    expect(matches("Marcel·lí Puig", "marcelli")).toBe(true);
+    expect(matches("Siobhán O’Brien", "o'brien")).toBe(true);
+    expect(matches("Siobhán O'Brien", "o’brien")).toBe(true);
   });
 
   it("still finds names typed with those letters", () => {

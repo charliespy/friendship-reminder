@@ -19,7 +19,8 @@ type Loaded = { status: "loading"; text?: string } | ContactList | { status: "fa
 
 /**
  * Letters that are their own letter, not a plain one plus an accent mark, so dropping marks leaves
- * them as they are: spelled the way an English keyboard would type them.
+ * them as they are: spelled the way an English keyboard would type them. Also Catalan's middle dot
+ * ("l·l"), which a keyboard leaves out, and curly apostrophes, which it types straight.
  */
 const PLAIN: Record<string, string> = {
   ı: "i",
@@ -35,6 +36,13 @@ const PLAIN: Record<string, string> = {
   ß: "ss",
   æ: "ae",
   œ: "oe",
+  ə: "a",
+  ĳ: "ij",
+  ſ: "s",
+  "·": "",
+  "’": "'",
+  "‘": "'",
+  "ʼ": "'",
 };
 
 /** How a search matches a name: any order of words, ignoring case and accents. */

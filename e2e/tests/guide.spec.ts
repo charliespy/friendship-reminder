@@ -20,6 +20,7 @@ test("a new user signs in or not, then picks people from Contacts", async ({ pag
   // "ı" is a letter of its own, not "i" with an accent, and plain "i" still finds it.
   await page.getByLabel("Search contacts").fill("yilmaz");
   await expect(page.getByRole("checkbox", { name: "Elif Yılmaz" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Kofi Mensah" })).toHaveCount(0);
   await page.getByLabel("Search contacts").fill("");
   await page.getByRole("checkbox", { name: "Kofi Mensah" }).check();
   // Each person ticked gets their own "how often", monthly to start with.
