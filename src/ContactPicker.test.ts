@@ -16,6 +16,9 @@ describe("matches (searching Contacts)", () => {
     expect(matches("Jörg Strauß", "strauss")).toBe(true);
     expect(matches("Æsa Brænd", "aesa braend")).toBe(true);
     expect(matches("Chloë Cœur", "coeur")).toBe(true);
+    expect(matches("Guðrún Þórsdóttir", "gudrun thorsdottir")).toBe(true);
+    expect(matches("Ħelena Borg", "helena")).toBe(true);
+    expect(matches("Áŋŋá Ŀlull", "anna llull")).toBe(true);
   });
 
   it("still finds names typed with those letters", () => {

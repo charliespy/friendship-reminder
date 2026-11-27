@@ -21,15 +21,26 @@ type Loaded = { status: "loading"; text?: string } | ContactList | { status: "fa
  * Letters that are their own letter, not a plain one plus an accent mark, so dropping marks leaves
  * them as they are: spelled the way an English keyboard would type them.
  */
-const PLAIN: Record<string, string> = { ı: "i", ł: "l", ø: "o", đ: "d", ß: "ss", æ: "ae", œ: "oe" };
+const PLAIN: Record<string, string> = {
+  ı: "i",
+  ł: "l",
+  ŀ: "l",
+  ø: "o",
+  đ: "d",
+  ð: "d",
+  þ: "th",
+  ħ: "h",
+  ŧ: "t",
+  ŋ: "n",
+  ß: "ss",
+  æ: "ae",
+  œ: "oe",
+};
 
 /** How a search matches a name: any order of words, ignoring case and accents. */
 function fold(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[ıłøđßæœ]/g, (c) => PLAIN[c] ?? c);
+  const unmarked = text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  return Array.from(unmarked, (c) => PLAIN[c] ?? c).join("");
 }
 
 export function matches(name: string, query: string): boolean {
