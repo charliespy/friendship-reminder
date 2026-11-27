@@ -311,6 +311,7 @@ export function PeoplePane({ view, shown = null }: { view: View; shown?: Shown |
         {!adding && (
           <button
             ref={addButton}
+            id="add-person"
             className="btn btn-primary"
             onClick={() => (setAdding(true), setImporting(false), setEditing(null))}
           >

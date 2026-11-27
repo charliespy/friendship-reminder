@@ -55,8 +55,11 @@ test("iOS is asked about notifications only when reminders are turned on, not at
   await page.reload();
   const card = page.getByRole("region", { name: "Get reminded on the day" });
   await expect(card).toBeVisible();
-  await card.getByRole("button", { name: "Not now" }).click();
+  // From the keyboard: the button goes away with the card, and focus goes to Today's heading.
+  await card.getByRole("button", { name: "Not now" }).focus();
+  await page.keyboard.press("Enter");
   await expect(card).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Today" })).toBeFocused();
   // Settings still offers it.
   await page.getByRole("tab", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Allow notifications" }).click();
@@ -70,8 +73,10 @@ test("iOS is asked about notifications only when reminders are turned on, not at
   // "Turn on reminders" on Today asks.
   await setNotificationAccess(request, "notAsked");
   await page.reload();
-  await card.getByRole("button", { name: "Turn on reminders" }).click();
+  await card.getByRole("button", { name: "Turn on reminders" }).focus();
+  await page.keyboard.press("Enter");
   await expect(card).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Today" })).toBeFocused();
 
   // Refused in iOS: Settings says where to turn them on.
   await setNotificationAccess(request, "denied");

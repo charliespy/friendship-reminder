@@ -159,6 +159,40 @@ test("on iPhone the guide fills the screen, without the tab bar", async ({ page,
   await expect(page.getByRole("tab", { name: /Today/ })).toBeVisible();
 });
 
+test("when the guide closes, focus goes to the screen now showing", async ({ page, request }) => {
+  // From the keyboard: the button pressed goes away with the guide.
+  const press = async (name: string) => {
+    await page.getByRole("button", { name }).focus();
+    await page.keyboard.press("Enter");
+  };
+
+  // Skip on the Mac: Add person, in the People pane.
+  await seedNewUser(request);
+  await openPreferences(page);
+  await press("Not now");
+  await press("Skip");
+  await expect(page.getByText("Nobody yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add person" })).toBeFocused();
+
+  // Adding people from Contacts on the Mac: Add person too.
+  await seedNewUser(request);
+  await setContactsAccess(request, "allowed");
+  await openPreferences(page);
+  await press("Not now");
+  await page.getByRole("checkbox", { name: "Ana Torres" }).check();
+  await page.getByRole("checkbox", { name: "Chloé Martin" }).check();
+  await press("Add 2 people");
+  await expect(page.getByTestId("person-row")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Add person" })).toBeFocused();
+
+  // Skip on iPhone: Today's heading.
+  await seedNewUser(request);
+  await page.goto("/phone.html");
+  await press("Not now");
+  await press("Skip");
+  await expect(page.getByRole("heading", { name: "Today" })).toBeFocused();
+});
+
 test("the link on a contact card opens the app at that person", async ({ page, request }) => {
   await seed(request, { people: SAMPLE });
   // Contacts were shared on an earlier import.

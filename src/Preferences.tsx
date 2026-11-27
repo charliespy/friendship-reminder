@@ -76,6 +76,12 @@ export function Preferences() {
       </main>
     </div>
   );
-  // A new user sees the first-run guide in place of the window's panes.
-  return view ? <WithGuide view={view}>{prefs}</WithGuide> : prefs;
+  // A new user sees the first-run guide in place of the window's panes; then People's Add person.
+  return view ? (
+    <WithGuide view={view} landing="add-person">
+      {prefs}
+    </WithGuide>
+  ) : (
+    prefs
+  );
 }

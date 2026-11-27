@@ -1,0 +1,87 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { useFocusWhenGone } from "./useFocusWhenGone";
+
+function Card({ shown }: { shown: boolean }) {
+  const focus = useFocusWhenGone(shown, () => document.getElementById("landing"));
+  return (
+    <>
+      <h2 id="landing" tabIndex={-1}>
+        Today
+      </h2>
+      <button>Elsewhere</button>
+      {shown && (
+        <section {...focus}>
+          <button>Not now</button>
+        </section>
+      )}
+    </>
+  );
+}
+
+afterEach(cleanup);
+
+describe("useFocusWhenGone", () => {
+  it("sends focus to the target when it goes away with the focused button", () => {
+    const { rerender } = render(<Card shown />);
+    screen.getByRole("button", { name: "Not now" }).focus();
+    rerender(<Card shown={false} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
+  });
+
+  it("moves nothing when focus wasn't inside (a tap on iPhone focuses nothing)", () => {
+    const { rerender } = render(<Card shown />);
+    rerender(<Card shown={false} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("never takes focus from somewhere the user moved it", () => {
+    const { rerender } = render(<Card shown />);
+    screen.getByRole("button", { name: "Not now" }).focus();
+    const elsewhere = screen.getByRole("button", { name: "Elsewhere" });
+    elsewhere.focus();
+    rerender(<Card shown={false} />);
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
+  it("moves nothing when focus left it for the page's background", async () => {
+    const { rerender } = render(<Card shown />);
+    const notNow = screen.getByRole("button", { name: "Not now" });
+    notNow.focus();
+    notNow.blur();
+    await Promise.resolve();
+    rerender(<Card shown={false} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("still sends focus on when the window lost focus meanwhile (iOS asking about notifications)", async () => {
+    const { rerender } = render(<Card shown />);
+    const notNow = screen.getByRole("button", { name: "Not now" });
+    notNow.focus();
+    const hasFocus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    notNow.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    await Promise.resolve();
+    hasFocus.mockRestore();
+    rerender(<Card shown={false} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
+  });
+
+  it("still sends focus on when a control inside went away and the rest stayed (Sign in, then Cancel)", () => {
+    function Swap({ shown, step }: { shown: boolean; step: 1 | 2 }) {
+      const focus = useFocusWhenGone(shown, () => document.getElementById("landing"));
+      return (
+        <>
+          <h2 id="landing" tabIndex={-1}>
+            Today
+          </h2>
+          {shown && <section {...focus}>{step === 1 ? <button>Sign in</button> : <button>Cancel</button>}</section>}
+        </>
+      );
+    }
+    const { rerender } = render(<Swap shown step={1} />);
+    screen.getByRole("button", { name: "Sign in" }).focus();
+    rerender(<Swap shown step={2} />);
+    rerender(<Swap shown={false} step={2} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
+  });
+});

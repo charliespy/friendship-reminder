@@ -7,6 +7,7 @@ import { api, type Account, type GuideStep, type View } from "./api";
 import { ContactPicker } from "./ContactPicker";
 import { CancelSignInButton, SignInWithAppleButton, waitingText } from "./SignInButtons";
 import { useAccount } from "./useAccount";
+import { useFocusWhenGone } from "./useFocusWhenGone";
 import { useAction } from "./useView";
 import appIcon from "../assets/icon.svg";
 
@@ -30,22 +31,35 @@ export function guideStep(view: View, account: Account | null): Step | null {
 
 /**
  * Shows the guide over the app while it has a step left, else the app (`children`). Waits for the
- * account before deciding, so the sign-in page doesn't flash up for someone signed in.
+ * account before deciding, so the sign-in page doesn't flash up for someone signed in. When the
+ * guide closes, focus goes to the element with the id `landing` in the app (it would be lost with
+ * the guide's button).
  */
-export function WithGuide({ view, phone = false, children }: { view: View; phone?: boolean; children: ReactNode }) {
+export function WithGuide({
+  view,
+  phone = false,
+  landing,
+  children,
+}: {
+  view: View;
+  phone?: boolean;
+  landing: string;
+  children: ReactNode;
+}) {
   const signIn = useAccount();
   const { account } = signIn;
   // "Not now" and "Skip": saved by the core, with an error shown if that fails.
   const finish = useAction();
   const done = (step: GuideStep) => finish.run(() => api.finishGuide(step));
   const finished = view.guide.signIn && view.guide.import;
+  const step = finished || !account ? null : guideStep(view, account);
+  const focus = useFocusWhenGone(step !== null, () => document.getElementById(landing));
   if (finished) return <>{children}</>;
   // The account answers at once; if it can't be read, the guide stays out of the way.
   if (!account) return signIn.loadError ? <>{children}</> : null;
-  const step = guideStep(view, account);
   if (!step) return <>{children}</>;
   return (
-    <div className={phone ? "phone guide guide-phone" : "guide"}>
+    <div className={phone ? "phone guide guide-phone" : "guide"} {...focus}>
       <div className="guide-body">
         {step === "signIn" ? (
           <SignInStep phone={phone} signIn={signIn} onSkip={() => done("signIn")} />

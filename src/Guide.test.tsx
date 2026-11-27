@@ -70,20 +70,49 @@ describe("guideStep", () => {
 
 describe("WithGuide", () => {
   it("shows the app at once when the guide is done", () => {
-    render(<WithGuide view={view({ signIn: true, import: true })}>the app</WithGuide>);
+    render(
+      <WithGuide view={view({ signIn: true, import: true })} landing="app">
+        the app
+      </WithGuide>,
+    );
     expect(screen.getByText("the app")).toBeTruthy();
   });
 
   it("shows the sign-in page in place of the app for a new user", async () => {
-    render(<WithGuide view={view(fresh)}>the app</WithGuide>);
+    render(
+      <WithGuide view={view(fresh)} landing="app">
+        the app
+      </WithGuide>,
+    );
     expect(await screen.findByRole("heading", { name: "Welcome to Friendship Reminder" })).toBeTruthy();
     expect(screen.queryByText("the app")).toBeNull();
   });
 
   it("says so when Not now can't be saved", async () => {
     finishGuide.mockRejectedValue({ kind: "storage", message: "Couldn't save your changes: disk full" });
-    render(<WithGuide view={view(fresh)}>the app</WithGuide>);
+    render(
+      <WithGuide view={view(fresh)} landing="app">
+        the app
+      </WithGuide>,
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
     expect((await screen.findByRole("alert")).textContent).toContain("disk full");
+  });
+
+  it("sends focus into the app when the guide closes, as it would be lost with the guide's button", async () => {
+    const app = <button id="app">the app</button>;
+    const { rerender } = render(
+      <WithGuide view={view(fresh)} landing="app">
+        {app}
+      </WithGuide>,
+    );
+    const notNow = await screen.findByRole("button", { name: "Not now" });
+    notNow.focus();
+    rerender(
+      <WithGuide view={view({ signIn: true, import: true })} landing="app">
+        {app}
+      </WithGuide>,
+    );
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "the app" }));
   });
 });
