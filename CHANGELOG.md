@@ -9,6 +9,8 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-26
+
 ### New
 
 - **Import from Contacts**: Add person can now add one or several people from Contacts at once.
@@ -22,17 +24,20 @@ word for word, so it is short and in plain words, under **New**, **Fixed**, **Ch
   "How often?", with no second list to tick. To share more, Share more contacts… takes you to
   Settings, and whoever you add there goes to "How often?" when you come back.
 
+### Fixed
+
+- After a few weeks without the app running, Done's "On the day suggested" offered a day weeks ago
+  and left the person missed. It now offers the latest day that went by, and Done clears the
+  reminder.
+- On iPhone, reminders were never booked: clearing the old ones failed every time, so the booking
+  stopped there. They're booked now.
+
 ### Changed
 
 - On iPhone, Sign in with Apple uses Apple's own sign-in sheet (Face ID or your passcode), not a
   web page, so iOS no longer asks whether the app may use the account server's address.
 - On iPhone, Friendship Reminder no longer asks to send notifications the moment it opens. Once
   you've added people, Today offers to turn reminders on, and iOS asks then.
-
-### Fixed
-
-- On iPhone, reminders were never booked: clearing the old ones failed every time, so the booking
-  stopped there. They're booked now.
 
 ## [0.2.0] - 2026-11-25
 
