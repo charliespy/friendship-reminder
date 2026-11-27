@@ -18,8 +18,9 @@ npm run dev:web        # the UI in a browser, against a scratch data file
 
 ## How the code is laid out
 
-- `crates/friends-core/`: all the rules (scheduling, the data file, the commands, and what to
-  sync). Plain Rust, no macOS code, fully unit-tested.
+- `crates/friends-core/`: all the rules (scheduling, the data file, the commands, what to sync,
+  and the Contacts rules: which cards to offer, and the link a person keeps to their card).
+  Plain Rust, no macOS code, fully unit-tested.
 - `crates/friends-account/`: signing in to the Friendship Reminder account (Supabase Auth): the requests,
   the session and its rules. Plain Rust, tested without a network.
 - `crates/friends-sync/`: syncing the list with the Friendship Reminder account: the requests that upload
@@ -29,8 +30,9 @@ npm run dev:web        # the UI in a browser, against a scratch data file
 - `src-tauri/`: the shell. `src/desktop.rs` is the Mac's (menu bar icon, windows, notifications,
   open at login), `src/mobile.rs` the iPhone's (booking reminders ahead with iOS), and the rest is
   shared: the account (browser sign-in on the Mac, Apple's sign-in sheet on iPhone from
-  `plugins/phone-sheets`), the Keychain and when to sync. `tauri.ios.conf.json` and `gen/apple/` are
-  the iPhone app's settings and Xcode project.
+  `plugins/phone-sheets`), the Keychain, when to sync, and `src/contacts.rs`, which reads the names
+  and web addresses on Contacts cards and writes the app's link onto each added person's card.
+  `tauri.ios.conf.json` and `gen/apple/` are the iPhone app's settings and Xcode project.
 - `src/`: the React UI. It only shows data and calls commands. `Phone.tsx` lays the same panes
   out as the iPhone app's tabs.
 - `crates/friends-devserver/` and `src/dev/`: the browser dev mode and the end-to-end tests run
