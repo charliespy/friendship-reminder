@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 import { openPreferences, seed, setToday } from "./helpers";
 
 const ANA = { name: "Ana Torres", frequencyDays: 30 as const, lastConnected: "2026-11-18" };
@@ -83,4 +83,42 @@ test("signing in with Apple shows the account, and signing out clears it", async
   await expect(page.getByText("Signed in with Apple")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: /Sign in with Apple/ })).toBeEnabled();
+});
+
+test("when the account's buttons swap, focus goes to the one that took the pressed one's place", async ({
+  page,
+  request,
+}) => {
+  // The sign-in waits here until Cancel answers it, so the waiting row can be checked.
+  let waiting: Route | null = null;
+  await page.route("**/__friends/invoke", async (route) => {
+    const { cmd } = route.request().postDataJSON() as { cmd: string };
+    if (cmd === "sign_in_with_apple" && !waiting) waiting = route;
+    else if (cmd === "cancel_sign_in") {
+      // As in the app: Cancel wakes the waiting sign-in, which answers with the account unchanged.
+      const answer = await route.fetch();
+      await route.fulfill({ response: answer });
+      await waiting?.fulfill({ response: answer });
+    } else await route.continue();
+  });
+  const press = async (name: string | RegExp) => {
+    await page.getByRole("button", { name }).focus();
+    await page.keyboard.press("Enter");
+  };
+  await seed(request, { people: [ANA] });
+  await openPreferences(page, "Settings");
+
+  // Sign in with Apple gives way to Cancel while it waits, and Cancel back to Sign in with Apple.
+  await press(/Sign in with Apple/);
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await expect.poll(() => waiting !== null).toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: /Sign in with Apple/ })).toBeFocused();
+
+  // A finished sign-in gives way to Sign out, and Sign out back to Sign in with Apple.
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Signed in with Apple")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: /Sign in with Apple/ })).toBeFocused();
 });

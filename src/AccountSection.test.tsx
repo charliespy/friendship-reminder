@@ -73,6 +73,20 @@ describe("AccountSection", () => {
     expect(signInButton()).toBeTruthy();
   });
 
+  it("keeps focus on the button that takes the pressed one's place", async () => {
+    await open({ status: "signedOut", warning: null });
+    signInWithApple.mockResolvedValue({ status: "signedIn", email: null, warning: null });
+    signInButton().focus();
+    await act(async () => fireEvent.click(signInButton()));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Sign out" }));
+    // Signing out turns every button off until it answers: focus waits for Sign in with Apple.
+    let answer: (a: Account) => void = () => {};
+    signOut.mockReturnValue(new Promise((r) => (answer = r)));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign out" })));
+    await act(async () => answer({ status: "signedOut", warning: null }));
+    expect(document.activeElement).toBe(signInButton());
+  });
+
   it("explains why a build can't sign in, with the button off", async () => {
     await open({ status: "unavailable", reason: "This copy of Friendship Reminder isn't signed for Sign in with Apple." });
     expect((signInButton() as HTMLButtonElement).disabled).toBe(true);

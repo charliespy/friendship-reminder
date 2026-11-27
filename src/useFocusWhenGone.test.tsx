@@ -141,4 +141,18 @@ describe("useFocusWhenGone", () => {
     rerender(<Pages page={null} />);
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
   });
+
+  it("doesn't scroll to a button swapped in the same place (Sign out for Cancel)", () => {
+    function Row({ row }: { row: "waiting" | "signedIn" }) {
+      const focus = useFocusWhenGone(row, () => document.querySelector<HTMLElement>("section button"), { inPlace: true });
+      return <section {...focus}>{row === "waiting" ? <button key="a">Cancel</button> : <button key="b">Sign out</button>}</section>;
+    }
+    const { rerender } = render(<Row row="waiting" />);
+    screen.getByRole("button", { name: "Cancel" }).focus();
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    rerender(<Row row="signedIn" />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Sign out" }));
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
 });
