@@ -142,7 +142,8 @@ export function ContactPicker({
   const swap = useFocusWhenGone(chosen ? "chosen" : loaded.status, () => {
     // In this order: "How often" for someone just chosen, else someone to tick, else the line that says
     // there's nobody left (never Skip or Cancel, where a second Enter would close the picker).
-    for (const where of ["[data-focus]", "select", 'input[type="checkbox"]:not(:disabled)', ".picker-hint"]) {
+    const order = ["[data-focus]", chosen ? "select" : "", 'input[type="checkbox"]:not(:disabled)', ".picker-hint"];
+    for (const where of order.filter(Boolean)) {
       const found = region.current?.querySelector<HTMLElement>(where);
       if (found) return found;
     }

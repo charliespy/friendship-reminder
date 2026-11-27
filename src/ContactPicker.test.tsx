@@ -275,6 +275,17 @@ describe("ContactPicker on iPhone", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Renée Martin")));
   });
 
+  it("after Share more from the keyboard, focuses the top of the list, not someone ticked lower down", async () => {
+    listContacts.mockImplementation(() => Promise.resolve(allowed([renee, kofi], { limited: true })));
+    shareMoreContacts.mockImplementation(() => Promise.resolve(allowed([renee, kofi, priya], { limited: true })));
+    renderPicker();
+    fireEvent.click(await screen.findByLabelText("Kofi Mensah"));
+    const more = screen.getByRole("button", { name: "Share more contacts…" });
+    more.focus();
+    fireEvent.click(more);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Renée Martin")));
+  });
+
   it("after Continue from the keyboard, focuses how often for the people chosen in Apple's sheet", async () => {
     await continueFromKeyboard(allowed([renee, kofi], { limited: true, picked: ["c2"] }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("How often for Kofi Mensah")));
