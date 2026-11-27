@@ -84,4 +84,61 @@ describe("useFocusWhenGone", () => {
     rerender(<Swap shown={false} step={2} />);
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
   });
+
+  it("sends focus to the new page when one page gives way to another (the guide's next page)", () => {
+    function Pages({ page }: { page: "signIn" | "import" | null }) {
+      const focus = useFocusWhenGone(page, () => document.getElementById(page ? "page-title" : "landing"));
+      return (
+        <>
+          <h2 id="landing" tabIndex={-1}>
+            Today
+          </h2>
+          {page && (
+            <section {...focus}>
+              <h1 id="page-title" tabIndex={-1}>
+                {page === "signIn" ? "Welcome" : "Who?"}
+              </h1>
+              <button key={page}>{page === "signIn" ? "Not now" : "Skip"}</button>
+            </section>
+          )}
+        </>
+      );
+    }
+    const { rerender } = render(<Pages page="signIn" />);
+    screen.getByRole("button", { name: "Not now" }).focus();
+    rerender(<Pages page="import" />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Who?" }));
+    // Still inside, so closing sends it on to the app.
+    rerender(<Pages page={null} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
+  });
+
+  it("still sends focus on at closing when the new page's own field took focus by itself", () => {
+    function Pages({ page }: { page: "signIn" | "import" | null }) {
+      const focus = useFocusWhenGone(page, () => document.getElementById(page ? "page-title" : "landing"));
+      return (
+        <>
+          <h2 id="landing" tabIndex={-1}>
+            Today
+          </h2>
+          {page && (
+            <section {...focus}>
+              <h1 id="page-title" tabIndex={-1}>
+                {page}
+              </h1>
+              {page === "signIn" ? <button>Not now</button> : <input aria-label="Search" autoFocus />}
+            </section>
+          )}
+        </>
+      );
+    }
+    const { rerender } = render(<Pages page="signIn" />);
+    screen.getByRole("button", { name: "Not now" }).focus();
+    rerender(<Pages page="import" />);
+    const search = screen.getByRole("textbox", { name: "Search" });
+    expect(document.activeElement).toBe(search);
+    // The field goes away with the guide: focus goes to the app.
+    rerender(<Pages page={null} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
+  });
 });

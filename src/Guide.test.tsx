@@ -115,4 +115,21 @@ describe("WithGuide", () => {
     );
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "the app" }));
   });
+
+  it("sends focus to the next page's heading when a page of the guide gives way to the next", async () => {
+    const app = <button id="app">the app</button>;
+    const { rerender } = render(
+      <WithGuide view={view(fresh)} landing="app">
+        {app}
+      </WithGuide>,
+    );
+    const notNow = await screen.findByRole("button", { name: "Not now" });
+    notNow.focus();
+    rerender(
+      <WithGuide view={view({ signIn: true, import: false })} landing="app">
+        {app}
+      </WithGuide>,
+    );
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Who do you want to keep up with?" }));
+  });
 });

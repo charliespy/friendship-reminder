@@ -5,10 +5,13 @@ import { useEffect, useRef, type FocusEvent } from "react";
  * focus would be left on the page itself, so the next Tab starts at the top and a screen reader
  * says nothing. This sends it to `target()` instead: what the screen shows now.
  *
+ * `shown` may also name what is shown (a page of the guide, say; `false` or `null` for nothing):
+ * a change from one to another counts as the old one going away too.
+ *
  * Only when focus was inside it (spread the returned props on its outer element): a tap on iPhone
  * doesn't focus a button, and then nothing moves. Never takes focus from somewhere the user moved it.
  */
-export function useFocusWhenGone(shown: boolean, target: () => HTMLElement | null | undefined) {
+export function useFocusWhenGone(shown: boolean | string | null, target: () => HTMLElement | null | undefined) {
   const wasShown = useRef(shown);
   // Whether focus is inside. Removing the focused control fires no blur in WebKit (and where it
   // does, the control is detached by then), so this stays true when focus goes away with it;
@@ -16,14 +19,18 @@ export function useFocusWhenGone(shown: boolean, target: () => HTMLElement | nul
   const inside = useRef(false);
   // Runs after every render, so it reads the latest `target`.
   useEffect(() => {
-    const gone = wasShown.current && !shown;
+    const nothing = (value: typeof shown) => value === false || value === null;
+    const gone = !nothing(wasShown.current) && wasShown.current !== shown;
     wasShown.current = shown;
     if (!gone) return;
     const hadFocus = inside.current;
-    inside.current = false;
+    const closed = nothing(shown);
+    // A new page is still inside: focus a control on it took by itself stays counted.
+    if (closed) inside.current = false;
     const lost = !document.activeElement || document.activeElement === document.body;
-    // Without scrolling: the screen may be showing a person a contact card's link opened.
-    if (hadFocus && lost) target()?.focus({ preventScroll: true });
+    // Closing doesn't scroll: the screen may be showing a person a contact card's link opened. A
+    // new page brings its target into view.
+    if (hadFocus && lost) target()?.focus({ preventScroll: closed });
   });
   return {
     onFocus: () => {
