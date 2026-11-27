@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage, type ContactList } from "./api";
 import { Avatar } from "./components/Avatar";
 import { FREQUENCIES } from "./format";
+import { useFocusWhenGone } from "./useFocusWhenGone";
 import { useAction } from "./useView";
 
 type Loaded = { status: "loading"; text?: string } | ContactList | { status: "failed"; message: string };
@@ -134,6 +135,15 @@ export function ContactPicker({
   }, [contacts, chosen, query]);
   const count = picked.size;
 
+  // Continue, Try again and Share more give way to "Opening Contacts…", and that to the list or a
+  // message, in the same place: focus goes to what each shows now (what's marked `data-focus`, else
+  // the first control), not to the page itself.
+  const region = useRef<HTMLDivElement>(null);
+  const swap = useFocusWhenGone(chosen ? "chosen" : loaded.status, () => {
+    const now = region.current;
+    return now?.querySelector<HTMLElement>("[data-focus]") ?? now?.querySelector<HTMLElement>("select, button:not(:disabled)");
+  });
+
   const flip = (id: string, on: boolean) => {
     const next = new Map(picked);
     if (on) next.set(id, DEFAULT_FREQUENCY);
@@ -160,7 +170,7 @@ export function ContactPicker({
 
   if (loaded.status === "notAsked") {
     return (
-      <div className="card picker" role="region" aria-label="Contacts">
+      <div className="card picker" role="region" aria-label="Contacts" ref={region} {...swap}>
         <div className="picker-message picker-explain">
           <strong>Add people from your Contacts</strong>
           <p className="muted">
@@ -175,7 +185,7 @@ export function ContactPicker({
         </div>
         <div className="form-actions picker-actions">
           {closeButton}
-          <button type="button" className="btn btn-primary" autoFocus={!phone} onClick={() => again(true)}>
+          <button type="button" className="btn btn-primary" autoFocus={!phone} data-focus onClick={() => again(true)}>
             Continue
           </button>
         </div>
@@ -185,8 +195,16 @@ export function ContactPicker({
 
   if (loaded.status !== "allowed") {
     return (
-      <div className="card picker" role="region" aria-label="Contacts">
-        <div className="picker-message" role={loaded.status === "loading" ? "status" : "alert"}>
+      <div className="card picker" role="region" aria-label="Contacts" ref={region} {...swap}>
+        {/* While it loads, focus waits on this line, not on Skip or Cancel (a second Enter there
+            would close the picker); a new message for each status, so focus moves on with it. */}
+        <div
+          key={loaded.status}
+          className="picker-message"
+          role={loaded.status === "loading" ? "status" : "alert"}
+          tabIndex={loaded.status === "loading" ? -1 : undefined}
+          data-focus={loaded.status === "loading" || undefined}
+        >
           {loaded.status === "loading" ? (
             <p className="muted">{loaded.text ?? "Opening Contacts…"}</p>
           ) : loaded.status === "denied" ? (
@@ -209,7 +227,7 @@ export function ContactPicker({
         <div className="form-actions picker-actions">
           {closeButton}
           {loaded.status !== "loading" && (
-            <button type="button" className="btn btn-outline" onClick={() => again(false)}>
+            <button type="button" className="btn btn-outline" data-focus onClick={() => again(false)}>
               Try again
             </button>
           )}
@@ -220,7 +238,7 @@ export function ContactPicker({
 
   const free = contacts.filter((c) => !c.added).length;
   return (
-    <div className="card picker" role="region" aria-label="Contacts">
+    <div className="card picker" role="region" aria-label="Contacts" ref={region} {...swap}>
       {chosen ? (
         <div className="picker-heading">
           <h2>How often?</h2>
@@ -233,6 +251,7 @@ export function ContactPicker({
             type="search"
             value={query}
             autoFocus={!phone}
+            data-focus
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search contacts"
             aria-label="Search contacts"

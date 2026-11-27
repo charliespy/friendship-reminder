@@ -2,7 +2,7 @@
  * The first-run guide, on a new Mac or iPhone: a sign-in page (with "Not now"), then adding people from
  * Contacts (with "Skip"). Each step is shown once; the core remembers which are behind you.
  */
-import { type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { api, type Account, type GuideStep, type View } from "./api";
 import { ContactPicker } from "./ContactPicker";
 import { CancelSignInButton, SignInWithAppleButton, waitingText } from "./SignInButtons";
@@ -88,6 +88,10 @@ function SignInStep({
   onSkip: () => void;
 }) {
   const { attempt, busy, error, cancelError } = signIn;
+  // Signing in swaps the buttons for Cancel, and Cancel (or a failed sign-in) swaps them back, on the
+  // same page: focus goes to the first button now showing, not to the page itself.
+  const actions = useRef<HTMLDivElement>(null);
+  const swap = useFocusWhenGone(attempt ? "waiting" : "ready", () => actions.current?.querySelector("button"));
   return (
     <section className="guide-step" aria-labelledby="guide-title">
       <img className="guide-icon" src={appIcon} alt="" width={64} height={64} />
@@ -96,7 +100,7 @@ function SignInStep({
         It reminds you when it's time to reach out to the people you care about. Sign in to keep your list on your
         Mac and your iPhone.
       </p>
-      <div className="guide-actions">
+      <div className="guide-actions" ref={actions} {...swap}>
         {attempt ? (
           <>
             <p className="muted" role="status">

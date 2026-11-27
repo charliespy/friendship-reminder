@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 import { SAMPLE, openCard, openPreferences, seed, seedNewUser, setContactsAccess } from "./helpers";
 
 test("a new user signs in or not, then picks people from Contacts", async ({ page, request }) => {
@@ -223,6 +223,66 @@ test("when the guide moves to its next page, focus goes to that page", async ({ 
   await page.getByRole("button", { name: "Not now" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Search contacts")).toBeFocused();
+});
+
+test("when the guide's buttons swap on the same page, focus goes to what replaced them", async ({ page, request }) => {
+  // Commands named here wait until `release` answers them, so the page between can be checked.
+  const held = new Map<string, Route>();
+  await page.route("**/__friends/invoke", async (route) => {
+    const { cmd } = route.request().postDataJSON() as { cmd: string };
+    if (cmd === "sign_in_with_apple" || cmd === "list_contacts") held.set(cmd, route);
+    else if (cmd === "cancel_sign_in") {
+      // As in the app: Cancel wakes the waiting sign-in, which answers with the account unchanged.
+      const answer = await route.fetch();
+      await route.fulfill({ response: answer });
+      await held.get("sign_in_with_apple")?.fulfill({ response: answer });
+      held.delete("sign_in_with_apple");
+    } else await route.continue();
+  });
+  const waitFor = async (cmd: string) => expect.poll(() => held.has(cmd)).toBe(true);
+  const release = async (cmd: string) => {
+    const route = held.get(cmd)!;
+    held.delete(cmd);
+    await route.continue();
+  };
+  const press = async (name: string) => {
+    await page.getByRole("button", { name }).focus();
+    await page.keyboard.press("Enter");
+  };
+
+  // Sign in with Apple gives way to Cancel while it waits, and Cancel back to Sign in with Apple.
+  await seedNewUser(request);
+  await openPreferences(page);
+  await press("Sign in with Apple");
+  await expect(page.getByText("Finish signing in with Apple in your browser.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Sign in with Apple" })).toBeFocused();
+
+  // Continue gives way to "Opening Contacts…", and that to the list's search field. Focus waits on
+  // the line, not on Skip, where a second Enter would skip the page.
+  await press("Not now");
+  await waitFor("list_contacts");
+  await release("list_contacts");
+  await press("Continue");
+  await waitFor("list_contacts");
+  await expect(page.getByRole("status").filter({ hasText: "Opening Contacts…" })).toBeFocused();
+  await release("list_contacts");
+  await expect(page.getByLabel("Search contacts")).toBeFocused();
+
+  // Without access, Try again comes back once the list is asked for again.
+  await seedNewUser(request);
+  await setContactsAccess(request, "denied");
+  await openPreferences(page);
+  await press("Not now");
+  await waitFor("list_contacts");
+  await release("list_contacts");
+  await press("Try again");
+  await waitFor("list_contacts");
+  await expect(page.getByRole("status").filter({ hasText: "Opening Contacts…" })).toBeFocused();
+  await release("list_contacts");
+  await expect(page.getByText("Friendship Reminder can't see your contacts")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeFocused();
 });
 
 test("the link on a contact card opens the app at that person", async ({ page, request }) => {
