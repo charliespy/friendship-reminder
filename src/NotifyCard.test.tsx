@@ -67,10 +67,23 @@ describe("NotifyCard", () => {
     rerender(<NotifyCard view={view([someone, { ...someone, id: 2 }])} notify={notify()} afterClose={() => null} />);
     expect(title()).toBeNull();
 
-    // The next time the app opens, it asks again.
+    // A card drawn afresh (as when the app opens again) shows again.
     unmount();
     renderCard(view([someone]), notify());
     expect(title()).toBeTruthy();
+  });
+
+  it("hands focus to what's next when Not now takes it away", () => {
+    const next = document.createElement("h2");
+    next.tabIndex = -1;
+    document.body.append(next);
+    render(<NotifyCard view={view([someone])} notify={notify()} afterClose={() => next} />);
+    const notNow = screen.getByRole("button", { name: "Not now" });
+    notNow.focus();
+    fireEvent.click(notNow);
+    expect(title()).toBeNull();
+    expect(document.activeElement).toBe(next);
+    next.remove();
   });
 
   it("shows what went wrong asking", () => {

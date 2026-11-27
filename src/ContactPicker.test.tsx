@@ -141,10 +141,33 @@ describe("ContactPicker adding", () => {
     expect(importContacts).toHaveBeenCalledWith([{ name: "Kofi Mensah", contact: "c2", frequencyDays: 30 }]);
   });
 
-  it("says so when everyone in Contacts is in the list already", async () => {
-    listContacts.mockImplementation(() => Promise.resolve(allowed([maya])));
+  it.each([
+    ["everyone in Contacts is in the list", allowed([maya]), "Everyone in Contacts is in your list already."],
+    [
+      "everyone shared is in the list",
+      allowed([maya], { limited: true }),
+      "Everyone you've shared from Contacts is in your list already.",
+    ],
+    ["Contacts is empty", allowed([]), "There's nobody in Contacts yet."],
+    ["nobody is shared yet", allowed([], { limited: true }), "You haven't shared anyone from Contacts yet."],
+  ])("says so when %s", async (_, list, text) => {
+    listContacts.mockImplementation(() => Promise.resolve(list));
     renderPicker();
-    expect(await screen.findByText("Everyone in Contacts is in your list already.")).toBeTruthy();
+    expect(await screen.findByText(text)).toBeTruthy();
+  });
+
+  it("doesn't report adding once it was closed meanwhile", async () => {
+    let done: (v: View) => void = () => {};
+    importContacts.mockImplementation(() => new Promise((resolve) => (done = resolve)));
+    const { unmount } = renderPicker();
+    fireEvent.click(await screen.findByLabelText("Kofi Mensah"));
+    fireEvent.click(screen.getByRole("button", { name: "Add 1 person" }));
+    expect(importContacts).toHaveBeenCalledTimes(1);
+    unmount();
+    done({} as View);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onAdded).not.toHaveBeenCalled();
   });
 
   it("shows what went wrong adding, and stays open", async () => {
@@ -195,7 +218,8 @@ describe("ContactPicker access", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByLabelText("Renée Martin")).toBeTruthy();
-    expect(listContacts).toHaveBeenLastCalledWith(true);
+    // Only Continue asks Apple; opening the picker never does.
+    expect(listContacts.mock.calls).toEqual([[false], [true]]);
   });
 
   it("says how to turn access on when it was denied", async () => {
@@ -220,7 +244,7 @@ describe("ContactPicker on iPhone", () => {
     renderPicker();
     expect(await screen.findByText(/Next, iOS asks whether to share your contacts/)).toBeTruthy();
     expect(screen.queryByText(/macOS/)).toBeNull();
-    // A tap there opens no keyboard on its own.
+    // Unlike the Mac, nothing is focused for the user on iPhone.
     expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Continue" }));
   });
 
@@ -296,6 +320,19 @@ describe("ContactPicker with only some contacts shared", () => {
       { name: "Renée Martin", contact: "c1", frequencyDays: 365 },
       { name: "Priya Raman", contact: "c4", frequencyDays: 30 },
     ]);
+  });
+
+  it("says what went wrong when Share more fails, and tries again", async () => {
+    listContacts.mockImplementation(() => Promise.resolve(allowed([renee], { limited: true })));
+    shareMoreContacts.mockImplementation(() => Promise.reject({ kind: "badCall", message: "Settings didn't open." }));
+    renderPicker();
+    fireEvent.click(await screen.findByRole("button", { name: "Share more contacts…" }));
+    expect(await screen.findByText("Couldn't open Contacts")).toBeTruthy();
+    expect(screen.getByText("Settings didn't open.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByLabelText("Renée Martin")).toBeTruthy();
+    expect(listContacts.mock.calls).toEqual([[false], [false]]);
   });
 
   it("drops the tick of someone added meanwhile", async () => {
