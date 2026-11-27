@@ -1,9 +1,10 @@
 /** Preferences › Settings › Account: Sign in with Apple, and who is signed in. */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type SyncStatus } from "./api";
 import { timeAgo } from "./format";
 import { CancelSignInButton, SignInWithAppleButton, waitingText } from "./SignInButtons";
 import { useAccount } from "./useAccount";
+import { useFocusWhenGone } from "./useFocusWhenGone";
 
 /** The line under the account about syncing. */
 function syncLine(sync: SyncStatus | null | undefined, now: number): string {
@@ -28,11 +29,19 @@ export function AccountSection({ phone = false }: { phone?: boolean }) {
   const signIn = useAccount();
   const { account, loadError, cancelError, attempt, busy, error, signOut } = signIn;
   const now = useNow();
+  // Each button gives way to another in the same row: Sign in with Apple to Cancel while it waits,
+  // Cancel (or a failed sign-in) back to Sign in with Apple, a sign-in to Sign out, and Sign out to
+  // Sign in with Apple. Focus goes to the button that took the pressed one's place, not to the page.
+  // While signing out every button is off, so "busy" counts as a row of its own: focus moves on once
+  // the new row's button can take it.
+  const row = attempt ? "waiting" : busy ? "busy" : account?.status === "signedIn" ? "signedIn" : "signedOut";
+  const buttons = useRef<HTMLDivElement>(null);
+  const swap = useFocusWhenGone(row, () => buttons.current?.querySelector<HTMLElement>("button:not(:disabled)"));
 
   return (
     <div className="setting-group">
       <h3 className="section-label">Account</h3>
-      <div className="choice-list">
+      <div className="choice-list" ref={buttons} {...swap}>
         {attempt ? (
           <div className="account-row">
             <span className="choice-text">{waitingText(phone)}</span>
