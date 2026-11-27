@@ -36,7 +36,9 @@ export function AccountSection({ phone = false }: { phone?: boolean }) {
   // the new row's button can take it.
   const row = attempt ? "waiting" : busy ? "busy" : account?.status === "signedIn" ? "signedIn" : "signedOut";
   const buttons = useRef<HTMLDivElement>(null);
-  const swap = useFocusWhenGone(row, () => buttons.current?.querySelector<HTMLElement>("button:not(:disabled)"));
+  const swap = useFocusWhenGone(row, () => buttons.current?.querySelector<HTMLElement>("button:not(:disabled)"), {
+    inPlace: true,
+  });
 
   return (
     <div className="setting-group">

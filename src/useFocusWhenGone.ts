@@ -10,8 +10,15 @@ import { useEffect, useRef, type FocusEvent } from "react";
  *
  * Only when focus was inside it (spread the returned props on its outer element): a tap on iPhone
  * doesn't focus a button, and then nothing moves. Never takes focus from somewhere the user moved it.
+ *
+ * `inPlace`: what replaces it sits where it was (a button swapped for another in the same row), so a
+ * change doesn't scroll to it either: the user may have scrolled elsewhere while it waited.
  */
-export function useFocusWhenGone(shown: boolean | string | null, target: () => HTMLElement | null | undefined) {
+export function useFocusWhenGone(
+  shown: boolean | string | null,
+  target: () => HTMLElement | null | undefined,
+  { inPlace = false }: { inPlace?: boolean } = {},
+) {
   const wasShown = useRef(shown);
   // Whether focus is inside. Removing the focused control fires no blur in WebKit (and where it
   // does, the control is detached by then), so this stays true when focus goes away with it;
@@ -29,8 +36,8 @@ export function useFocusWhenGone(shown: boolean | string | null, target: () => H
     if (closed) inside.current = false;
     const lost = !document.activeElement || document.activeElement === document.body;
     // Closing doesn't scroll: the screen may be showing a person a contact card's link opened. A
-    // new page brings its target into view.
-    if (hadFocus && lost) target()?.focus({ preventScroll: closed });
+    // new page brings its target into view, unless it is in the same place.
+    if (hadFocus && lost) target()?.focus({ preventScroll: closed || inPlace });
   });
   return {
     onFocus: () => {
