@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage, type ContactList } from "./api";
 import { Avatar } from "./components/Avatar";
 import { FREQUENCIES } from "./format";
+import { useFocusWhenGone } from "./useFocusWhenGone";
 import { useAction } from "./useView";
 
 type Loaded = { status: "loading"; text?: string } | ContactList | { status: "failed"; message: string };
@@ -134,6 +135,21 @@ export function ContactPicker({
   }, [contacts, chosen, query]);
   const count = picked.size;
 
+  // Continue, Try again and Share more give way to "Opening Contacts…", and that to the list or a
+  // message, in the same place: focus goes to what each shows now, not to the page itself. On iPhone
+  // that's never the search field, which would bring up the keyboard.
+  const region = useRef<HTMLDivElement>(null);
+  const swap = useFocusWhenGone(chosen ? "chosen" : loaded.status, () => {
+    // In this order: "How often" for someone just chosen, else someone to tick, else the line that says
+    // there's nobody left (never Skip or Cancel, where a second Enter would close the picker).
+    const order = ["[data-focus]", chosen ? "select" : "", 'input[type="checkbox"]:not(:disabled)', ".picker-hint"];
+    for (const where of order.filter(Boolean)) {
+      const found = region.current?.querySelector<HTMLElement>(where);
+      if (found) return found;
+    }
+    return region.current?.querySelector<HTMLElement>("button:not(:disabled)");
+  });
+
   const flip = (id: string, on: boolean) => {
     const next = new Map(picked);
     if (on) next.set(id, DEFAULT_FREQUENCY);
@@ -160,7 +176,7 @@ export function ContactPicker({
 
   if (loaded.status === "notAsked") {
     return (
-      <div className="card picker" role="region" aria-label="Contacts">
+      <div className="card picker" role="region" aria-label="Contacts" ref={region} {...swap}>
         <div className="picker-message picker-explain">
           <strong>Add people from your Contacts</strong>
           <p className="muted">
@@ -175,7 +191,7 @@ export function ContactPicker({
         </div>
         <div className="form-actions picker-actions">
           {closeButton}
-          <button type="button" className="btn btn-primary" autoFocus={!phone} onClick={() => again(true)}>
+          <button type="button" className="btn btn-primary" autoFocus={!phone} data-focus onClick={() => again(true)}>
             Continue
           </button>
         </div>
@@ -185,10 +201,18 @@ export function ContactPicker({
 
   if (loaded.status !== "allowed") {
     return (
-      <div className="card picker" role="region" aria-label="Contacts">
-        <div className="picker-message" role={loaded.status === "loading" ? "status" : "alert"}>
+      <div className="card picker" role="region" aria-label="Contacts" ref={region} {...swap}>
+        {/* While it loads, focus waits on this line, not on Skip or Cancel (a second Enter there
+            would close the picker); a new message for each status, so focus moves on with it. */}
+        <div
+          key={loaded.status}
+          className="picker-message"
+          role={loaded.status === "loading" ? "status" : "alert"}
+        >
           {loaded.status === "loading" ? (
-            <p className="muted">{loaded.text ?? "Opening Contacts…"}</p>
+            <p className="muted" tabIndex={-1} data-focus>
+              {loaded.text ?? "Opening Contacts…"}
+            </p>
           ) : loaded.status === "denied" ? (
             <>
               <strong>Friendship Reminder can't see your contacts</strong>
@@ -209,7 +233,7 @@ export function ContactPicker({
         <div className="form-actions picker-actions">
           {closeButton}
           {loaded.status !== "loading" && (
-            <button type="button" className="btn btn-outline" onClick={() => again(false)}>
+            <button type="button" className="btn btn-outline" data-focus onClick={() => again(false)}>
               Try again
             </button>
           )}
@@ -220,7 +244,7 @@ export function ContactPicker({
 
   const free = contacts.filter((c) => !c.added).length;
   return (
-    <div className="card picker" role="region" aria-label="Contacts">
+    <div className="card picker" role="region" aria-label="Contacts" ref={region} {...swap}>
       {chosen ? (
         <div className="picker-heading">
           <h2>How often?</h2>
@@ -233,6 +257,7 @@ export function ContactPicker({
             type="search"
             value={query}
             autoFocus={!phone}
+            data-focus={!phone || undefined}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search contacts"
             aria-label="Search contacts"
@@ -241,7 +266,10 @@ export function ContactPicker({
       )}
       {contacts.length === 0 ? (
         <p className="picker-message muted">
-          {loaded.limited ? "You haven't shared anyone from Contacts yet." : "There's nobody in Contacts yet."}
+          {/* The line, not its box: the card would clip a focus ring round the box. */}
+          <span tabIndex={-1} data-focus>
+            {loaded.limited ? "You haven't shared anyone from Contacts yet." : "There's nobody in Contacts yet."}
+          </span>
         </p>
       ) : shown.length === 0 ? (
         <p className="picker-message muted">Nobody in Contacts matches “{query.trim()}”.</p>
@@ -295,7 +323,7 @@ export function ContactPicker({
         </div>
       )}
       <div className="picker-footer">
-        <p className="hint picker-hint">
+        <p className="hint picker-hint" tabIndex={-1}>
           {chosen
             ? "Each counts as in touch today, so their first reminder comes one round from now."
             : free === 0 && contacts.length > 0

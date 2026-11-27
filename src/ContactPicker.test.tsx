@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ContactChoice, ContactList, View } from "./api";
 
@@ -259,6 +259,46 @@ describe("ContactPicker on iPhone", () => {
     renderPicker();
     await screen.findByLabelText("Renée Martin");
     expect(document.activeElement).not.toBe(screen.getByLabelText("Search contacts"));
+  });
+  /** Continue pressed from the keyboard (a tap focuses nothing), answered with `list`. */
+  async function continueFromKeyboard(list: ContactList) {
+    listContacts.mockImplementationOnce(() => Promise.resolve({ status: "notAsked" }));
+    listContacts.mockImplementationOnce(() => Promise.resolve(list));
+    renderPicker();
+    const go = await screen.findByRole("button", { name: "Continue" });
+    go.focus();
+    fireEvent.click(go);
+  }
+
+  it("after Continue from the keyboard, focuses the first person, not the search", async () => {
+    await continueFromKeyboard(allowed([renee, kofi]));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Renée Martin")));
+  });
+
+  it("after Share more from the keyboard, focuses the top of the list, not someone ticked lower down", async () => {
+    listContacts.mockImplementation(() => Promise.resolve(allowed([renee, kofi], { limited: true })));
+    shareMoreContacts.mockImplementation(() => Promise.resolve(allowed([renee, kofi, priya], { limited: true })));
+    renderPicker();
+    fireEvent.click(await screen.findByLabelText("Kofi Mensah"));
+    const more = screen.getByRole("button", { name: "Share more contacts…" });
+    more.focus();
+    fireEvent.click(more);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Renée Martin")));
+  });
+
+  it("after Continue from the keyboard, focuses how often for the people chosen in Apple's sheet", async () => {
+    await continueFromKeyboard(allowed([renee, kofi], { limited: true, picked: ["c2"] }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("How often for Kofi Mensah")));
+  });
+
+  it("after Continue from the keyboard, focuses the line saying nobody is left, not Cancel", async () => {
+    await continueFromKeyboard(allowed([]));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByText("There's nobody in Contacts yet.")));
+    cleanup();
+    await continueFromKeyboard(allowed([maya]));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByText("Everyone in Contacts is in your list already.")),
+    );
   });
 });
 
