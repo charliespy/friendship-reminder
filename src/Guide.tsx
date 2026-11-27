@@ -32,8 +32,8 @@ export function guideStep(view: View, account: Account | null): Step | null {
 /**
  * Shows the guide over the app while it has a step left, else the app (`children`). Waits for the
  * account before deciding, so the sign-in page doesn't flash up for someone signed in. When the
- * guide closes, focus goes to the element with the id `landing` in the app (it would be lost with
- * the guide's button).
+ * guide moves to its next page, focus goes to that page's heading; when it closes, to the element
+ * with the id `landing` in the app (it would be lost with the guide's button either way).
  */
 export function WithGuide({
   view,
@@ -53,7 +53,7 @@ export function WithGuide({
   const done = (step: GuideStep) => finish.run(() => api.finishGuide(step));
   const finished = view.guide.signIn && view.guide.import;
   const step = finished || !account ? null : guideStep(view, account);
-  const focus = useFocusWhenGone(step !== null, () => document.getElementById(landing));
+  const focus = useFocusWhenGone(step, () => document.getElementById(step ? "guide-title" : landing));
   if (finished) return <>{children}</>;
   // The account answers at once; if it can't be read, the guide stays out of the way.
   if (!account) return signIn.loadError ? <>{children}</> : null;
@@ -91,7 +91,7 @@ function SignInStep({
   return (
     <section className="guide-step" aria-labelledby="guide-title">
       <img className="guide-icon" src={appIcon} alt="" width={64} height={64} />
-      <h1 id="guide-title">Welcome to Friendship Reminder</h1>
+      <h1 id="guide-title" tabIndex={-1}>Welcome to Friendship Reminder</h1>
       <p className="guide-lead">
         It reminds you when it's time to reach out to the people you care about. Sign in to keep your list on your
         Mac and your iPhone.
@@ -125,7 +125,7 @@ function SignInStep({
 function WaitStep({ onSkip }: { onSkip: () => void }) {
   return (
     <section className="guide-step" aria-labelledby="guide-title">
-      <h1 id="guide-title">Getting your list</h1>
+      <h1 id="guide-title" tabIndex={-1}>Getting your list</h1>
       <p className="guide-lead" role="status">
         Friendship Reminder is bringing down the people you added on your other devices.
       </p>
@@ -141,7 +141,7 @@ function WaitStep({ onSkip }: { onSkip: () => void }) {
 function ImportStep({ onSkip }: { onSkip: () => void }) {
   return (
     <section className="guide-step guide-step-wide" aria-labelledby="guide-title">
-      <h1 id="guide-title">Who do you want to keep up with?</h1>
+      <h1 id="guide-title" tabIndex={-1}>Who do you want to keep up with?</h1>
       <p className="guide-lead">
         Add them from your contacts, or skip this and add people by name whenever you like.
       </p>

@@ -197,6 +197,34 @@ test("when the guide closes, focus goes to the screen now showing", async ({ pag
   await expect(page.getByRole("heading", { name: "Today" })).toBeFocused();
 });
 
+test("when the guide moves to its next page, focus goes to that page", async ({ page, request }) => {
+  // On iPhone nothing on the Contacts page takes focus by itself: Not now from the keyboard (a
+  // keyboard or VoiceOver user) leaves it on the new page's heading, not on the page itself.
+  await seedNewUser(request);
+  await page.goto("/phone.html");
+  await page.getByRole("button", { name: "Not now" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Who do you want to keep up with?" })).toBeFocused();
+
+  // From there the keyboard reaches the page's buttons (Option-Tab: WebKit's Tab skips buttons, as
+  // on a Mac by default), and Skip works without focusing it by hand.
+  const skip = page.getByRole("button", { name: "Skip" });
+  for (let i = 0; i < 10 && !(await skip.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press("Alt+Tab");
+  }
+  await expect(skip).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Today" })).toBeFocused();
+
+  // On the Mac the Contacts list's search field takes focus, as before: the heading doesn't take it away.
+  await seedNewUser(request);
+  await setContactsAccess(request, "allowed");
+  await openPreferences(page);
+  await page.getByRole("button", { name: "Not now" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Search contacts")).toBeFocused();
+});
+
 test("the link on a contact card opens the app at that person", async ({ page, request }) => {
   await seed(request, { people: SAMPLE });
   // Contacts were shared on an earlier import.
