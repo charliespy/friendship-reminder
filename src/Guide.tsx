@@ -53,13 +53,13 @@ export function WithGuide({
   const done = (step: GuideStep) => finish.run(() => api.finishGuide(step));
   const finished = view.guide.signIn && view.guide.import;
   const step = finished || !account ? null : guideStep(view, account);
-  useFocusWhenGone(step !== null, () => document.getElementById(landing));
+  const focus = useFocusWhenGone(step !== null, () => document.getElementById(landing));
   if (finished) return <>{children}</>;
   // The account answers at once; if it can't be read, the guide stays out of the way.
   if (!account) return signIn.loadError ? <>{children}</> : null;
   if (!step) return <>{children}</>;
   return (
-    <div className={phone ? "phone guide guide-phone" : "guide"}>
+    <div className={phone ? "phone guide guide-phone" : "guide"} {...focus}>
       <div className="guide-body">
         {step === "signIn" ? (
           <SignInStep phone={phone} signIn={signIn} onSkip={() => done("signIn")} />

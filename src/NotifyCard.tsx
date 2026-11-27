@@ -20,10 +20,10 @@ export function NotifyCard({
 }) {
   const [later, setLater] = useState(false);
   const shown = !later && notify.access === "notAsked" && view.settings.notifications && view.people.length > 0;
-  useFocusWhenGone(shown, afterClose);
+  const focus = useFocusWhenGone(shown, afterClose);
   if (!shown) return null;
   return (
-    <section className="card notify-card" aria-labelledby="notify-title">
+    <section className="card notify-card" aria-labelledby="notify-title" {...focus}>
       <h3 id="notify-title">Get reminded on the day</h3>
       <p className="muted">
         Friendship Reminder can send a notification on the morning it's time to reach out to someone. Next, iOS asks

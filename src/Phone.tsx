@@ -156,9 +156,10 @@ export function Phone() {
       </nav>
     </div>
   );
-  // A new user sees the first-run guide in place of the tabs; then Today's heading.
+  // A new user sees the first-run guide in place of the tabs; then Today's heading (or People's Add
+  // person, when a contact card's link opened People meanwhile).
   return view ? (
-    <WithGuide view={view} phone landing="today-title">
+    <WithGuide view={view} phone landing={tab === "people" ? "add-person" : "today-title"}>
       {app}
     </WithGuide>
   ) : (
