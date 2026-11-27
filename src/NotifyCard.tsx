@@ -5,11 +5,23 @@
  */
 import { useState } from "react";
 import type { View } from "./api";
+import { useFocusWhenGone } from "./useFocusWhenGone";
 import type { NotificationAccessState } from "./useNotificationAccess";
 
-export function NotifyCard({ view, notify }: { view: View; notify: NotificationAccessState }) {
+/** `afterClose`: where focus goes when the card goes away with its focused button. */
+export function NotifyCard({
+  view,
+  notify,
+  afterClose,
+}: {
+  view: View;
+  notify: NotificationAccessState;
+  afterClose: () => HTMLElement | null;
+}) {
   const [later, setLater] = useState(false);
-  if (later || notify.access !== "notAsked" || !view.settings.notifications || view.people.length === 0) return null;
+  const shown = !later && notify.access === "notAsked" && view.settings.notifications && view.people.length > 0;
+  useFocusWhenGone(shown, afterClose);
+  if (!shown) return null;
   return (
     <section className="card notify-card" aria-labelledby="notify-title">
       <h3 id="notify-title">Get reminded on the day</h3>
