@@ -22,7 +22,8 @@ export function useFocusWhenGone(shown: boolean, target: () => HTMLElement | nul
     const hadFocus = inside.current;
     inside.current = false;
     const lost = !document.activeElement || document.activeElement === document.body;
-    if (hadFocus && lost) target()?.focus();
+    // Without scrolling: the screen may be showing a person a contact card's link opened.
+    if (hadFocus && lost) target()?.focus({ preventScroll: true });
   });
   return {
     onFocus: () => {

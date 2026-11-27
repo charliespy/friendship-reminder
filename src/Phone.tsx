@@ -71,7 +71,6 @@ export function Phone() {
   const shown = useShownPerson(() => setTab("people"));
   // iOS asks about notifications only when the user turns reminders on (Today's card, or Settings).
   const notify = useNotificationAccess();
-  const todayTitle = useRef<HTMLHeadingElement>(null);
 
   // Each tab keeps its own place: the page scrolls as a whole, so leaving a tab saves how far down
   // it was, and coming back puts it there again (the top, the first time).
@@ -112,13 +111,13 @@ export function Phone() {
                   <header className="pane-header">
                     <div>
                       {/* Takes focus when the guide or the card below goes away with the focused button. */}
-                      <h2 id="today-title" ref={todayTitle} tabIndex={-1}>
+                      <h2 id="today-title" tabIndex={-1}>
                         Today
                       </h2>
                       <p>{formatDay(view.today, view.today)}</p>
                     </div>
                   </header>
-                  <NotifyCard view={view} notify={notify} afterClose={() => todayTitle.current} />
+                  <NotifyCard view={view} notify={notify} afterClose={() => document.getElementById("today-title")} />
                   <ReachOut view={view} addHint="Add the people you want to keep up with in People." />
                 </section>
               ) : t.id === "people" ? (
