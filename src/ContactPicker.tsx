@@ -17,12 +17,41 @@ import { useAction } from "./useView";
 
 type Loaded = { status: "loading"; text?: string } | ContactList | { status: "failed"; message: string };
 
+/**
+ * Letters that are their own letter, not a plain one plus an accent mark, so dropping marks leaves
+ * them as they are: spelled the way an English keyboard would type them. Also Catalan's middle dot
+ * ("l·l"), which a keyboard leaves out, and curly apostrophes, which it types straight.
+ */
+const PLAIN: Record<string, string> = {
+  ı: "i",
+  ł: "l",
+  ŀ: "l",
+  ø: "o",
+  đ: "d",
+  ð: "d",
+  þ: "th",
+  ħ: "h",
+  ŧ: "t",
+  ŋ: "n",
+  ß: "ss",
+  æ: "ae",
+  œ: "oe",
+  ə: "a",
+  ĳ: "ij",
+  ſ: "s",
+  "·": "",
+  "’": "'",
+  "‘": "'",
+  "ʼ": "'",
+};
+
 /** How a search matches a name: any order of words, ignoring case and accents. */
 function fold(text: string): string {
-  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const unmarked = text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  return Array.from(unmarked, (c) => PLAIN[c] ?? c).join("");
 }
 
-function matches(name: string, query: string): boolean {
+export function matches(name: string, query: string): boolean {
   const n = fold(name);
   return fold(query).split(/\s+/).filter(Boolean).every((w) => n.includes(w));
 }
