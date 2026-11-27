@@ -18,14 +18,10 @@ export function useFocusWhenGone(shown: boolean, target: () => HTMLElement | nul
   useEffect(() => {
     const gone = wasShown.current && !shown;
     wasShown.current = shown;
-    const lost = !document.activeElement || document.activeElement === document.body;
-    if (!gone) {
-      // Still showing, but a control inside went away with focus: it isn't inside any more.
-      if (shown && lost) inside.current = false;
-      return;
-    }
+    if (!gone) return;
     const hadFocus = inside.current;
     inside.current = false;
+    const lost = !document.activeElement || document.activeElement === document.body;
     if (hadFocus && lost) target()?.focus();
   });
   return {
@@ -38,12 +34,13 @@ export function useFocusWhenGone(shown: boolean, target: () => HTMLElement | nul
         if (!e.currentTarget.contains(to)) inside.current = false;
         return;
       }
-      // To nowhere: a click on the page's background, the control being removed, or the window
-      // losing focus (iOS asking about notifications, the browser opening to sign in), after which
-      // focus comes back to the same control. Only the first means focus left.
+      // To nowhere: a click on the page's background, the control being removed or turned off
+      // while it works (Chrome drops focus from a disabled button), or the window losing focus (iOS
+      // asking about notifications, the browser opening to sign in), after which focus comes back
+      // to the same control. Only the first means focus left.
       const from = e.target;
       queueMicrotask(() => {
-        if (from.isConnected && document.hasFocus()) inside.current = false;
+        if (from.isConnected && !from.matches(":disabled") && document.hasFocus()) inside.current = false;
       });
     },
   };

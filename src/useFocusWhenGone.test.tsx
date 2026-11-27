@@ -65,4 +65,23 @@ describe("useFocusWhenGone", () => {
     rerender(<Card shown={false} />);
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
   });
+
+  it("still sends focus on when a control inside went away and the rest stayed (Sign in, then Cancel)", () => {
+    function Swap({ shown, step }: { shown: boolean; step: 1 | 2 }) {
+      const focus = useFocusWhenGone(shown, () => document.getElementById("landing"));
+      return (
+        <>
+          <h2 id="landing" tabIndex={-1}>
+            Today
+          </h2>
+          {shown && <section {...focus}>{step === 1 ? <button>Sign in</button> : <button>Cancel</button>}</section>}
+        </>
+      );
+    }
+    const { rerender } = render(<Swap shown step={1} />);
+    screen.getByRole("button", { name: "Sign in" }).focus();
+    rerender(<Swap shown step={2} />);
+    rerender(<Swap shown={false} step={2} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
+  });
 });
