@@ -136,16 +136,17 @@ export function ContactPicker({
   const count = picked.size;
 
   // Continue, Try again and Share more give way to "Opening Contacts…", and that to the list or a
-  // message, in the same place: focus goes to what each shows now (what's marked `data-focus`, else
-  // the first control), not to the page itself. On iPhone that's never the search field, which
-  // would bring up the keyboard.
+  // message, in the same place: focus goes to what each shows now, not to the page itself. On iPhone
+  // that's never the search field, which would bring up the keyboard.
   const region = useRef<HTMLDivElement>(null);
   const swap = useFocusWhenGone(chosen ? "chosen" : loaded.status, () => {
-    const now = region.current;
-    return (
-      now?.querySelector<HTMLElement>("[data-focus]") ??
-      now?.querySelector<HTMLElement>('input[type="checkbox"]:not(:disabled), select, button:not(:disabled)')
-    );
+    // In this order: "How often" for someone just chosen, else someone to tick, else the line that says
+    // there's nobody left (never Skip or Cancel, where a second Enter would close the picker).
+    for (const where of ["[data-focus]", "select", 'input[type="checkbox"]:not(:disabled)', ".picker-hint"]) {
+      const found = region.current?.querySelector<HTMLElement>(where);
+      if (found) return found;
+    }
+    return region.current?.querySelector<HTMLElement>("button:not(:disabled)");
   });
 
   const flip = (id: string, on: boolean) => {
@@ -263,7 +264,7 @@ export function ContactPicker({
         </div>
       )}
       {contacts.length === 0 ? (
-        <p className="picker-message muted">
+        <p className="picker-message muted" tabIndex={-1} data-focus>
           {loaded.limited ? "You haven't shared anyone from Contacts yet." : "There's nobody in Contacts yet."}
         </p>
       ) : shown.length === 0 ? (
@@ -318,7 +319,7 @@ export function ContactPicker({
         </div>
       )}
       <div className="picker-footer">
-        <p className="hint picker-hint">
+        <p className="hint picker-hint" tabIndex={-1}>
           {chosen
             ? "Each counts as in touch today, so their first reminder comes one round from now."
             : free === 0 && contacts.length > 0
