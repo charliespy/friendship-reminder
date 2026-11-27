@@ -265,8 +265,11 @@ export function ContactPicker({
         </div>
       )}
       {contacts.length === 0 ? (
-        <p className="picker-message muted" tabIndex={-1} data-focus>
-          {loaded.limited ? "You haven't shared anyone from Contacts yet." : "There's nobody in Contacts yet."}
+        <p className="picker-message muted">
+          {/* The line, not its box: the card would clip a focus ring round the box. */}
+          <span tabIndex={-1} data-focus>
+            {loaded.limited ? "You haven't shared anyone from Contacts yet." : "There's nobody in Contacts yet."}
+          </span>
         </p>
       ) : shown.length === 0 ? (
         <p className="picker-message muted">Nobody in Contacts matches “{query.trim()}”.</p>
