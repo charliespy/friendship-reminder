@@ -267,7 +267,7 @@ test("when the guide's buttons swap on the same page, focus goes to what replace
   await release("list_contacts");
   await press("Continue");
   await waitFor("list_contacts");
-  await expect(page.getByRole("status").filter({ hasText: "Opening Contacts…" })).toBeFocused();
+  await expect(page.getByText("Opening Contacts…")).toBeFocused();
   await release("list_contacts");
   await expect(page.getByLabel("Search contacts")).toBeFocused();
 
@@ -280,7 +280,7 @@ test("when the guide's buttons swap on the same page, focus goes to what replace
   await release("list_contacts");
   await press("Try again");
   await waitFor("list_contacts");
-  await expect(page.getByRole("status").filter({ hasText: "Opening Contacts…" })).toBeFocused();
+  await expect(page.getByText("Opening Contacts…")).toBeFocused();
   await release("list_contacts");
   await expect(page.getByText("Friendship Reminder can't see your contacts")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeFocused();

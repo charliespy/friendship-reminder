@@ -208,11 +208,11 @@ export function ContactPicker({
           key={loaded.status}
           className="picker-message"
           role={loaded.status === "loading" ? "status" : "alert"}
-          tabIndex={loaded.status === "loading" ? -1 : undefined}
-          data-focus={loaded.status === "loading" || undefined}
         >
           {loaded.status === "loading" ? (
-            <p className="muted">{loaded.text ?? "Opening Contacts…"}</p>
+            <p className="muted" tabIndex={-1} data-focus>
+              {loaded.text ?? "Opening Contacts…"}
+            </p>
           ) : loaded.status === "denied" ? (
             <>
               <strong>Friendship Reminder can't see your contacts</strong>
