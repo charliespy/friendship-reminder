@@ -256,6 +256,7 @@ test("when the guide's buttons swap on the same page, focus goes to what replace
   await press("Sign in with Apple");
   await expect(page.getByText("Finish signing in with Apple in your browser.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await waitFor("sign_in_with_apple");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Sign in with Apple" })).toBeFocused();
 
@@ -283,6 +284,18 @@ test("when the guide's buttons swap on the same page, focus goes to what replace
   await release("list_contacts");
   await expect(page.getByText("Friendship Reminder can't see your contacts")).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeFocused();
+
+  // On iPhone the list's first person takes it, not the search field, which would bring up the keyboard.
+  await seedNewUser(request);
+  await page.goto("/phone.html");
+  await press("Not now");
+  await waitFor("list_contacts");
+  await release("list_contacts");
+  await press("Continue");
+  await waitFor("list_contacts");
+  await release("list_contacts");
+  await expect(page.getByRole("checkbox").first()).toBeFocused();
+  await expect(page.getByLabel("Search contacts")).not.toBeFocused();
 });
 
 test("the link on a contact card opens the app at that person", async ({ page, request }) => {

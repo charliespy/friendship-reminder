@@ -91,7 +91,9 @@ function SignInStep({
   // Signing in swaps the buttons for Cancel, and Cancel (or a failed sign-in) swaps them back, on the
   // same page: focus goes to the first button now showing, not to the page itself.
   const actions = useRef<HTMLDivElement>(null);
-  const swap = useFocusWhenGone(attempt ? "waiting" : "ready", () => actions.current?.querySelector("button"));
+  const swap = useFocusWhenGone(attempt ? "waiting" : "ready", () =>
+    actions.current?.querySelector<HTMLElement>("button:not(:disabled)"),
+  );
   return (
     <section className="guide-step" aria-labelledby="guide-title">
       <img className="guide-icon" src={appIcon} alt="" width={64} height={64} />

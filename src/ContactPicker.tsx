@@ -137,11 +137,15 @@ export function ContactPicker({
 
   // Continue, Try again and Share more give way to "Opening Contacts…", and that to the list or a
   // message, in the same place: focus goes to what each shows now (what's marked `data-focus`, else
-  // the first control), not to the page itself.
+  // the first control), not to the page itself. On iPhone that's never the search field, which
+  // would bring up the keyboard.
   const region = useRef<HTMLDivElement>(null);
   const swap = useFocusWhenGone(chosen ? "chosen" : loaded.status, () => {
     const now = region.current;
-    return now?.querySelector<HTMLElement>("[data-focus]") ?? now?.querySelector<HTMLElement>("select, button:not(:disabled)");
+    return (
+      now?.querySelector<HTMLElement>("[data-focus]") ??
+      now?.querySelector<HTMLElement>('input[type="checkbox"]:not(:disabled), select, button:not(:disabled)')
+    );
   });
 
   const flip = (id: string, on: boolean) => {
@@ -251,7 +255,7 @@ export function ContactPicker({
             type="search"
             value={query}
             autoFocus={!phone}
-            data-focus
+            data-focus={!phone || undefined}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search contacts"
             aria-label="Search contacts"
