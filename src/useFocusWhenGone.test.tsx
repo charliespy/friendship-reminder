@@ -142,6 +142,22 @@ describe("useFocusWhenGone", () => {
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Today" }));
   });
 
+  it("sends focus on when the focused button turns off and keeps focus (Save, once saved)", () => {
+    function Form({ state }: { state: "changed" | "saved" }) {
+      const focus = useFocusWhenGone(state, () => document.querySelector<HTMLElement>("input:checked"));
+      return (
+        <fieldset {...focus}>
+          <input type="radio" aria-label="Weekdays only" defaultChecked />
+          <button disabled={state === "saved"}>Save</button>
+        </fieldset>
+      );
+    }
+    const { rerender } = render(<Form state="changed" />);
+    screen.getByRole("button", { name: "Save" }).focus();
+    rerender(<Form state="saved" />);
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Weekdays only" }));
+  });
+
   it("doesn't scroll to a button swapped in the same place (Sign out for Cancel)", () => {
     function Row({ row }: { row: "waiting" | "signedIn" }) {
       const focus = useFocusWhenGone(row, () => document.querySelector<HTMLElement>("section button"), { inPlace: true });

@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DayToggle, type View, type Weekday } from "./api";
 import { AccountSection } from "./AccountSection";
+import { useFocusWhenGone } from "./useFocusWhenGone";
 import type { NotificationAccessState } from "./useNotificationAccess";
 import { useAction } from "./useView";
 
@@ -96,9 +97,16 @@ function DaySetting({ view }: { view: View }) {
     // returns), so the choice never flicks back to the old one meanwhile.
     if (ok) setJustSaved(true);
   };
+  // Save turns off once saved (and every control while it saves), and Discard goes away: focus on
+  // either would fall to the page. It goes to the choice now checked instead, once that is on.
+  const actions = save.busy ? "busy" : changed ? "changed" : "unchanged";
+  const group = useRef<HTMLFieldSetElement>(null);
+  const keep = useFocusWhenGone(actions, () =>
+    group.current?.querySelector<HTMLElement>('input[name="dayToggle"]:checked:not(:disabled)'),
+  );
 
   return (
-    <fieldset className="setting-group plain-fieldset">
+    <fieldset className="setting-group plain-fieldset" ref={group} {...keep}>
       <legend className="section-label">Days to aim for</legend>
       <div className="choice-list">
         {TOGGLES.map((t) => [
