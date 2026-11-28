@@ -152,7 +152,13 @@ function DaySetting({ view }: { view: View }) {
             Discard
           </button>
         )}
-        <button ref={saveButton} type="button" className="btn btn-primary" disabled={!changed || save.busy} onClick={onSave}>
+        <button
+          ref={saveButton}
+          type="button"
+          className="btn btn-primary"
+          disabled={!changed || save.busy}
+          onClick={onSave}
+        >
           Save
         </button>
       </div>
