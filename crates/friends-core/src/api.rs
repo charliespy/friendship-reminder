@@ -514,9 +514,9 @@ impl App {
             .collect())
     }
 
-    /// The regular check (on launch, on wake and every hour): push missed targets forward, and return
-    /// the people to send a notification for now (none when notifications are off). Saves when
-    /// anything changed.
+    /// The Mac's regular check (at launch, then every minute, which also covers waking from sleep and
+    /// the date changing at midnight): push missed targets forward, and return the people to send a
+    /// notification for now (none when notifications are off). Saves when anything changed.
     pub fn tick(&mut self, today: NaiveDate) -> io::Result<Vec<Person>> {
         let before = self.data.clone();
         self.data.catch_up(today);

@@ -700,7 +700,8 @@ impl Data {
         }
     }
 
-    /// Pushes every missed target forward to today or later. Run on launch, on wake and every hour.
+    /// Pushes every missed target forward to today or later. Run before every command, after a sync
+    /// download, when the iPhone books its reminders, and at the Mac's regular check (every minute).
     /// Returns whether anything changed.
     pub fn catch_up(&mut self, today: NaiveDate) -> bool {
         let (rule, ranges) = (self.settings.rule(), self.ranges());
