@@ -1,5 +1,5 @@
 /** The Preferences window: People, Blocked dates and Settings. */
-import { useState } from "react";
+import { type KeyboardEvent, useState } from "react";
 import { BlockedPane } from "./BlockedPane";
 import { WithGuide } from "./Guide";
 import { PeoplePane } from "./PeoplePane";
@@ -22,11 +22,28 @@ export function Preferences() {
   const shown = useShownPerson(() => setTab("people"));
   const due = view?.people.filter((p) => p.due).length ?? 0;
 
+  // A vertical tab list: Up and Down move to the previous and next tab (wrapping round), Home and
+  // End to the first and last, and the tab moved to is shown straight away.
+  const onTabKey = (e: KeyboardEvent) => {
+    const at = TABS.findIndex((t) => t.id === tab);
+    const to =
+      e.key === "ArrowDown" ? (at + 1) % TABS.length
+      : e.key === "ArrowUp" ? (at - 1 + TABS.length) % TABS.length
+      : e.key === "Home" ? 0
+      : e.key === "End" ? TABS.length - 1
+      : null;
+    if (to === null) return;
+    e.preventDefault();
+    const next = TABS[to]!.id;
+    setTab(next);
+    document.getElementById(`tab-${next}`)?.focus();
+  };
+
   const prefs = (
     <div className="prefs">
       <nav className="sidebar" aria-label="Preferences">
         <h1 className="wordmark">Friendship Reminder</h1>
-        <div role="tablist" aria-orientation="vertical">
+        <div role="tablist" aria-orientation="vertical" onKeyDown={onTabKey}>
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -34,6 +51,9 @@ export function Preferences() {
               id={`tab-${t.id}`}
               aria-selected={tab === t.id}
               aria-controls={`pane-${t.id}`}
+              // Only the selected tab is a Tab stop, so Tab goes from the tab list into its pane.
+              tabIndex={tab === t.id ? 0 : -1}
+              aria-label={t.id === "people" && due > 0 ? `${t.title}, ${due} due` : undefined}
               className="tab"
               onClick={() => setTab(t.id)}
             >

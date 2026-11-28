@@ -225,3 +225,34 @@ test("Done asks when you were in touch: the missed day, or another day from the 
   await page.getByRole("button", { name: "Edit Jonah Okafor" }).click();
   await expect(page.getByLabel("Last in touch")).toHaveValue("2026-11-16");
 });
+
+test("the arrow keys move between the Preferences tabs, and Tab goes from the tab list into the pane", async ({
+  page,
+  request,
+}) => {
+  await seed(request, { people: SAMPLE.slice(0, 1) });
+  await openPreferences(page);
+  const people = page.getByRole("tab", { name: "People, 1 due", exact: true });
+  const blocked = page.getByRole("tab", { name: "Blocked dates" });
+  const settings = page.getByRole("tab", { name: "Settings" });
+  await expect(people).toHaveAttribute("aria-selected", "true");
+
+  await people.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(blocked).toBeFocused();
+  await expect(blocked).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#pane-blocked")).toBeVisible();
+  await page.keyboard.press("ArrowUp");
+  await expect(people).toBeFocused();
+  await expect(people).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("End");
+  await expect(settings).toBeFocused();
+  await expect(settings).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Home");
+  await expect(people).toBeFocused();
+
+  // The other tabs aren't Tab stops: Tab leaves the tab list for the People pane. (WebKit's Tab skips
+  // buttons, as Safari does unless macOS's keyboard navigation is on; Option-Tab goes to every one.)
+  await page.keyboard.press("Alt+Tab");
+  await expect(page.getByRole("button", { name: "Add person" })).toBeFocused();
+});

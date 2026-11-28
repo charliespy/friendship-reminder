@@ -130,14 +130,52 @@ describe("Preferences", () => {
     }
   });
 
-  it("shows how many people are due on the People tab", async () => {
+  it("moves between tabs with the arrow keys, Home and End, and keeps only the selected tab in the Tab order", async () => {
+    await open(view([]));
+    const selected = () => screen.getAllByRole("tab").map((t) => t.getAttribute("aria-selected") === "true");
+    const tabStops = () => screen.getAllByRole("tab").map((t) => t.tabIndex);
+    const people = tab(/^People/);
+    const blocked = tab(/^Blocked dates/);
+    const settings = tab(/^Settings/);
+    expect(tabStops()).toEqual([0, -1, -1]);
+
+    people.focus();
+    fireEvent.keyDown(people, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(blocked);
+    expect(selected()).toEqual([false, true, false]);
+    expect(panel("blocked").hidden).toBe(false);
+    expect(tabStops()).toEqual([-1, 0, -1]);
+
+    fireEvent.keyDown(blocked, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(people);
+    expect(selected()).toEqual([true, false, false]);
+
+    fireEvent.keyDown(people, { key: "End" });
+    expect(document.activeElement).toBe(settings);
+    expect(selected()).toEqual([false, false, true]);
+
+    // Past the last tab, Down wraps round to the first; before the first, Up to the last.
+    fireEvent.keyDown(settings, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(people);
+    fireEvent.keyDown(people, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(settings);
+
+    fireEvent.keyDown(settings, { key: "Home" });
+    expect(document.activeElement).toBe(people);
+    expect(selected()).toEqual([true, false, false]);
+    expect(tabStops()).toEqual([0, -1, -1]);
+  });
+
+  it("shows how many people are due on the People tab, and says what the number counts", async () => {
     await open(view([MAYA, THEO, LENA]));
     expect(tab(/^People/).textContent).toBe("People2");
+    expect(screen.getByRole("tab", { name: "People, 2 due" })).toBe(tab(/^People/));
   });
 
   it("shows no count when nobody is due", async () => {
     await open(view([LENA]));
     expect(tab(/^People/).textContent).toBe("People");
+    expect(screen.getByRole("tab", { name: "People" })).toBe(tab(/^People/));
   });
 
   it("keeps a half-filled form when switching tabs and back", async () => {
