@@ -236,6 +236,8 @@ test("a long name is cut short and keeps its Due tag, at Preferences' smallest s
   const tag = name.locator(".tag");
   await expect(tag).toHaveText("Due");
   await expect(tag).toBeVisible();
+  // The name really is too long to fit, so it is cut short.
+  expect(await row.locator(".person-name-text").evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
   const nameBox = (await name.boundingBox())!;
   const tagBox = (await tag.boundingBox())!;
   // The whole tag lies inside the name's box, which cuts off whatever overflows it.
