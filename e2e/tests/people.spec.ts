@@ -225,3 +225,20 @@ test("Done asks when you were in touch: the missed day, or another day from the 
   await page.getByRole("button", { name: "Edit Jonah Okafor" }).click();
   await expect(page.getByLabel("Last in touch")).toHaveValue("2026-11-16");
 });
+
+test("a long name is cut short and keeps its Due tag, at Preferences' smallest size", async ({ page, request }) => {
+  // 600 points wide is the smallest Preferences gets (src-tauri/src/desktop.rs).
+  await page.setViewportSize({ width: 600, height: 440 });
+  await seed(request, { people: [{ name: "Christopher Montgomery", frequencyDays: 30, lastConnected: "2026-10-10" }] });
+  await openPreferences(page);
+  const row = page.getByTestId("person-row");
+  const name = row.locator(".person-name");
+  const tag = name.locator(".tag");
+  await expect(tag).toHaveText("Due");
+  await expect(tag).toBeVisible();
+  const nameBox = (await name.boundingBox())!;
+  const tagBox = (await tag.boundingBox())!;
+  // The whole tag lies inside the name's box, which cuts off whatever overflows it.
+  expect(tagBox.x).toBeGreaterThanOrEqual(nameBox.x);
+  expect(tagBox.x + tagBox.width).toBeLessThanOrEqual(nameBox.x + nameBox.width + 0.5);
+});

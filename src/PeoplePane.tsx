@@ -163,7 +163,7 @@ function PersonRow({
       <Avatar name={person.name} />
       <div className="person-text">
         <div className="person-name">
-          {person.name}
+          <span className="person-name-text">{person.name}</span>
           {person.due && <span className="tag">Due</span>}
         </div>
         <div className="person-meta">
