@@ -24,8 +24,11 @@ export function Preferences() {
 
   // A vertical tab list: Up and Down move to the previous and next tab (wrapping round), Home and
   // End to the first and last, and the tab moved to is shown straight away.
+  // Counts from the focused tab: a contact card's link can select People while focus is elsewhere.
   const onTabKey = (e: KeyboardEvent) => {
-    const at = TABS.findIndex((t) => t.id === tab);
+    if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return;
+    const focused = TABS.findIndex((t) => `tab-${t.id}` === (e.target as HTMLElement).id);
+    const at = focused >= 0 ? focused : TABS.findIndex((t) => t.id === tab);
     const to =
       e.key === "ArrowDown" ? (at + 1) % TABS.length
       : e.key === "ArrowUp" ? (at - 1 + TABS.length) % TABS.length

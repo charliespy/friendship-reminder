@@ -7,6 +7,7 @@ const onViewChanged = vi.fn<(f: (v: View) => void) => Promise<() => void>>();
 const getLaunchAtLogin = vi.fn<() => Promise<boolean>>();
 const setDayToggle = vi.fn<(t: string, d?: string[]) => Promise<View>>();
 const takeShownPerson = vi.fn<() => Promise<number | null>>();
+const onShowPerson = vi.fn<(f: () => void) => Promise<() => void>>();
 
 vi.mock("./api", async (orig) => ({
   ...(await orig<typeof import("./api")>()),
@@ -18,7 +19,7 @@ vi.mock("./api", async (orig) => ({
     getAccount: () => Promise.resolve({ status: "signedOut", warning: null }),
     onAccountChanged: () => Promise.resolve(() => {}),
     takeShownPerson: () => takeShownPerson(),
-    onShowPerson: () => Promise.resolve(() => {}),
+    onShowPerson: (f: () => void) => onShowPerson(f),
   },
 }));
 
@@ -77,7 +78,8 @@ const panel = (id: string) => document.getElementById(`pane-${id}`)!;
 afterEach(cleanup);
 
 beforeEach(() => {
-  for (const f of [getView, onViewChanged, getLaunchAtLogin, takeShownPerson]) f.mockReset();
+  for (const f of [getView, onViewChanged, getLaunchAtLogin, takeShownPerson, onShowPerson]) f.mockReset();
+  onShowPerson.mockResolvedValue(() => {});
   onViewChanged.mockResolvedValue(() => {});
   takeShownPerson.mockResolvedValue(null);
   getLaunchAtLogin.mockResolvedValue(false);
@@ -164,6 +166,31 @@ describe("Preferences", () => {
     expect(document.activeElement).toBe(people);
     expect(selected()).toEqual([true, false, false]);
     expect(tabStops()).toEqual([0, -1, -1]);
+
+    // With Command or Option held the keys keep their usual meaning.
+    fireEvent.keyDown(people, { key: "ArrowDown", metaKey: true });
+    fireEvent.keyDown(people, { key: "End", altKey: true });
+    expect(document.activeElement).toBe(people);
+    expect(selected()).toEqual([true, false, false]);
+  });
+
+  it("moves from the focused tab when a contact card's link selected another", async () => {
+    let linkCame = () => {};
+    onShowPerson.mockImplementation((f) => {
+      linkCame = f;
+      return Promise.resolve(() => {});
+    });
+    await open(view([MAYA]));
+    const settings = tab(/^Settings/);
+    fireEvent.click(settings);
+    settings.focus();
+    takeShownPerson.mockResolvedValueOnce(1);
+    await act(async () => linkCame());
+    expect(tab(/^People/).getAttribute("aria-selected")).toBe("true");
+    // Down from Settings, where focus is, wraps round to People; not on from People to Blocked dates.
+    fireEvent.keyDown(settings, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(tab(/^People/));
+    expect(tab(/^People/).getAttribute("aria-selected")).toBe("true");
   });
 
   it("shows how many people are due on the People tab, and says what the number counts", async () => {
