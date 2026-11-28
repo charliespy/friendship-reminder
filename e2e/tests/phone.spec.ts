@@ -33,6 +33,28 @@ test("a person added in People shows up in Today", async ({ page, request }) => 
   await expect(page.getByRole("tab", { name: "Settings" })).toBeInViewport();
 });
 
+test("long names in People are cut short and keep their Due tag", async ({ page, request }) => {
+  const names = ["Maya Chen", "Christopher Montgomery", "Alexandra Papadopoulos", "Oluwaseun Adebayo-Williams"];
+  await seed(request, { people: names.map((name) => ({ name, frequencyDays: 30, lastConnected: "2026-10-10" })) });
+  await page.goto("/phone.html");
+  await page.getByRole("tab", { name: "People" }).click();
+  const rows = page.getByTestId("person-row");
+  await expect(rows).toHaveCount(names.length);
+  // The long names really are too long to fit, so they are cut short.
+  const cut = await rows.locator(".person-name-text").evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
+  expect(cut).toBe(names.length - 1);
+  for (const row of await rows.all()) {
+    const name = row.locator(".person-name");
+    const tag = name.locator(".tag");
+    await expect(tag).toHaveText("Due");
+    const nameBox = (await name.boundingBox())!;
+    const tagBox = (await tag.boundingBox())!;
+    // The whole tag lies inside the name's box, which cuts off whatever overflows it.
+    expect(tagBox.x).toBeGreaterThanOrEqual(nameBox.x);
+    expect(tagBox.x + tagBox.width).toBeLessThanOrEqual(nameBox.x + nameBox.width + 0.5);
+  }
+});
+
 test("Settings has no Open at login on the phone", async ({ page, request }) => {
   await seed(request);
   await page.goto("/phone.html");
