@@ -98,11 +98,18 @@ function DaySetting({ view }: { view: View }) {
     if (ok) setJustSaved(true);
   };
   // Save turns off once saved (and every control while it saves), and Discard goes away: focus on
-  // either would fall to the page. It goes to the choice now checked instead, once that is on.
+  // either would fall to the page. It goes back to Save when there's still something to save (the
+  // save failed), else to the choice now checked, once that is on. Without scrolling: the user may
+  // have scrolled elsewhere while it saved.
   const actions = save.busy ? "busy" : changed ? "changed" : "unchanged";
   const group = useRef<HTMLFieldSetElement>(null);
-  const keep = useFocusWhenGone(actions, () =>
-    group.current?.querySelector<HTMLElement>('input[name="dayToggle"]:checked:not(:disabled)'),
+  const saveButton = useRef<HTMLButtonElement>(null);
+  const keep = useFocusWhenGone(
+    actions,
+    () =>
+      (changed && !save.busy ? saveButton.current : null) ??
+      group.current?.querySelector<HTMLElement>('input[name="dayToggle"]:checked:not(:disabled)'),
+    { inPlace: true },
   );
 
   return (
@@ -145,7 +152,7 @@ function DaySetting({ view }: { view: View }) {
             Discard
           </button>
         )}
-        <button type="button" className="btn btn-primary" disabled={!changed || save.busy} onClick={onSave}>
+        <button ref={saveButton} type="button" className="btn btn-primary" disabled={!changed || save.busy} onClick={onSave}>
           Save
         </button>
       </div>

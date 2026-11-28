@@ -68,9 +68,22 @@ test("after Save or Discard, focus goes to the day setting now chosen, not to th
   await press("Discard");
   await expect(page.getByLabel(/Weekdays only/)).toBeChecked();
   await expect(page.getByLabel(/Weekdays only/)).toBeFocused();
+
+  // A save that fails leaves the change to save again: focus goes back to Save.
+  await page.route("**/__friends/invoke", async (route) => {
+    const { args } = route.request().postDataJSON() as { args?: { cmd?: string } };
+    if (args?.cmd === "set_day_toggle") await route.fulfill({ status: 500, json: "The data file couldn't be saved." });
+    else await route.continue();
+  });
+  await page.getByLabel(/Weekends only/).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByLabel(/Weekends only/)).toBeChecked();
+  await press("Save");
+  await expect(page.getByRole("alert")).toHaveText("The data file couldn't be saved.");
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeFocused();
 });
 
-test("notifications and open at login can be switched off and on",async ({ page, request }) => {
+test("notifications and open at login can be switched off and on", async ({ page, request }) => {
   await seed(request);
   await openPreferences(page, "Settings");
   const notify = page.getByLabel(/Send a notification/);
