@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage, type DayToggle, type View, type Weekday } from "./api";
 import { AccountSection } from "./AccountSection";
+import { useFocusWhenGone } from "./useFocusWhenGone";
 import type { NotificationAccessState } from "./useNotificationAccess";
 import { useAction } from "./useView";
 
@@ -96,9 +97,23 @@ function DaySetting({ view }: { view: View }) {
     // returns), so the choice never flicks back to the old one meanwhile.
     if (ok) setJustSaved(true);
   };
+  // Save turns off once saved (and every control while it saves), and Discard goes away: focus on
+  // either would fall to the page. It goes back to Save when there's still something to save (the
+  // save failed), else to the choice now checked, once that is on. Without scrolling: the user may
+  // have scrolled elsewhere while it saved.
+  const actions = save.busy ? "busy" : changed ? "changed" : "unchanged";
+  const group = useRef<HTMLFieldSetElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
+  const keep = useFocusWhenGone(
+    actions,
+    () =>
+      (changed && !save.busy ? saveButton.current : null) ??
+      group.current?.querySelector<HTMLElement>('input[name="dayToggle"]:checked:not(:disabled)'),
+    { inPlace: true },
+  );
 
   return (
-    <fieldset className="setting-group plain-fieldset">
+    <fieldset className="setting-group plain-fieldset" ref={group} {...keep}>
       <legend className="section-label">Days to aim for</legend>
       <div className="choice-list">
         {TOGGLES.map((t) => [
@@ -137,7 +152,13 @@ function DaySetting({ view }: { view: View }) {
             Discard
           </button>
         )}
-        <button type="button" className="btn btn-primary" disabled={!changed || save.busy} onClick={onSave}>
+        <button
+          ref={saveButton}
+          type="button"
+          className="btn btn-primary"
+          disabled={!changed || save.busy}
+          onClick={onSave}
+        >
           Save
         </button>
       </div>

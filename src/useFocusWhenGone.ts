@@ -34,7 +34,10 @@ export function useFocusWhenGone(
     const closed = nothing(shown);
     // A new page is still inside: focus a control on it took by itself stays counted.
     if (closed) inside.current = false;
-    const lost = !document.activeElement || document.activeElement === document.body;
+    // A control turned off counts as lost too: WebKit lets go of it only some time later, after this
+    // has run, and nothing could be done with it meanwhile.
+    const active = document.activeElement;
+    const lost = !active || active === document.body || active.matches(":disabled");
     // Closing doesn't scroll: the screen may be showing a person a contact card's link opened. A
     // new page brings its target into view, unless it is in the same place.
     if (hadFocus && lost) target()?.focus({ preventScroll: closed || inPlace });

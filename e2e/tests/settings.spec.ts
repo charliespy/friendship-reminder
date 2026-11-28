@@ -42,6 +42,47 @@ test("Custom day aims only for the days picked", async ({ page, request }) => {
   await expect(page.getByTestId("person-row")).toContainText("Reminder in 4 weeks, Mon, Dec 14");
 });
 
+test("after Save or Discard, focus goes to the day setting now chosen, not to the page", async ({
+  page,
+  request,
+}) => {
+  await seed(request, { people: [ANA] });
+  await openPreferences(page, "Settings");
+  const press = async (name: string) => {
+    await page.getByRole("button", { name, exact: true }).focus();
+    await page.keyboard.press("Enter");
+  };
+
+  // Save turns off once it's saved (and everything is off while it saves).
+  await page.getByLabel(/Weekdays only/).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByLabel(/Weekdays only/)).toBeChecked();
+  await press("Save");
+  await expect(page.getByRole("status")).toHaveText("Saved.");
+  await expect(page.getByLabel(/Weekdays only/)).toBeFocused();
+
+  // Discard goes away, and Save turns off.
+  await page.getByLabel(/Custom day/).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByLabel(/Custom day/)).toBeChecked();
+  await press("Discard");
+  await expect(page.getByLabel(/Weekdays only/)).toBeChecked();
+  await expect(page.getByLabel(/Weekdays only/)).toBeFocused();
+
+  // A save that fails leaves the change to save again: focus goes back to Save.
+  await page.route("**/__friends/invoke", async (route) => {
+    const { args } = route.request().postDataJSON() as { args?: { cmd?: string } };
+    if (args?.cmd === "set_day_toggle") await route.fulfill({ status: 500, json: "The data file couldn't be saved." });
+    else await route.continue();
+  });
+  await page.getByLabel(/Weekends only/).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByLabel(/Weekends only/)).toBeChecked();
+  await press("Save");
+  await expect(page.getByRole("alert")).toHaveText("The data file couldn't be saved.");
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeFocused();
+});
+
 test("notifications and open at login can be switched off and on", async ({ page, request }) => {
   await seed(request);
   await openPreferences(page, "Settings");
